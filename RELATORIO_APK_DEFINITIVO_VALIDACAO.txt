@@ -1,0 +1,24 @@
+LUMIVOX ANDROID — RELATÓRIO DE VALIDAÇÃO PARA APK DEFINITIVO
+
+Status: projeto preparado para compilação online via GitHub Actions.
+
+Validações realizadas localmente:
+[OK] Estrutura Android presente.
+[OK] AndroidManifest.xml com Activity principal exportada e launcher MAIN.
+[OK] MainActivity.java presente.
+[OK] WebView carrega app offline em file:///android_asset/www/index.html.
+[OK] Ponte JavaScript LumivoxAndroid.speak() presente.
+[OK] TextToSpeech nativo Android presente.
+[OK] Seletor de arquivos PDF/imagem preparado via WebChromeClient.
+[OK] Núcleo HTML/CSS/JS preservado em assets/www.
+[OK] Ícones do app presentes nas densidades mipmap.
+[OK] Workflow GitHub Actions atualizado para gerar APK debug e release.
+[OK] APK release configurado com assinatura de protótipo.
+[OK] Scripts de build local atualizados para debug + release.
+
+Limitação local:
+[AVISO] O ambiente atual não possui Android SDK/Gradle/aapt/d8/apksigner instalados; por isso, a compilação real do APK deve ocorrer no GitHub Actions ou Android Studio.
+
+Resultado esperado no GitHub:
+- Lumivox-Android-debug.apk
+- Lumivox-Android-release-assinado.apk
