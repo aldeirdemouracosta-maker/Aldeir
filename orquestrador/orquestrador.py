@@ -116,6 +116,11 @@ class LimiteDeIteracoesError(Exception):
     """O modelo não chamou `finalizar` dentro do número de rodadas permitido."""
 
 
+class GeracaoTruncadaError(Exception):
+    """O modelo atingiu max_tokens sem terminar a resposta — sinal de
+    geração descontrolada, não um problema de timeout."""
+
+
 def _resolver_caminho_seguro(raiz: Path, relativo: str) -> Path:
     raiz = raiz.resolve()
     alvo = (raiz / relativo).resolve()
@@ -135,18 +140,26 @@ def escrever_arquivo(raiz: Path, relativo: str, conteudo: str) -> None:
     caminho.write_text(conteudo)
 
 
-def chamar_llm(base_url: str, mensagens: list, timeout: int = 120) -> dict:
+def chamar_llm(base_url: str, mensagens: list, timeout: int = 120, max_tokens: int = 512) -> dict:
     # tool_choice="required" força o modelo a sempre emitir uma chamada de
     # ferramenta (nunca texto solto) e, em motores como o llama-server,
     # ativa a gramática que garante o formato estruturado de tool_calls —
     # sem isso, alguns modelos (ex.: Qwen2.5-Coder) escrevem o JSON da
     # chamada como texto comum, que não é reconhecido como tool_calls.
+    #
+    # max_tokens limita o tamanho da resposta: uma chamada de ferramenta
+    # válida tem poucas dezenas de tokens, então um valor alto aqui é
+    # sinal de geração descontrolada (visto na prática: gramática forçada
+    # + quantização agressiva pode fazer o modelo ultrapassar 1000+
+    # tokens sem terminar). Cortar cedo transforma isso num erro rápido
+    # e observável em vez de um timeout longo e silencioso.
     corpo = json.dumps(
         {
             "model": "local",
             "messages": mensagens,
             "tools": FERRAMENTAS,
             "tool_choice": "required",
+            "max_tokens": max_tokens,
         }
     ).encode("utf-8")
     requisicao = urllib.request.Request(
@@ -157,7 +170,16 @@ def chamar_llm(base_url: str, mensagens: list, timeout: int = 120) -> dict:
     )
     with urllib.request.urlopen(requisicao, timeout=timeout) as resposta:
         payload = json.loads(resposta.read())
-    return payload["choices"][0]["message"]
+
+    escolha = payload["choices"][0]
+    if escolha.get("finish_reason") == "length":
+        raise GeracaoTruncadaError(
+            f"o modelo atingiu o limite de {max_tokens} tokens sem terminar a "
+            "resposta — sinal de geração descontrolada (comum com "
+            "tool_choice=required em modelos muito quantizados). Considere um "
+            "quant menos agressivo (Q5_K_XL/Q6_K_XL) se isso persistir."
+        )
+    return escolha["message"]
 
 
 def executar_ferramenta(
@@ -202,6 +224,7 @@ class Orquestrador:
         config_sandbox: Optional[ConfiguracaoSandbox] = None,
         max_iteracoes: int = 20,
         timeout_llm: int = 300,
+        max_tokens_resposta: int = 512,
     ):
         self.raiz_projeto = raiz_projeto
         self.config_sandbox = config_sandbox or ConfiguracaoSandbox()
@@ -210,6 +233,7 @@ class Orquestrador:
         # inicial (system prompt + ferramentas + diagnóstico) mais a geração
         # com tool_choice=required pode passar de 120s na primeira chamada.
         self.timeout_llm = timeout_llm
+        self.max_tokens_resposta = max_tokens_resposta
 
     def rodar(self, instrucao: str, contexto_extra: Optional[str] = None) -> dict:
         motor = selecionar_motor()
@@ -223,7 +247,12 @@ class Orquestrador:
         ]
 
         for _ in range(self.max_iteracoes):
-            mensagem_modelo = chamar_llm(motor["base_url"], mensagens, timeout=self.timeout_llm)
+            mensagem_modelo = chamar_llm(
+                motor["base_url"],
+                mensagens,
+                timeout=self.timeout_llm,
+                max_tokens=self.max_tokens_resposta,
+            )
             mensagens.append(mensagem_modelo)
 
             chamadas = mensagem_modelo.get("tool_calls") or []
@@ -265,6 +294,12 @@ def main() -> None:
         help="segundos de espera por resposta do modelo (padrão 300; aumente em hardware sem AVX2/GPU híbrida)",
     )
     parser.add_argument(
+        "--max-tokens-resposta",
+        type=int,
+        default=512,
+        help="limite de tokens por resposta do modelo (padrão 512; corte cedo em vez de esperar geração descontrolada)",
+    )
+    parser.add_argument(
         "--diagnostico",
         action="store_true",
         help="roda analisador_projeto antes e dá o diagnóstico de contexto ao agente",
@@ -283,10 +318,11 @@ def main() -> None:
         args.diretorio_projeto,
         ConfiguracaoSandbox(timeout_segundos=args.timeout_comando),
         timeout_llm=args.timeout_llm,
+        max_tokens_resposta=args.max_tokens_resposta,
     )
     try:
         resultado = orquestrador.rodar(args.instrucao, contexto_extra=contexto_extra)
-    except MotorIndisponivelError as erro:
+    except (MotorIndisponivelError, GeracaoTruncadaError) as erro:
         print(json.dumps({"erro": str(erro)}, indent=2, ensure_ascii=False))
         raise SystemExit(1)
 
