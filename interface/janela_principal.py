@@ -13,6 +13,7 @@ Uso:
 """
 
 import sys
+import tempfile
 from dataclasses import asdict
 from pathlib import Path
 from typing import Optional
@@ -32,6 +33,7 @@ from PySide6.QtWidgets import (
 )
 
 from analisador_projeto.analisar_completude import analisar_completude, formatar_diagnostico_para_prompt
+from importador_zip.inspecionar_zip import analisar_projeto as analisar_zip
 from orquestrador.orquestrador import Orquestrador
 
 FONTE_MONO = "Menlo, Consolas, 'DejaVu Sans Mono', monospace"
@@ -50,6 +52,23 @@ class TrabalhadorAnalise(QObject):
             relatorio = analisar_completude(self.diretorio, rodar_testes_automaticos=False)
             self.concluido.emit(asdict(relatorio))
         except Exception as erro:  # noqa: BLE001 — qualquer falha vira erro visível na UI, não crash silencioso
+            self.erro.emit(f"{type(erro).__name__}: {erro}")
+
+
+class TrabalhadorImportacaoZip(QObject):
+    concluido = Signal(dict)
+    erro = Signal(str)
+
+    def __init__(self, caminho_zip: Path):
+        super().__init__()
+        self.caminho_zip = caminho_zip
+
+    def rodar(self) -> None:
+        try:
+            diretorio_trabalho = Path(tempfile.mkdtemp(prefix="fabrica_local_ia_zip_"))
+            relatorio = analisar_zip(self.caminho_zip, diretorio_trabalho)
+            self.concluido.emit(asdict(relatorio))
+        except Exception as erro:  # noqa: BLE001 — inclui ZipInseguroError: some vira erro visível na UI
             self.erro.emit(f"{type(erro).__name__}: {erro}")
 
 
@@ -82,6 +101,7 @@ class JanelaPrincipal(QMainWindow):
         self.resize(820, 640)
 
         self._ultimo_diagnostico: Optional[dict] = None
+        self._destino_zip_pendente: Optional[str] = None
         self._thread: Optional[QThread] = None
         self._trabalhador: Optional[QObject] = None
 
@@ -101,14 +121,21 @@ class JanelaPrincipal(QMainWindow):
         self.campo_pasta.setPlaceholderText("/caminho/do/projeto")
         self.botao_procurar = QPushButton("Procurar…")
         self.botao_procurar.clicked.connect(self._escolher_pasta)
+        self.botao_abrir_zip = QPushButton("Abrir ZIP…")
+        self.botao_abrir_zip.clicked.connect(self._escolher_zip)
         linha_pasta.addWidget(self.campo_pasta)
         linha_pasta.addWidget(self.botao_procurar)
+        linha_pasta.addWidget(self.botao_abrir_zip)
         layout.addLayout(linha_pasta)
 
         linha_acoes_diag = QHBoxLayout()
         self.botao_analisar = QPushButton("Analisar projeto")
         self.botao_analisar.clicked.connect(self._analisar_projeto)
+        self.botao_usar_mesmo_assim = QPushButton("Usar pasta extraída mesmo assim")
+        self.botao_usar_mesmo_assim.clicked.connect(self._usar_extraido_mesmo_assim)
+        self.botao_usar_mesmo_assim.setVisible(False)
         linha_acoes_diag.addWidget(self.botao_analisar)
+        linha_acoes_diag.addWidget(self.botao_usar_mesmo_assim)
         linha_acoes_diag.addStretch()
         layout.addLayout(linha_acoes_diag)
 
@@ -147,6 +174,63 @@ class JanelaPrincipal(QMainWindow):
         pasta = QFileDialog.getExistingDirectory(self, "Escolher pasta do projeto")
         if pasta:
             self.campo_pasta.setText(pasta)
+
+    def _escolher_zip(self) -> None:
+        caminho_texto, _ = QFileDialog.getOpenFileName(self, "Abrir projeto em ZIP", "", "Arquivos ZIP (*.zip)")
+        if not caminho_texto:
+            return
+
+        self.botao_usar_mesmo_assim.setVisible(False)
+        self._destino_zip_pendente = None
+        self.botao_abrir_zip.setEnabled(False)
+        self.area_log.clear()
+        self.area_log.appendPlainText(f"Importando ZIP: {caminho_texto}")
+        self.rotulo_status.setText("Extraindo e verificando o ZIP…")
+
+        thread = QThread(self)
+        trabalhador = TrabalhadorImportacaoZip(Path(caminho_texto))
+        trabalhador.moveToThread(thread)
+        thread.started.connect(trabalhador.rodar)
+        trabalhador.concluido.connect(self._zip_importado)
+        trabalhador.erro.connect(self._zip_com_erro)
+        trabalhador.concluido.connect(thread.quit)
+        trabalhador.erro.connect(thread.quit)
+        thread.finished.connect(lambda: self.botao_abrir_zip.setEnabled(True))
+
+        self._thread_zip = thread
+        self._trabalhador_zip = trabalhador
+        thread.start()
+
+    def _zip_importado(self, relatorio: dict) -> None:
+        destino = relatorio["diretorio_extraido"]
+        riscos = relatorio["arquivos_de_risco"] + relatorio["padroes_suspeitos"]
+
+        self.area_log.appendPlainText(
+            f"{relatorio['total_arquivos']} arquivo(s), {relatorio['total_bytes']} byte(s) extraídos."
+        )
+        for risco in riscos:
+            self.area_log.appendPlainText(f"  risco: {risco['arquivo']} — {risco['motivo']}")
+
+        if relatorio["pode_auto_prosseguir"]:
+            self.campo_pasta.setText(destino)
+            self.rotulo_status.setText("ZIP importado — sem riscos detectados.")
+        else:
+            self._destino_zip_pendente = destino
+            self.botao_usar_mesmo_assim.setVisible(True)
+            self.rotulo_status.setText(
+                "ZIP tem itens que precisam de revisão — ver log acima antes de continuar."
+            )
+
+    def _zip_com_erro(self, mensagem: str) -> None:
+        self.area_log.appendPlainText(f"Erro ao importar ZIP: {mensagem}")
+        self.rotulo_status.setText("Falha ao importar o ZIP — ver log acima.")
+
+    def _usar_extraido_mesmo_assim(self) -> None:
+        if self._destino_zip_pendente:
+            self.campo_pasta.setText(self._destino_zip_pendente)
+            self.rotulo_status.setText("Usando pasta extraída do ZIP apesar dos itens sinalizados.")
+        self.botao_usar_mesmo_assim.setVisible(False)
+        self._destino_zip_pendente = None
 
     def _diretorio_projeto(self) -> Optional[Path]:
         texto = self.campo_pasta.text().strip()

@@ -109,6 +109,72 @@ def test_executar_sem_instrucao_nao_dispara_nada(qtbot, projeto: Path):
     assert "instrução" in janela.rotulo_status.text().lower()
 
 
+def test_abrir_zip_legitimo_preenche_pasta_automaticamente(qtbot, zip_legitimo: Path):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    from interface.janela_principal import TrabalhadorImportacaoZip
+
+    trabalhador = TrabalhadorImportacaoZip(zip_legitimo)
+    resultado = {}
+    trabalhador.concluido.connect(lambda r: resultado.update(r))
+    trabalhador.rodar()
+
+    qtbot.waitUntil(lambda: bool(resultado), timeout=5000)
+    janela._zip_importado(resultado)
+
+    assert resultado["pode_auto_prosseguir"] is True
+    assert janela.campo_pasta.text() == resultado["diretorio_extraido"]
+    assert Path(janela.campo_pasta.text(), "main.py").is_file()
+    assert janela.botao_usar_mesmo_assim.isVisible() is False
+    assert "sem riscos detectados" in janela.rotulo_status.text()
+
+
+def test_abrir_zip_suspeito_exige_confirmacao_antes_de_usar_pasta(qtbot, zip_com_padrao_suspeito: Path):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela.show()  # isVisible() só reflete o estado real com a janela exibida
+
+    from interface.janela_principal import TrabalhadorImportacaoZip
+
+    trabalhador = TrabalhadorImportacaoZip(zip_com_padrao_suspeito)
+    resultado = {}
+    trabalhador.concluido.connect(lambda r: resultado.update(r))
+    trabalhador.rodar()
+
+    qtbot.waitUntil(lambda: bool(resultado), timeout=5000)
+    janela._zip_importado(resultado)
+
+    assert resultado["pode_auto_prosseguir"] is False
+    assert janela.campo_pasta.text() == ""
+    assert janela.botao_usar_mesmo_assim.isVisible() is True
+    assert "malicioso.py" in janela.area_log.toPlainText()
+
+    janela.botao_usar_mesmo_assim.click()
+
+    assert janela.campo_pasta.text() == resultado["diretorio_extraido"]
+    assert janela.botao_usar_mesmo_assim.isVisible() is False
+
+
+def test_abrir_zip_com_zip_slip_mostra_erro_sem_travar(qtbot, zip_slip: Path):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    from interface.janela_principal import TrabalhadorImportacaoZip
+
+    trabalhador = TrabalhadorImportacaoZip(zip_slip)
+    mensagens = []
+    trabalhador.erro.connect(mensagens.append)
+    trabalhador.rodar()
+
+    qtbot.waitUntil(lambda: bool(mensagens), timeout=5000)
+    janela._zip_com_erro(mensagens[0])
+
+    assert "ZipInseguroError" in mensagens[0]
+    assert janela.campo_pasta.text() == ""
+    assert "Falha ao importar" in janela.rotulo_status.text()
+
+
 def test_diagnostico_da_tela_e_usado_como_contexto_na_execucao(qtbot, projeto: Path, servidor_llm_mock):
     """Analisar o projeto primeiro deve enriquecer a instrução enviada
     ao modelo com o diagnóstico, igual à flag --diagnostico da CLI."""

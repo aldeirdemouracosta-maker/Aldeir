@@ -175,11 +175,37 @@ pip install -r requirements.txt
 python3 -m interface.janela_principal
 ```
 
-Escolha a pasta do `~/projeto_teste` (ou outro projeto), clique em
-"Analisar projeto", escreva uma instrução e clique em "Executar" —
-mesmo fluxo do passo 7, mas com painel de progresso ao vivo em vez de
-esperar o JSON final no terminal. Ver `interface/README.md` para
-detalhes.
+Escolha a pasta do `~/projeto_teste` (ou outro projeto, ou clique em
+"Abrir ZIP…" para importar um projeto compactado — passa pelo mesmo
+portão de segurança do passo 8, com um botão de confirmação se o ZIP
+tiver itens sinalizados), clique em "Analisar projeto", escreva uma
+instrução e clique em "Executar" — mesmo fluxo do passo 7, mas com
+painel de progresso ao vivo em vez de esperar o JSON final no
+terminal. Ver `interface/README.md` para detalhes.
+
+## 10. Instalar como aplicativo do sistema (comando, ícone, menu)
+
+Em vez de abrir a interface com `python3 -m interface.janela_principal`
+toda vez, instale um comando de verdade, com ícone e entrada no menu
+de aplicativos:
+
+```bash
+pip install -r requirements.txt
+sudo ./empacotamento/instalar.sh
+```
+
+Isso cria `/usr/local/bin/fabrica-local-ia` (aponta para esta mesma
+cópia do repositório — um `git pull` depois não exige reinstalar),
+o ícone em `/usr/share/icons/hicolor/scalable/apps/` e a entrada
+`.desktop` em `/usr/share/applications/`. Depois, procure
+"Fábrica Local de IA" no menu de aplicativos do seu ambiente
+desktop, ou rode `fabrica-local-ia` no terminal.
+
+Para desinstalar:
+
+```bash
+sudo ./empacotamento/desinstalar.sh
+```
 
 ## Achados testando contra um modelo real (Xeon + RX 580, Qwen2.5-Coder-7B)
 
