@@ -79,17 +79,11 @@ else:
     ...
 ```
 
-## Limite deliberado: isolamento de execução fica fora daqui
+## Isolamento de execução: `sandbox_execucao/`
 
 Este módulo não roda build nem testes do projeto recebido — só analisa
-estaticamente. Isolar a *execução* de verdade (build/test do projeto)
-exige primitivas de sistema operacional (namespaces, seccomp,
-cgroups — via container, `bwrap`/`firejail`, ou uma VM descartável),
-que não podem ser simuladas com segurança em Python puro. Implementar
-isso "por cima" como script seria pior do que não ter nada: daria uma
-falsa sensação de isolamento.
-
-O `RelatorioProjeto` (principalmente `pode_auto_prosseguir` e
-`diretorio_extraido`) é o contrato de entrada para essa próxima peça —
-um executor de sandbox real (ex.: `bubblewrap`/Docker no Ubuntu da
-`ARQUITETURA_FABRICA_LOCAL_IA.md`) — a ser construído separadamente.
+estaticamente. A execução isolada (build/test de verdade, via
+`bubblewrap`) é o módulo irmão `sandbox_execucao/`, que consome o
+`RelatorioProjeto` gerado aqui (principalmente `pode_auto_prosseguir`
+e `diretorio_extraido`) como portão de entrada — ver
+`sandbox_execucao/README.md`.

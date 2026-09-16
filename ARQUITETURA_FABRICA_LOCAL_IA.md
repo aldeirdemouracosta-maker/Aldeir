@@ -123,6 +123,22 @@ ao resto do disco, limites de CPU/tempo). Isso precisa existir **antes**
 de qualquer capacidade de "corrigir automaticamente" — do contrário o
 modo "Terminar projeto" vira a maior superfície de ataque do programa.
 
+Implementado neste repositório:
+
+- `importador_zip/`: extração segura (bloqueia zip-slip, symlinks e zip
+  bombs), inventário, scan heurístico de padrões perigosos e snapshot
+  com hash por arquivo. Devolve `pode_auto_prosseguir`.
+- `sandbox_execucao/`: executa build/test isolado via `bubblewrap`
+  (sem rede por padrão, escrita confinada ao diretório do projeto,
+  timeout e limite de memória). Recusa rodar se o relatório do
+  `importador_zip` não liberou o projeto, a menos que um humano
+  revise e libere explicitamente.
+
+Os dois módulos foram testados de ponta a ponta, inclusive com um ZIP
+malicioso de zip-slip (rejeitado antes de tocar o disco) e um comando
+tentando acessar rede/escrever fora de `/work` dentro do sandbox
+(ambos bloqueados).
+
 ## 4. Agentes especializados
 
 Em vez de um único agente tentando fazer tudo:
@@ -275,13 +291,15 @@ REQUISITOS
 │ PROTÓTIPO              │ ← Penpot
 │ TESTE DE USABILIDADE   │ ← Quant-UX
 │ MOTOR DE IA LOCAL      │ ← motor_ia/ (este repositório)
+│ IMPORTAÇÃO SEGURA DE ZIP│ ← importador_zip/ (este repositório)
+│ SANDBOX DE EXECUÇÃO    │ ← sandbox_execucao/ (este repositório)
 └──────────────────────────────┘
   ↓
-DESENVOLVIMENTO REAL      ← ainda precisa pesquisar
+DESENVOLVIMENTO REAL      ← agente Coder ainda precisa pesquisar/construir
   ↓
 BACKEND / BANCO / APIs    ← ainda precisa pesquisar
   ↓
-TESTES                    ← ainda precisa pesquisar
+TESTES                    ← execução isolada existe; runner de testes por linguagem ainda precisa pesquisar
   ↓
 ACESSIBILIDADE            ← precisa camada própria
   ↓
