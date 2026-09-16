@@ -30,6 +30,19 @@ da raiz do projeto é rejeitado (`CaminhoForaDoProjetoError`) e o
 modelo recebe uma mensagem de erro em vez de um caminho para escapar
 do projeto.
 
+## Tool calling: nativo com fallback de texto
+
+`chamar_llm` pede `tool_choice: "required"` ao motor, mas nem todo
+motor/modelo obedece isso de verdade — testado numa máquina real,
+llama-server + Qwen2.5-Coder ignoravam esse parâmetro e devolviam a
+chamada como JSON dentro de `message.content` (às vezes em bloco
+markdown, às vezes com texto ao redor) em vez de `tool_calls`
+estruturado. `extrair_chamada_de_texto` varre o conteúdo e extrai o
+primeiro objeto `{"name": ..., "arguments": {...}}` válido nesses
+casos, então o orquestrador funciona independente de o motor
+implementar tool calling OpenAI-compatible corretamente — ver
+`TESTE_LOCAL.md` para os detalhes da investigação.
+
 ## Uso
 
 `orquestrador.py` importa `motor_ia` e `sandbox_execucao` (pacotes irmãos

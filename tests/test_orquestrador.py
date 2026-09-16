@@ -184,3 +184,98 @@ def test_geracao_truncada_levanta_erro_em_vez_de_travar(projeto: Path):
         servidor.shutdown()
 
     assert capturado["max_tokens"] == 64
+
+
+def test_extrair_chamada_de_texto_com_markdown_fence():
+    texto = (
+        '```json\n{\n  "name": "ler_arquivo",\n  "arguments": {\n    "caminho": "app.py"\n  }\n}\n```\n\n'
+        "Depois disso eu vou continuar."
+    )
+    resultado = orq.extrair_chamada_de_texto(texto)
+    assert resultado == {"name": "ler_arquivo", "arguments": {"caminho": "app.py"}}
+
+
+def test_extrair_chamada_de_texto_sem_json_retorna_none():
+    assert orq.extrair_chamada_de_texto("apenas uma resposta em texto, sem chamada nenhuma") is None
+
+
+def test_extrair_chamada_de_texto_ignora_json_sem_formato_de_chamada():
+    # um objeto JSON válido, mas que não é uma chamada de ferramenta
+    # (sem "name"/"arguments") não deve ser confundido com uma
+    assert orq.extrair_chamada_de_texto('{"algo": "irrelevante"}') is None
+
+
+def test_loop_extrai_chamada_de_conteudo_texto_quando_servidor_nao_estrutura(projeto: Path, servidor_llm_mock):
+    """Reproduz o achado real: llama-server + Qwen2.5-Coder ignoram
+    tool_choice=required e devolvem a chamada como JSON dentro de
+    ```json``` em message.content, sem tool_calls. O orquestrador
+    precisa extrair e executar mesmo assim."""
+    base_url = servidor_llm_mock(
+        [
+            {
+                "role": "assistant",
+                "content": (
+                    '```json\n{"name": "escrever_arquivo", '
+                    '"arguments": {"caminho": "saida.txt", "conteudo": "via texto\\n"}}\n```'
+                ),
+            },
+            _msg_tool_call("2", "finalizar", {"resumo": "ok via extracao", "sucesso": True}),
+        ]
+    )
+    orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": base_url}
+
+    resultado = orq.Orquestrador(projeto).rodar("crie saida.txt")
+
+    assert resultado == {"resumo": "ok via extracao", "sucesso": True}
+    assert (projeto / "saida.txt").read_text() == "via texto\n"
+
+
+def test_extracao_funciona_mesmo_com_geracao_truncada_depois_do_primeiro_bloco(projeto: Path):
+    """O caso exato visto na máquina real: finish_reason="length" (o
+    modelo continuou narrando depois do primeiro bloco e foi cortado),
+    mas o primeiro JSON já estava completo — não deve levantar
+    GeracaoTruncadaError, deve extrair e usar essa primeira chamada."""
+    import socket
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    conteudo_truncado = (
+        '```json\n{"name": "ler_arquivo", "arguments": {"caminho": "app.py"}}\n```\n\n'
+        "Depois disso, você pode chamar escrever_arquivo com o conteúdo "
+        'atualizado. ```json\n{"name": "escrever_arquivo", "arguments": {"cam'
+    )
+
+    class _HandlerTruncadoComChamadaValida(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_POST(self):
+            tamanho = int(self.headers.get("Content-Length", 0))
+            self.rfile.read(tamanho)
+            resposta = {
+                "choices": [
+                    {
+                        "message": {"role": "assistant", "content": conteudo_truncado},
+                        "finish_reason": "length",
+                    }
+                ]
+            }
+            saida = json.dumps(resposta).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(saida)))
+            self.end_headers()
+            self.wfile.write(saida)
+
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    porta = s.getsockname()[1]
+    s.close()
+    servidor = HTTPServer(("127.0.0.1", porta), _HandlerTruncadoComChamadaValida)
+    threading.Thread(target=servidor.serve_forever, daemon=True).start()
+    try:
+        mensagem = orq.chamar_llm(f"http://127.0.0.1:{porta}/v1", [{"role": "user", "content": "x"}])
+    finally:
+        servidor.shutdown()
+
+    assert mensagem["tool_calls"][0]["function"]["name"] == "ler_arquivo"

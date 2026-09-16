@@ -170,35 +170,46 @@ revise antes de prosseguir.
 ## Achados testando contra um modelo real (Xeon + RX 580, Qwen2.5-Coder-7B)
 
 Estes já foram encontrados e corrigidos nesta sessão — deixados aqui
-para quem seguir o guia não precisar redescobrir:
+para quem seguir o guia não precisar redescobrir. O achado principal
+(#2) só ficou claro depois de descartar duas hipóteses erradas (#2a,
+#2b) — registradas aqui porque a investigação em si é útil:
 
 1. **`llama-server` precisa de `--jinja`** para ativar o
    processamento de chat template necessário para tool calling. Sem
    isso, o modelo escreve texto comum em vez de uma chamada
    estruturada.
-2. **Mesmo com `--jinja`, o Qwen2.5-Coder escreve a chamada de
-   ferramenta como JSON solto** em vez de embrulhada em `<tool_call>`
-   — formato que o parser do `llama-server` não reconhece, então a
-   chamada nunca chega como `tool_calls` estruturado. Corrigido
-   mandando `tool_choice: "required"` na requisição
-   (`orquestrador/orquestrador.py:chamar_llm`), que força o
-   `llama-server` a usar a gramática que garante o formato certo. Já
-   está no código — nada a fazer aqui.
-3. **Geração descontrolada com `tool_choice=required`**: mesmo com o
-   formato certo, em Q4_K_M o modelo pode ultrapassar 1000+ tokens
-   tentando gerar uma chamada que deveria ter ~15 (confirmado nos
-   logs do `llama-server`: geração ativa e contínua a ~21 tok/s, não
-   travamento — só sem parar). Isso parecia timeout, mas era geração
-   sem fim. Corrigido com `max_tokens` (padrão 512) na requisição:
-   corta cedo e levanta `GeracaoTruncadaError` em vez de deixar o
-   cliente esperar minutos por algo que não ia terminar direito. Se
-   isso continuar acontecendo com frequência, o próximo passo é trocar
-   de quantização (Q5_K_XL/Q6_K_XL em vez de Q4_K_M) — geração de
-   tool call é sensível a quantização agressiva.
+2. **O `llama-server` (nesta versão) não aplica de verdade a gramática
+   de `tool_calls` para o Qwen2.5-Coder, mesmo com `--jinja` e
+   `tool_choice: "required"`.** O modelo devolve tudo como texto livre
+   em `message.content` — inclusive narrando um plano inteiro de
+   várias etapas em markdown com blocos ` ```json ` embutidos, em vez
+   de parar numa única chamada. Confirmado testando com dois quants
+   diferentes (Q4_K_M e Q6_K, bem menos agressivo) — o comportamento
+   foi o mesmo nos dois, descartando quantização como causa.
+   - *Hipótese descartada (#2a):* achávamos que era geração
+     descontrolada por quantização agressiva (Q4_K_M). Trocar para
+     Q6_K não mudou nada — mesmo problema.
+   - *Hipótese descartada (#2b):* achávamos que `tool_choice: "required"`
+     resolvia (é o que a documentação do llama.cpp recomenda para esse
+     caso). Não resolveu — o parâmetro parece ser ignorado por esse
+     modelo/versão.
+   - **Correção real**: `orquestrador/orquestrador.py:extrair_chamada_de_texto`
+     varre `message.content` e extrai o primeiro objeto JSON válido no
+     formato `{"name": ..., "arguments": {...}}`, mesmo dentro de
+     blocos markdown ou com texto ao redor. O orquestrador usa essa
+     extração como fallback sempre que o servidor não devolve
+     `tool_calls` estruturado — funciona independente do motor/modelo
+     respeitar ou não o tool calling nativo do OpenAI. Já está no
+     código, nada a fazer aqui.
+3. **`max_tokens` (padrão 512) limita o tamanho da resposta** — uma
+   chamada de ferramenta válida tem poucas dezenas de tokens, então
+   isso corta cedo qualquer geração longa demais. Se mesmo assim não
+   der para extrair uma chamada válida do que foi gerado até o corte,
+   levanta `GeracaoTruncadaError` com uma amostra do conteúdo (em vez
+   de um erro genérico ou um `JSONDecodeError` confuso).
 4. **Timeout**: processar o prompt inicial (system prompt + 4
-   ferramentas + diagnóstico) mais a geração com `tool_choice=required`
-   pode passar de 120s em CPU sem AVX2 + GPU híbrida. O padrão agora é
-   300s; se ainda assim der timeout (e não `GeracaoTruncadaError`), use
+   ferramentas + diagnóstico) pode passar de 120s em CPU sem AVX2 +
+   GPU híbrida. O padrão agora é 300s; se ainda assim der timeout, use
    `--timeout-llm 600` (ou mais) na CLI do orquestrador.
 
 ## O que observar e reportar de volta

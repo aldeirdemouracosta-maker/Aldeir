@@ -140,19 +140,53 @@ def escrever_arquivo(raiz: Path, relativo: str, conteudo: str) -> None:
     caminho.write_text(conteudo)
 
 
+def extrair_chamada_de_texto(texto: str) -> Optional[dict]:
+    """Fallback para quando o servidor não devolve `tool_calls`
+    estruturado, mas o modelo escreveu o JSON da chamada como texto
+    solto (visto na prática: llama-server + Qwen2.5-Coder ignoram
+    `tool_choice=required` e narram um plano em markdown com blocos
+    ```json``` embutidos, em vez de parar numa única chamada).
+
+    Varre `texto` à procura do primeiro objeto JSON top-level com o
+    formato `{"name": ..., "arguments": {...}}` e devolve esse dict, ou
+    `None` se não encontrar nenhum — sem regex para JSON aninhado
+    (frágil); casa chaves manualmente para achar o fim de cada objeto.
+    """
+    inicio = texto.find("{")
+    while inicio != -1:
+        profundidade = 0
+        for i in range(inicio, len(texto)):
+            if texto[i] == "{":
+                profundidade += 1
+            elif texto[i] == "}":
+                profundidade -= 1
+                if profundidade == 0:
+                    candidato = texto[inicio : i + 1]
+                    try:
+                        dado = json.loads(candidato)
+                    except json.JSONDecodeError:
+                        break
+                    if isinstance(dado, dict) and "name" in dado and "arguments" in dado:
+                        return dado
+                    break
+        inicio = texto.find("{", inicio + 1)
+    return None
+
+
 def chamar_llm(base_url: str, mensagens: list, timeout: int = 120, max_tokens: int = 512) -> dict:
-    # tool_choice="required" força o modelo a sempre emitir uma chamada de
-    # ferramenta (nunca texto solto) e, em motores como o llama-server,
-    # ativa a gramática que garante o formato estruturado de tool_calls —
-    # sem isso, alguns modelos (ex.: Qwen2.5-Coder) escrevem o JSON da
-    # chamada como texto comum, que não é reconhecido como tool_calls.
+    # tool_choice="required" pede ao servidor para sempre emitir uma
+    # chamada de ferramenta — em motores que respeitam isso, ativa a
+    # gramática que garante tool_calls estruturado. Na prática, nem todo
+    # motor/modelo obedece (visto com llama-server + Qwen2.5-Coder), por
+    # isso o fallback de extrair_chamada_de_texto abaixo é o que garante
+    # o funcionamento de verdade, não só esse parâmetro.
     #
     # max_tokens limita o tamanho da resposta: uma chamada de ferramenta
     # válida tem poucas dezenas de tokens, então um valor alto aqui é
-    # sinal de geração descontrolada (visto na prática: gramática forçada
-    # + quantização agressiva pode fazer o modelo ultrapassar 1000+
-    # tokens sem terminar). Cortar cedo transforma isso num erro rápido
-    # e observável em vez de um timeout longo e silencioso.
+    # sinal de geração descontrolada. Cortar cedo transforma isso num
+    # erro rápido e observável em vez de um timeout longo e silencioso —
+    # mas só levanta erro se nem assim der para extrair uma chamada
+    # válida do que já foi gerado (ver abaixo).
     corpo = json.dumps(
         {
             "model": "local",
@@ -172,21 +206,31 @@ def chamar_llm(base_url: str, mensagens: list, timeout: int = 120, max_tokens: i
         payload = json.loads(resposta.read())
 
     escolha = payload["choices"][0]
-    if escolha.get("finish_reason") == "length":
-        mensagem_parcial = escolha.get("message", {})
-        conteudo_parcial = mensagem_parcial.get("content") or ""
-        chamadas_parciais = mensagem_parcial.get("tool_calls")
-        amostra = (
-            json.dumps(chamadas_parciais, ensure_ascii=False)[:800]
-            if chamadas_parciais
-            else conteudo_parcial[:800]
-        )
-        raise GeracaoTruncadaError(
-            f"o modelo atingiu o limite de {max_tokens} tokens sem terminar a "
-            "resposta — sinal de geração descontrolada. Amostra do que foi "
-            f"gerado antes do corte:\n{amostra!r}"
-        )
-    return escolha["message"]
+    mensagem = escolha["message"]
+
+    if not mensagem.get("tool_calls"):
+        chamada = extrair_chamada_de_texto(mensagem.get("content") or "")
+        if chamada is not None:
+            mensagem = dict(mensagem)
+            mensagem["tool_calls"] = [
+                {
+                    "id": "extraida_0",
+                    "type": "function",
+                    "function": {
+                        "name": chamada["name"],
+                        "arguments": json.dumps(chamada["arguments"]),
+                    },
+                }
+            ]
+        elif escolha.get("finish_reason") == "length":
+            amostra = (mensagem.get("content") or "")[:800]
+            raise GeracaoTruncadaError(
+                f"o modelo atingiu o limite de {max_tokens} tokens sem terminar a "
+                "resposta, e não foi possível extrair nenhuma chamada de "
+                f"ferramenta válida do que foi gerado até o corte:\n{amostra!r}"
+            )
+
+    return mensagem
 
 
 def executar_ferramenta(
