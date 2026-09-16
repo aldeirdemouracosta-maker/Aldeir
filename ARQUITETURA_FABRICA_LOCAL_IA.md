@@ -178,7 +178,7 @@ tentando acessar rede/escrever fora de `/work` dentro do sandbox
 - `empacotamento/`: instala a interface como comando de sistema
   (`fabrica-local-ia`) com ícone e entrada no menu de aplicativos,
   sem copiar código — aponta para a cópia local do repositório.
-- `tests/`: suíte pytest (59 testes) cobrindo os módulos acima com
+- `tests/`: suíte pytest (66 testes) cobrindo os módulos acima com
   casos maliciosos reais (zip-slip, zip bomb, padrão de comando
   perigoso, escrita/rede fora do sandbox, path traversal no
   orquestrador). `.github/workflows/testes.yml` roda a suíte em todo

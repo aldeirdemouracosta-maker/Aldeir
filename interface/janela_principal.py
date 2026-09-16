@@ -18,9 +18,10 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import QObject, QThread, Signal
+from PySide6.QtCore import QObject, QSettings, Qt, QThread, Signal
 from PySide6.QtWidgets import (
     QApplication,
+    QDockWidget,
     QFileDialog,
     QHBoxLayout,
     QLabel,
@@ -35,6 +36,7 @@ from PySide6.QtWidgets import (
 from analisador_projeto.analisar_completude import analisar_completude, formatar_diagnostico_para_prompt
 from importador_zip.inspecionar_zip import analisar_projeto as analisar_zip
 from orquestrador.orquestrador import Orquestrador
+from visao_mockup.interpretar_mockup import interpretar_mockup as interpretar_mockup_imagem
 
 FONTE_MONO = "Menlo, Consolas, 'DejaVu Sans Mono', monospace"
 
@@ -72,6 +74,25 @@ class TrabalhadorImportacaoZip(QObject):
             self.erro.emit(f"{type(erro).__name__}: {erro}")
 
 
+class TrabalhadorDescricaoMockup(QObject):
+    concluido = Signal(str)
+    erro = Signal(str)
+
+    def __init__(self, binario: Path, modelo: Path, mmproj: Path, imagem: Path):
+        super().__init__()
+        self.binario = binario
+        self.modelo = modelo
+        self.mmproj = mmproj
+        self.imagem = imagem
+
+    def rodar(self) -> None:
+        try:
+            descricao = interpretar_mockup_imagem(self.binario, self.modelo, self.mmproj, self.imagem)
+            self.concluido.emit(descricao)
+        except Exception as erro:  # noqa: BLE001 — inclui ServidorVisaoIndisponivelError: vira erro visível na UI
+            self.erro.emit(f"{type(erro).__name__}: {erro}")
+
+
 class TrabalhadorOrquestrador(QObject):
     evento = Signal(str)
     concluido = Signal(dict)
@@ -101,11 +122,14 @@ class JanelaPrincipal(QMainWindow):
         self.resize(820, 640)
 
         self._ultimo_diagnostico: Optional[dict] = None
+        self._ultima_descricao_mockup: Optional[str] = None
         self._destino_zip_pendente: Optional[str] = None
         self._thread: Optional[QThread] = None
         self._trabalhador: Optional[QObject] = None
+        self._configuracoes = QSettings("FabricaLocalIA", "Interface")
 
         self._montar_widgets()
+        self._restaurar_layout()
 
     # ---- construção da UI --------------------------------------------------
 
@@ -139,12 +163,17 @@ class JanelaPrincipal(QMainWindow):
         linha_acoes_diag.addStretch()
         layout.addLayout(linha_acoes_diag)
 
-        layout.addWidget(QLabel("Diagnóstico"))
-        self.area_diagnostico = QPlainTextEdit()
-        self.area_diagnostico.setReadOnly(True)
-        self.area_diagnostico.setStyleSheet(f"font-family: {FONTE_MONO};")
-        self.area_diagnostico.setMaximumBlockCount(2000)
-        layout.addWidget(self.area_diagnostico, stretch=1)
+        linha_mockup = QHBoxLayout()
+        self.botao_descrever_mockup = QPushButton("Descrever mockup…")
+        self.botao_descrever_mockup.setToolTip(
+            "Sobe um modelo de visão temporário para ler uma imagem de mockup. "
+            "Desligue o modelo de código antes — os dois não cabem na mesma GPU."
+        )
+        self.botao_descrever_mockup.clicked.connect(self._descrever_mockup)
+        self.rotulo_mockup = QLabel("Nenhuma descrição de mockup carregada.")
+        linha_mockup.addWidget(self.botao_descrever_mockup)
+        linha_mockup.addWidget(self.rotulo_mockup, stretch=1)
+        layout.addLayout(linha_mockup)
 
         layout.addWidget(QLabel("Instrução"))
         self.campo_instrucao = QPlainTextEdit()
@@ -156,17 +185,48 @@ class JanelaPrincipal(QMainWindow):
         self.botao_executar.clicked.connect(self._executar_orquestrador)
         layout.addWidget(self.botao_executar)
 
-        layout.addWidget(QLabel("Progresso"))
-        self.area_log = QPlainTextEdit()
-        self.area_log.setReadOnly(True)
-        self.area_log.setStyleSheet(f"font-family: {FONTE_MONO};")
-        self.area_log.setMaximumBlockCount(5000)
-        layout.addWidget(self.area_log, stretch=1)
-
         self.rotulo_status = QLabel("")
         layout.addWidget(self.rotulo_status)
 
         self.setCentralWidget(centro)
+
+        # Diagnóstico e Progresso são painéis dockáveis: o usuário pode
+        # arrastar, flutuar ou reorganizar onde quiser — o arranjo é
+        # lembrado entre sessões (ver _restaurar_layout/closeEvent).
+        self.area_diagnostico = QPlainTextEdit()
+        self.area_diagnostico.setReadOnly(True)
+        self.area_diagnostico.setStyleSheet(f"font-family: {FONTE_MONO};")
+        self.area_diagnostico.setMaximumBlockCount(2000)
+        self.dock_diagnostico = QDockWidget("Diagnóstico", self)
+        self.dock_diagnostico.setObjectName("dock_diagnostico")
+        self.dock_diagnostico.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
+        self.dock_diagnostico.setWidget(self.area_diagnostico)
+        self.addDockWidget(Qt.RightDockWidgetArea, self.dock_diagnostico)
+
+        self.area_log = QPlainTextEdit()
+        self.area_log.setReadOnly(True)
+        self.area_log.setStyleSheet(f"font-family: {FONTE_MONO};")
+        self.area_log.setMaximumBlockCount(5000)
+        self.dock_progresso = QDockWidget("Progresso", self)
+        self.dock_progresso.setObjectName("dock_progresso")
+        self.dock_progresso.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
+        self.dock_progresso.setWidget(self.area_log)
+        self.addDockWidget(Qt.BottomDockWidgetArea, self.dock_progresso)
+
+    # ---- layout dos painéis (dock widgets) -----------------------------------
+
+    def _restaurar_layout(self) -> None:
+        geometria = self._configuracoes.value("janela/geometria")
+        if geometria is not None:
+            self.restoreGeometry(geometria)
+        estado = self._configuracoes.value("janela/estado_docks")
+        if estado is not None:
+            self.restoreState(estado)
+
+    def closeEvent(self, evento) -> None:  # noqa: N802 — nome exigido pelo Qt
+        self._configuracoes.setValue("janela/geometria", self.saveGeometry())
+        self._configuracoes.setValue("janela/estado_docks", self.saveState())
+        super().closeEvent(evento)
 
     # ---- pasta do projeto ---------------------------------------------------
 
@@ -276,6 +336,68 @@ class JanelaPrincipal(QMainWindow):
         self.area_diagnostico.setPlainText(f"Erro ao analisar: {mensagem}")
         self.rotulo_status.setText("Falha na análise — ver acima.")
 
+    # ---- descrever mockup (modelo de visão) ----------------------------------
+
+    def _caminho_configurado(self, chave: str, titulo: str, filtro: str) -> Optional[str]:
+        caminho = self._configuracoes.value(chave, "")
+        if caminho and Path(caminho).is_file():
+            return caminho
+        caminho, _ = QFileDialog.getOpenFileName(self, titulo, "", filtro)
+        if not caminho:
+            return None
+        self._configuracoes.setValue(chave, caminho)
+        return caminho
+
+    def _descrever_mockup(self) -> None:
+        imagem, _ = QFileDialog.getOpenFileName(
+            self, "Escolher imagem do mockup", "", "Imagens (*.png *.jpg *.jpeg)"
+        )
+        if not imagem:
+            return
+
+        binario = self._caminho_configurado(
+            "visao/binario", "Escolher o executável llama-server (com suporte a visão)", "Todos os arquivos (*)"
+        )
+        if not binario:
+            return
+        modelo = self._caminho_configurado(
+            "visao/modelo", "Escolher o modelo de visão (GGUF)", "Modelos GGUF (*.gguf)"
+        )
+        if not modelo:
+            return
+        mmproj = self._caminho_configurado(
+            "visao/mmproj", "Escolher o mmproj (projetor multimodal, GGUF)", "Modelos GGUF (*.gguf)"
+        )
+        if not mmproj:
+            return
+
+        self.botao_descrever_mockup.setEnabled(False)
+        self.rotulo_mockup.setText("Interpretando mockup — pode levar alguns minutos…")
+        self.area_log.appendPlainText(f"Descrevendo mockup: {imagem}")
+
+        thread = QThread(self)
+        trabalhador = TrabalhadorDescricaoMockup(Path(binario), Path(modelo), Path(mmproj), Path(imagem))
+        trabalhador.moveToThread(thread)
+        thread.started.connect(trabalhador.rodar)
+        trabalhador.concluido.connect(self._mockup_descrito)
+        trabalhador.erro.connect(self._mockup_com_erro)
+        trabalhador.concluido.connect(thread.quit)
+        trabalhador.erro.connect(thread.quit)
+        thread.finished.connect(lambda: self.botao_descrever_mockup.setEnabled(True))
+
+        self._thread_mockup = thread
+        self._trabalhador_mockup = trabalhador
+        thread.start()
+
+    def _mockup_descrito(self, descricao: str) -> None:
+        self._ultima_descricao_mockup = descricao
+        self.area_log.appendPlainText(descricao)
+        self.rotulo_mockup.setText(f"Descrição de mockup pronta ({len(descricao)} caracteres).")
+
+    def _mockup_com_erro(self, mensagem: str) -> None:
+        self.area_log.appendPlainText(f"Erro ao descrever mockup: {mensagem}")
+        self.rotulo_mockup.setText("Falha ao descrever mockup — ver log de progresso.")
+
     # ---- executar orquestrador -----------------------------------------------
 
     def _executar_orquestrador(self) -> None:
@@ -287,9 +409,12 @@ class JanelaPrincipal(QMainWindow):
             self.rotulo_status.setText("Escreva uma instrução primeiro.")
             return
 
-        contexto_extra = (
-            formatar_diagnostico_para_prompt(self._ultimo_diagnostico) if self._ultimo_diagnostico else None
-        )
+        partes_contexto = []
+        if self._ultimo_diagnostico:
+            partes_contexto.append(formatar_diagnostico_para_prompt(self._ultimo_diagnostico))
+        if self._ultima_descricao_mockup:
+            partes_contexto.append(self._ultima_descricao_mockup)
+        contexto_extra = "\n\n".join(partes_contexto) or None
 
         self.botao_executar.setEnabled(False)
         self.area_log.clear()

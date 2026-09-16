@@ -4,28 +4,27 @@ Janela única, minimalista, que reaproveita `analisador_projeto` e
 `orquestrador` como bibliotecas Python (não via CLI):
 
 ```
-┌──────────────────────────────────────────────────────┐
-│ Pasta do projeto  [________] [Procurar…] [Abrir ZIP…] │
-│ [Analisar projeto] [Usar pasta extraída mesmo assim]  │
-│                                                        │
-│ Diagnóstico                                           │
-│ ┌────────────────────────────────────────────────────┐
-│ │ (texto do analisador_projeto)                       │
-│ └────────────────────────────────────────────────────┘
-│                                                        │
-│ Instrução                                             │
-│ ┌────────────────────────────────────────────────────┐
-│ │                                                      │
-│ └────────────────────────────────────────────────────┘
-│ [Executar]                                            │
-│                                                        │
-│ Progresso                                             │
-│ ┌────────────────────────────────────────────────────┐
-│ │ (log ao vivo do orquestrador / da importação de ZIP)│
-│ └────────────────────────────────────────────────────┘
-│ (status)                                              │
-└────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┬─────────────┐
+│ Pasta do projeto  [________] [Procurar…] [Abrir ZIP…] │ Diagnóstico │
+│ [Analisar projeto] [Usar pasta extraída mesmo assim]  │ (dockável,  │
+│ [Descrever mockup…]  (status da descrição)            │  arrastável)│
+│                                                        │             │
+│ Instrução                                             │             │
+│ ┌────────────────────────────────────────────────────┐│             │
+│ │                                                      ││             │
+│ └────────────────────────────────────────────────────┘│             │
+│ [Executar]                                            │             │
+│ (status)                                              │             │
+├────────────────────────────────────────────────────────────────────┤
+│ Progresso (dockável, arrastável)                                    │
+│ (log ao vivo do orquestrador / da importação de ZIP / do mockup)    │
+└──────────────────────────────────────────────────────────────────��─┘
 ```
+
+"Diagnóstico" e "Progresso" são painéis Qt dockáveis (`QDockWidget`) —
+arraste pela barra de título deles para reposicionar, empilhar,
+flutuar como janela solta, ou fechar. O arranjo que o usuário montar
+fica salvo (`QSettings`) e volta na próxima abertura.
 
 ## Por que roda em thread separada
 
@@ -73,6 +72,24 @@ projeto atual.
   zip bomb por tamanho/razão de compressão): `extrair_seguro` recusa a
   extração inteira antes de gravar qualquer arquivo — a UI mostra o
   erro no painel de progresso e a pasta do projeto continua vazia.
+
+## Descrever um mockup (modelo de visão)
+
+"Descrever mockup…" liga `visao_mockup/interpretar_mockup.py` (agente
+reduzido, validado contra Qwen2.5-VL-7B numa RX 580 — ver
+`TESTE_LOCAL.md`, seção 11) à interface via `TrabalhadorDescricaoMockup`,
+também em `QThread` própria. Fluxo: escolhe a imagem do mockup, depois
+(só na primeira vez — fica salvo em `QSettings`) o executável
+`llama-server`, o modelo de visão e o `mmproj`, ambos em GGUF. A
+descrição gerada some com o diagnóstico como contexto extra ao clicar
+"Executar" — mesmo padrão de `--contexto-arquivo` + `--diagnostico` na
+CLI do orquestrador.
+
+Importante: o servidor de visão e o servidor de código não cabem
+juntos em 8GB de VRAM — desligue o modelo de código antes de clicar
+"Descrever mockup…", e religue-o antes de "Executar". A interface não
+gerencia essa troca sozinha (mesma decisão de arquitetura documentada
+em `TESTE_LOCAL.md`).
 
 ## Como foi testado sem tela
 
