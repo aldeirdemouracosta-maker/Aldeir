@@ -173,11 +173,18 @@ def chamar_llm(base_url: str, mensagens: list, timeout: int = 120, max_tokens: i
 
     escolha = payload["choices"][0]
     if escolha.get("finish_reason") == "length":
+        mensagem_parcial = escolha.get("message", {})
+        conteudo_parcial = mensagem_parcial.get("content") or ""
+        chamadas_parciais = mensagem_parcial.get("tool_calls")
+        amostra = (
+            json.dumps(chamadas_parciais, ensure_ascii=False)[:800]
+            if chamadas_parciais
+            else conteudo_parcial[:800]
+        )
         raise GeracaoTruncadaError(
             f"o modelo atingiu o limite de {max_tokens} tokens sem terminar a "
-            "resposta — sinal de geração descontrolada (comum com "
-            "tool_choice=required em modelos muito quantizados). Considere um "
-            "quant menos agressivo (Q5_K_XL/Q6_K_XL) se isso persistir."
+            "resposta — sinal de geração descontrolada. Amostra do que foi "
+            f"gerado antes do corte:\n{amostra!r}"
         )
     return escolha["message"]
 
