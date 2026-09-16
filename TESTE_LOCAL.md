@@ -17,7 +17,31 @@ git checkout claude/friendly-rubin-xg4c53
 
 ```bash
 sudo apt update
-sudo apt install -y bubblewrap mesa-vulkan-drivers vulkan-tools build-essential cmake git python3 glslc libvulkan-dev spirv-headers
+sudo apt install -y bubblewrap mesa-vulkan-drivers vulkan-tools build-essential cmake git python3 libvulkan-dev spirv-headers
+```
+
+`glslc` (compilador de shaders, necessário para compilar o llama.cpp
+com Vulkan) só existe nos repositórios do Ubuntu a partir da versão
+**24.04**. Confira a sua versão com `lsb_release -a`:
+
+- **Ubuntu 24.04+**: `sudo apt install -y glslc`
+- **Ubuntu 22.04 (Jammy) ou anterior**: o pacote não existe — instale
+  o SDK oficial da LunarG, que traz o `glslc` junto:
+
+  ```bash
+  wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
+  sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list http://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
+  sudo apt update
+  sudo apt install -y vulkan-sdk
+  ```
+
+Confirme que `glslc` está instalado antes de seguir para o próximo
+passo — sem isso, a compilação do llama.cpp falha com dezenas de
+erros `Vulkan_GLSLC_EXECUTABLE-NOTFOUND` (achado testando numa máquina
+Ubuntu 22.04 real):
+
+```bash
+which glslc && glslc --version
 ```
 
 Confirme que a GPU aparece via Vulkan:
@@ -51,20 +75,19 @@ compatibilidade Polaris em
 e [aivisionslab-studios/rx580-local-ai-guide](https://github.com/aivisionslab-studios/rx580-local-ai-guide)
 (referenciados em `ARQUITETURA_FABRICA_LOCAL_IA.md`, seção 6.1).
 
-Se a compilação falhar com algo como:
+Se a compilação falhar com dezenas de erros como:
 
 ```
 Vulkan_GLSLC_EXECUTABLE-NOTFOUND -fshader-stage=compute ...
 vulkan-shaders-gen: one or more shaders failed to compile
 ```
 
-o pacote `glslc` (compilador de shaders) não estava instalado quando o
-CMake configurou o projeto — o passo 2 acima já inclui `glslc`, mas se
-você configurou antes de instalá-lo, o CMake guardou `NOTFOUND` em
-cache. Limpe o cache e reconfigure:
+confirme primeiro que `which glslc` retorna um caminho (passo 2). Se
+retornar, o problema é o CMake ter guardado `NOTFOUND` em cache de uma
+configuração anterior — **sempre apague `build/` por completo antes de
+reconfigurar**, um `cmake -B build` sozinho não re-detecta o `glslc`:
 
 ```bash
-sudo apt install -y glslc libvulkan-dev spirv-headers
 rm -rf build
 cmake -B build -DGGML_VULKAN=ON
 cmake --build build --config Release -j$(nproc)
