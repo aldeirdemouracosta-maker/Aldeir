@@ -69,6 +69,24 @@ def test_bwrap_ausente_levanta_erro_alto(projeto: Path):
         )
 
 
+def test_falha_do_bwrap_ao_montar_sandbox_nao_vira_resultado_de_comando(tmp_path: Path, projeto: Path):
+    """Reproduz sem depender do host: um `bwrap` que falha antes de rodar
+    o comando (ex.: RTM_NEWADDR bloqueado por AppArmor, como no runner do
+    GitHub Actions) precisa levantar erro, não devolver um
+    ResultadoExecucao como se o comando dentro do sandbox tivesse rodado
+    e saído com código != 0."""
+    bwrap_falso = tmp_path / "bwrap_falso.sh"
+    bwrap_falso.write_text(
+        "#!/bin/sh\necho 'bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted' >&2\nexit 1\n"
+    )
+    bwrap_falso.chmod(0o755)
+
+    with pytest.raises(SandboxIndisponivelError):
+        executar_comando_sandbox(
+            projeto, ["/bin/echo", "x"], ConfiguracaoSandbox(comando_bwrap=str(bwrap_falso))
+        )
+
+
 def test_executar_pos_inspecao_recusa_sem_liberacao():
     relatorio = {"pode_auto_prosseguir": False, "diretorio_extraido": "/tmp"}
     with pytest.raises(RiscoNaoRevisadoError):

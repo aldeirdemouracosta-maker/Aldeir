@@ -127,6 +127,14 @@ def executar_comando_sandbox(
         expirou = True
         codigo_saida = None
 
+    if not expirou and codigo_saida != 0 and stderr.startswith("bwrap: "):
+        # O próprio bwrap falhou ao montar o sandbox (ex.: namespace de
+        # rede bloqueado por política do host) — isso nunca chegou a
+        # rodar `comando`. Tratar como resultado de execução (código de
+        # saída do comando) esconderia uma falha de infraestrutura como
+        # se fosse o comportamento do projeto sendo testado.
+        raise SandboxIndisponivelError(f"bwrap falhou ao montar o sandbox: {stderr.strip()}")
+
     return ResultadoExecucao(
         comando=comando,
         codigo_saida=codigo_saida,
