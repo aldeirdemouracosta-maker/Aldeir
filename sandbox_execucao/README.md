@@ -82,6 +82,17 @@ se isso importar para o seu caso de uso, combine com `cgroups`
 (`systemd-run --scope -p MemoryMax=... -p TasksMax=...`) por fora
 deste script.
 
+**Toolchain fora de `/usr`, `/bin`, `/sbin`, `/lib`, `/lib64`, `/etc`,
+`/opt` não fica visível dentro do sandbox.** `/opt` foi incluído
+justamente porque é onde vivem instalações comuns de toolchain (ex.:
+o Python do `actions/setup-python` no GitHub Actions fica em
+`/opt/hostedtoolcache` — sem esse bind, `python3 -m pytest` dentro do
+sandbox não encontrava o `pytest` instalado pelo `pip` no runner,
+mesmo com tudo certo do lado de fora). Instalações em diretório de
+usuário (`~/.pyenv`, `~/.nvm`, `~/.rbenv` etc.) continuam fora do
+alcance do sandbox — a alternativa é um ambiente virtual/`node_modules`
+dentro do próprio diretório do projeto, que fica visível via `/work`.
+
 ## Habilitar rede (quando necessário)
 
 Alguns builds precisam baixar dependências. Isso é uma escolha

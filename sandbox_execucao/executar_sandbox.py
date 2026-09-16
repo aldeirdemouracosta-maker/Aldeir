@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-CAMINHOS_SOMENTE_LEITURA = ["/usr", "/bin", "/sbin", "/lib", "/lib64", "/etc"]
+CAMINHOS_SOMENTE_LEITURA = ["/usr", "/bin", "/sbin", "/lib", "/lib64", "/etc", "/opt"]
 
 
 class SandboxIndisponivelError(Exception):
