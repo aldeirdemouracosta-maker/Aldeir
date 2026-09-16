@@ -3,12 +3,15 @@ from pathlib import Path
 
 import pytest
 
+from dataclasses import asdict
+
 from analisador_projeto.analisar_completude import (
     analisar_completude,
     detectar_linguagem_principal,
     encontrar_funcoes_incompletas_python,
     encontrar_modulos_stub,
     encontrar_todos,
+    formatar_diagnostico_para_prompt,
 )
 
 
@@ -80,6 +83,17 @@ def test_encontrar_modulos_stub(projeto_incompleto: Path):
     achados = encontrar_modulos_stub(projeto_incompleto)
     assert len(achados) == 1
     assert achados[0].arquivo == "utils.py"
+
+
+def test_formatar_diagnostico_para_prompt_inclui_achados_principais(projeto_incompleto: Path):
+    relatorio = asdict(analisar_completude(projeto_incompleto, rodar_testes_automaticos=False))
+    texto = formatar_diagnostico_para_prompt(relatorio)
+
+    assert "Python" in texto
+    assert "3 função/funções incompleta(s)" in texto
+    assert "subtrai" in texto
+    assert "TODO" in texto
+    assert f"Estado estimado: {relatorio['estado_estimado_percentual']}%" in texto
 
 
 def test_relatorio_seguranca_bloqueia_execucao_de_testes(projeto_completo: Path):

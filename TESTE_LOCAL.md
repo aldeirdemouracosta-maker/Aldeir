@@ -97,6 +97,14 @@ python3 -m orquestrador.orquestrador /tmp/projeto_teste \
   "implemente a função soma em app.py para retornar a soma de a e b, e valide com python3 -c 'from app import soma; assert soma(2,3)==5'"
 ```
 
+Com `--diagnostico`, o `analisador_projeto` roda antes e o agente já
+recebe TODOs/funções incompletas/estado estimado como contexto:
+
+```bash
+python3 -m orquestrador.orquestrador --diagnostico /tmp/projeto_teste \
+  "termine a implementação pendente"
+```
+
 Esperado: o orquestrador chama o modelo, o modelo decide ler `app.py`,
 escrever a implementação, rodar o comando de validação em sandbox, e
 chamar `finalizar`. A saída final é um JSON `{"resumo": ..., "sucesso": true}`.

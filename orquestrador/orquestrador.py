@@ -196,14 +196,15 @@ class Orquestrador:
         self.config_sandbox = config_sandbox or ConfiguracaoSandbox()
         self.max_iteracoes = max_iteracoes
 
-    def rodar(self, instrucao: str) -> dict:
+    def rodar(self, instrucao: str, contexto_extra: Optional[str] = None) -> dict:
         motor = selecionar_motor()
         if not motor["escolhido"]:
             raise MotorIndisponivelError(motor["mensagem"])
 
+        mensagem_usuario = instrucao if not contexto_extra else f"{contexto_extra}\n\n{instrucao}"
         mensagens = [
             {"role": "system", "content": PROMPT_SISTEMA},
-            {"role": "user", "content": instrucao},
+            {"role": "user", "content": mensagem_usuario},
         ]
 
         for _ in range(self.max_iteracoes):
@@ -242,14 +243,27 @@ def main() -> None:
     parser.add_argument("diretorio_projeto", type=Path)
     parser.add_argument("instrucao")
     parser.add_argument("--timeout-comando", type=int, default=120)
+    parser.add_argument(
+        "--diagnostico",
+        action="store_true",
+        help="roda analisador_projeto antes e dá o diagnóstico de contexto ao agente",
+    )
     args = parser.parse_args()
+
+    contexto_extra = None
+    if args.diagnostico:
+        from analisador_projeto.analisar_completude import analisar_completude, formatar_diagnostico_para_prompt
+        from dataclasses import asdict
+
+        relatorio = asdict(analisar_completude(args.diretorio_projeto))
+        contexto_extra = formatar_diagnostico_para_prompt(relatorio)
 
     orquestrador = Orquestrador(
         args.diretorio_projeto,
         ConfiguracaoSandbox(timeout_segundos=args.timeout_comando),
     )
     try:
-        resultado = orquestrador.rodar(args.instrucao)
+        resultado = orquestrador.rodar(args.instrucao, contexto_extra=contexto_extra)
     except MotorIndisponivelError as erro:
         print(json.dumps({"erro": str(erro)}, indent=2, ensure_ascii=False))
         raise SystemExit(1)

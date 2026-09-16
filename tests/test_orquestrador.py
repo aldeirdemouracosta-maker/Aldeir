@@ -90,3 +90,46 @@ def test_limite_de_iteracoes_e_respeitado(projeto: Path, servidor_llm_mock):
 
     with pytest.raises(orq.LimiteDeIteracoesError):
         orq.Orquestrador(projeto, max_iteracoes=3).rodar("nunca termine")
+
+
+def test_contexto_extra_e_prependido_a_mensagem_do_usuario(projeto: Path):
+    """O diagnóstico do analisador_projeto (via --diagnostico na CLI)
+    precisa chegar de verdade na mensagem enviada ao modelo, não só
+    existir como parâmetro aceito."""
+    import socket
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    capturado = {}
+    resposta_finalizar = _msg_tool_call("1", "finalizar", {"resumo": "ok", "sucesso": True})
+
+    class _HandlerCaptura(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_POST(self):
+            tamanho = int(self.headers.get("Content-Length", 0))
+            corpo = json.loads(self.rfile.read(tamanho))
+            capturado["mensagens"] = corpo["messages"]
+            saida = json.dumps({"choices": [{"message": resposta_finalizar}]}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(saida)))
+            self.end_headers()
+            self.wfile.write(saida)
+
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    porta = s.getsockname()[1]
+    s.close()
+    servidor = HTTPServer(("127.0.0.1", porta), _HandlerCaptura)
+    threading.Thread(target=servidor.serve_forever, daemon=True).start()
+    try:
+        orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": f"http://127.0.0.1:{porta}/v1"}
+        orq.Orquestrador(projeto).rodar("conserte o bug", contexto_extra="Diagnóstico: 3 funções incompletas")
+    finally:
+        servidor.shutdown()
+
+    mensagem_usuario = capturado["mensagens"][1]["content"]
+    assert mensagem_usuario.startswith("Diagnóstico: 3 funções incompletas")
+    assert mensagem_usuario.endswith("conserte o bug")

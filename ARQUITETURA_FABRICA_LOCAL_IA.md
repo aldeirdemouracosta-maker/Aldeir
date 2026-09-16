@@ -149,7 +149,11 @@ tentando acessar rede/escrever fora de `/work` dentro do sandbox
   execução de comando reais, bloqueio de path traversal, limite de
   iterações e falha alta quando nenhum motor está respondendo. Hoje é
   um agente genérico único, não os dez papéis especializados da seção
-  4 — ver `orquestrador/README.md` para o porquê dessa escolha.
+  4 — ver `orquestrador/README.md` para o porquê dessa escolha. Com a
+  flag `--diagnostico`, roda o `analisador_projeto` antes e passa o
+  resultado como contexto inicial — o agente já começa sabendo TODOs,
+  funções incompletas e testes falhando, em vez de descobrir por
+  tentativa e erro.
 - `analisador_projeto/`: diagnóstico "o que existe / o que falta" —
   linguagem principal, TODOs, funções incompletas em Python (via
   `ast`), módulos-esqueleto, e contagem de testes passando/falhando
@@ -157,7 +161,7 @@ tentando acessar rede/escrever fora de `/work` dentro do sandbox
   `importador_zip`). Implementa a tela "Projeto detectado" do modo
   "Terminar projeto" (seção 2) com um "estado estimado" heurístico
   documentado como tal, não uma métrica validada.
-- `tests/`: suíte pytest (34 testes) cobrindo os cinco módulos acima
+- `tests/`: suíte pytest (36 testes) cobrindo os cinco módulos acima
   com casos maliciosos reais (zip-slip, zip bomb, padrão de comando
   perigoso, escrita/rede fora do sandbox, path traversal no
   orquestrador). `.github/workflows/testes.yml` roda a suíte em todo

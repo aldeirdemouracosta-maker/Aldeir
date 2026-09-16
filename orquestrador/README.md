@@ -45,6 +45,14 @@ python3 -m orquestrador.orquestrador /caminho/do/projeto "adicione um teste para
 Python só coloca o diretório do próprio arquivo no import path, não a
 raiz do repositório.)
 
+Com `--diagnostico`, o `analisador_projeto` roda primeiro e o agente já
+começa sabendo o que falta (TODOs, funções incompletas, testes
+falhando), em vez de descobrir por tentativa e erro:
+
+```bash
+python3 -m orquestrador.orquestrador --diagnostico /caminho/do/projeto "termine a implementação pendente"
+```
+
 Como biblioteca:
 
 ```python

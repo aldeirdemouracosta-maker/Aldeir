@@ -338,6 +338,48 @@ def analisar_completude(
     )
 
 
+def formatar_diagnostico_para_prompt(relatorio: dict, limite_itens: int = 20) -> str:
+    """Resume um RelatorioCompletude (como dict) em texto compacto para
+    dar de contexto inicial a um agente — ele começa já sabendo o que
+    falta, em vez de descobrir por tentativa e erro."""
+    linhas = [
+        "Diagnóstico do projeto (heurístico, gerado automaticamente):",
+        f"- Linguagem principal: {relatorio['linguagem_principal']}",
+        f"- {relatorio['total_arquivos_codigo']} arquivo(s) de código",
+        f"- {len(relatorio['todos_encontrados'])} TODO/FIXME encontrado(s)",
+        f"- {len(relatorio['funcoes_incompletas'])} função/funções incompleta(s)",
+        f"- {len(relatorio['modulos_stub'])} módulo(s)-esqueleto",
+    ]
+
+    testes = relatorio.get("testes")
+    if testes:
+        linhas.append(
+            f"- testes: {testes['passaram']} passaram, {testes['falharam']} falharam "
+            f"(comando: {' '.join(testes['comando'])})"
+        )
+    else:
+        linhas.append("- testes: não rodados/detectados")
+
+    linhas.append(f"- Estado estimado: {relatorio['estado_estimado_percentual']}%")
+
+    if relatorio["funcoes_incompletas"]:
+        linhas.append("\nFunções incompletas:")
+        for achado in relatorio["funcoes_incompletas"][:limite_itens]:
+            linhas.append(f"  - {achado['arquivo']}:{achado['linha']} — {achado['detalhe']}")
+
+    if relatorio["todos_encontrados"]:
+        linhas.append("\nTODOs:")
+        for achado in relatorio["todos_encontrados"][:limite_itens]:
+            linhas.append(f"  - {achado['arquivo']}:{achado['linha']} — {achado['detalhe']}")
+
+    if relatorio["observacoes"]:
+        linhas.append("\nObservações:")
+        for observacao in relatorio["observacoes"]:
+            linhas.append(f"  - {observacao}")
+
+    return "\n".join(linhas)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("diretorio_projeto", type=Path)
