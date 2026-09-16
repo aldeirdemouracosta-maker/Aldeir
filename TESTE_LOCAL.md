@@ -93,7 +93,7 @@ ou o servidor não respondeu em `:8080`).
 mkdir -p /tmp/projeto_teste
 echo "def soma(a, b):\n    pass" > /tmp/projeto_teste/app.py
 
-python3 orquestrador/orquestrador.py /tmp/projeto_teste \
+python3 -m orquestrador.orquestrador /tmp/projeto_teste \
   "implemente a função soma em app.py para retornar a soma de a e b, e valide com python3 -c 'from app import soma; assert soma(2,3)==5'"
 ```
 

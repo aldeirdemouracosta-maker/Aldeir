@@ -32,9 +32,18 @@ do projeto.
 
 ## Uso
 
+`orquestrador.py` importa `motor_ia` e `sandbox_execucao` (pacotes irmãos
+na raiz do repositório), então precisa rodar como módulo — a partir da
+raiz do repositório, não com o caminho direto do arquivo:
+
 ```bash
-python3 orquestrador.py /caminho/do/projeto "adicione um teste para a função X"
+python3 -m orquestrador.orquestrador /caminho/do/projeto "adicione um teste para a função X"
 ```
+
+(`python3 orquestrador/orquestrador.py ...` falha com
+`ModuleNotFoundError: No module named 'motor_ia'` — sem o `-m`, o
+Python só coloca o diretório do próprio arquivo no import path, não a
+raiz do repositório.)
 
 Como biblioteca:
 
