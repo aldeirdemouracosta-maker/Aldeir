@@ -207,6 +207,42 @@ Para desinstalar:
 sudo ./empacotamento/desinstalar.sh
 ```
 
+## 11. Interpretar um mockup com um modelo de visão (experimental)
+
+`visao_mockup/interpretar_mockup.py` é um agente reduzido: não fica
+ligado junto com o modelo de código (não cabem os dois ao mesmo tempo
+em 8GB de VRAM). Ele sobe um `llama-server` só com o modelo de visão,
+manda uma imagem, recebe a descrição dos elementos, e desliga o
+servidor sozinho — pensado para ser chamado pelo orquestrador só
+quando a instrução envolver uma imagem, não para rodar continuamente.
+
+Baixe um modelo de visão em GGUF com o `mmproj` (projetor multimodal)
+correspondente — por exemplo, procure por "LLaVA GGUF" ou
+"Qwen2-VL-7B-Instruct GGUF" no Hugging Face; precisa dos dois
+arquivos, o modelo principal e o `mmproj-*.gguf`. LLaVA tende a ter
+suporte mais maduro no backend Vulkan do llama.cpp por ser mais
+antigo — vale testar os dois e comparar.
+
+```bash
+python3 -m visao_mockup.interpretar_mockup \
+  --binario ./llama.cpp/build/bin/llama-server \
+  --modelo ~/modelos/llava-7b.gguf \
+  --mmproj ~/modelos/llava-7b-mmproj.gguf \
+  --imagem ~/mockups/tela_principal.png
+```
+
+Esperado: uma descrição em texto dos elementos visuais (botões,
+campos, cards) com posição aproximada. Ainda **não** está ligado ao
+orquestrador — é só o passo 1 (validar que o modelo de visão funciona
+de verdade no seu hardware) antes de virar uma ferramenta que o
+agente de código chama sob demanda.
+
+Se o servidor não ficar pronto a tempo, `ServidorVisaoIndisponivelError`
+mostra o final do stderr do `llama-server` — normalmente falta de
+`--mmproj` suportado por essa build, ou VRAM insuficiente por já ter
+outro modelo carregado (confira `nvidia-smi`/`radeontop` e desligue o
+modelo de código antes de testar este).
+
 ## Achados testando contra um modelo real (Xeon + RX 580, Qwen2.5-Coder-7B)
 
 Estes já foram encontrados e corrigidos nesta sessão — deixados aqui
