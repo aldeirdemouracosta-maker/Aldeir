@@ -139,6 +139,18 @@ malicioso de zip-slip (rejeitado antes de tocar o disco) e um comando
 tentando acessar rede/escrever fora de `/work` dentro do sandbox
 (ambos bloqueados).
 
+- `orquestrador/`: loop de agente com tool calling (`ler_arquivo`,
+  `escrever_arquivo`, `executar_comando`, `finalizar`) sobre a API
+  OpenAI-compatible devolvida por `motor_ia`. Leitura/escrita confinada
+  à raiz do projeto (mesma defesa contra path traversal do
+  `importador_zip`); comandos rodam via `sandbox_execucao`. Testado de
+  ponta a ponta com um servidor OpenAI-compatible falso (sem um motor
+  de IA real disponível neste ambiente de desenvolvimento): escrita e
+  execução de comando reais, bloqueio de path traversal, limite de
+  iterações e falha alta quando nenhum motor está respondendo. Hoje é
+  um agente genérico único, não os dez papéis especializados da seção
+  4 — ver `orquestrador/README.md` para o porquê dessa escolha.
+
 ## 4. Agentes especializados
 
 Em vez de um único agente tentando fazer tudo:
@@ -293,9 +305,10 @@ REQUISITOS
 │ MOTOR DE IA LOCAL      │ ← motor_ia/ (este repositório)
 │ IMPORTAÇÃO SEGURA DE ZIP│ ← importador_zip/ (este repositório)
 │ SANDBOX DE EXECUÇÃO    │ ← sandbox_execucao/ (este repositório)
+│ ORQUESTRADOR (1 agente)│ ← orquestrador/ (este repositório)
 └──────────────────────────────┘
   ↓
-DESENVOLVIMENTO REAL      ← agente Coder ainda precisa pesquisar/construir
+DESENVOLVIMENTO REAL      ← loop de agente existe; papéis especializados ainda precisam ser construídos
   ↓
 BACKEND / BANCO / APIs    ← ainda precisa pesquisar
   ↓
