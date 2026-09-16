@@ -150,6 +150,11 @@ tentando acessar rede/escrever fora de `/work` dentro do sandbox
   iterações e falha alta quando nenhum motor está respondendo. Hoje é
   um agente genérico único, não os dez papéis especializados da seção
   4 — ver `orquestrador/README.md` para o porquê dessa escolha.
+- `tests/`: suíte pytest (25 testes) cobrindo os quatro módulos acima
+  com casos maliciosos reais (zip-slip, zip bomb, padrão de comando
+  perigoso, escrita/rede fora do sandbox, path traversal no
+  orquestrador). `.github/workflows/testes.yml` roda a suíte em todo
+  push/PR — a CI que faltava neste repositório.
 
 ## 4. Agentes especializados
 
