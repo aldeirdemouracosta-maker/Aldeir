@@ -136,8 +136,18 @@ def escrever_arquivo(raiz: Path, relativo: str, conteudo: str) -> None:
 
 
 def chamar_llm(base_url: str, mensagens: list, timeout: int = 120) -> dict:
+    # tool_choice="required" força o modelo a sempre emitir uma chamada de
+    # ferramenta (nunca texto solto) e, em motores como o llama-server,
+    # ativa a gramática que garante o formato estruturado de tool_calls —
+    # sem isso, alguns modelos (ex.: Qwen2.5-Coder) escrevem o JSON da
+    # chamada como texto comum, que não é reconhecido como tool_calls.
     corpo = json.dumps(
-        {"model": "local", "messages": mensagens, "tools": FERRAMENTAS}
+        {
+            "model": "local",
+            "messages": mensagens,
+            "tools": FERRAMENTAS,
+            "tool_choice": "required",
+        }
     ).encode("utf-8")
     requisicao = urllib.request.Request(
         base_url.rstrip("/") + "/chat/completions",
