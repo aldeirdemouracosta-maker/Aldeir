@@ -297,3 +297,62 @@ def test_extracao_funciona_mesmo_com_geracao_truncada_depois_do_primeiro_bloco(p
         servidor.shutdown()
 
     assert mensagem["tool_calls"][0]["function"]["name"] == "ler_arquivo"
+
+
+def test_cli_contexto_arquivo_e_diagnostico_se_somam(projeto: Path, servidor_llm_mock, monkeypatch, tmp_path: Path):
+    """--contexto-arquivo (ex.: descrição de mockup gerada por
+    visao_mockup) precisa chegar na mensagem do modelo junto com o
+    --diagnostico, quando os dois são passados juntos na CLI."""
+    capturado = {}
+
+    import socket
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    resposta_finalizar = _msg_tool_call("1", "finalizar", {"resumo": "ok", "sucesso": True})
+
+    class _HandlerCaptura(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_POST(self):
+            tamanho = int(self.headers.get("Content-Length", 0))
+            corpo = json.loads(self.rfile.read(tamanho))
+            capturado["mensagens"] = corpo["messages"]
+            saida = json.dumps({"choices": [{"message": resposta_finalizar}]}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(saida)))
+            self.end_headers()
+            self.wfile.write(saida)
+
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    porta = s.getsockname()[1]
+    s.close()
+    servidor = HTTPServer(("127.0.0.1", porta), _HandlerCaptura)
+    threading.Thread(target=servidor.serve_forever, daemon=True).start()
+
+    arquivo_contexto = tmp_path / "descricao_mockup.txt"
+    arquivo_contexto.write_text("Mockup: botão 'Salvar' no rodapé, campo 'Nome' no topo.")
+
+    monkeypatch.setattr(orq, "selecionar_motor", lambda: {"escolhido": "mock", "base_url": f"http://127.0.0.1:{porta}/v1"})
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "orquestrador",
+            str(projeto),
+            "implemente a tela do mockup",
+            "--diagnostico",
+            "--contexto-arquivo",
+            str(arquivo_contexto),
+        ],
+    )
+    try:
+        orq.main()
+    finally:
+        servidor.shutdown()
+
+    mensagem_usuario = capturado["mensagens"][1]["content"]
+    assert "Mockup: botão 'Salvar' no rodapé" in mensagem_usuario
+    assert mensagem_usuario.endswith("implemente a tela do mockup")

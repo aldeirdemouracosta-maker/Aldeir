@@ -161,14 +161,25 @@ tentando acessar rede/escrever fora de `/work` dentro do sandbox
   `importador_zip`). Implementa a tela "Projeto detectado" do modo
   "Terminar projeto" (seção 2) com um "estado estimado" heurístico
   documentado como tal, não uma métrica validada.
-- `interface/`: janela desktop única (PySide6) — escolher pasta,
-  analisar projeto, escrever instrução, executar. Roda análise e
-  orquestrador em `QThread` separada (não trava esperando o modelo) e
-  mostra o progresso ao vivo via `on_evento`. Testada sem tela real
-  (`QT_QPA_PLATFORM=offscreen`), com botões clicados de verdade e
-  arquivo escrito em disco conferido no final.
-- `tests/`: suíte pytest (48 testes) cobrindo os seis módulos acima
-  com casos maliciosos reais (zip-slip, zip bomb, padrão de comando
+- `interface/`: janela desktop única (PySide6) — escolher pasta ou
+  importar ZIP, analisar projeto, escrever instrução, executar. Roda
+  análise e orquestrador em `QThread` separada (não trava esperando o
+  modelo) e mostra o progresso ao vivo via `on_evento`. Testada sem
+  tela real (`QT_QPA_PLATFORM=offscreen`), com botões clicados de
+  verdade e arquivo escrito em disco conferido no final.
+- `visao_mockup/`: agente reduzido — sobe um `llama-server` só com um
+  modelo de visão (Qwen2.5-VL, validado numa RX 580 real; LLaVA é
+  legado no llama.cpp hoje), interpreta uma imagem de mockup em
+  descrição de elementos de interface, e desliga o servidor. Não fica
+  residente junto com o modelo de código (não cabem os dois em 8GB de
+  VRAM ao mesmo tempo) e não é uma ferramenta chamada no meio do loop
+  do orquestrador — é um passo prévio, cuja saída entra como contexto
+  via `--contexto-arquivo` (ver `TESTE_LOCAL.md`, seção 11).
+- `empacotamento/`: instala a interface como comando de sistema
+  (`fabrica-local-ia`) com ícone e entrada no menu de aplicativos,
+  sem copiar código — aponta para a cópia local do repositório.
+- `tests/`: suíte pytest (59 testes) cobrindo os módulos acima com
+  casos maliciosos reais (zip-slip, zip bomb, padrão de comando
   perigoso, escrita/rede fora do sandbox, path traversal no
   orquestrador). `.github/workflows/testes.yml` roda a suíte em todo
   push/PR — a CI que faltava neste repositório.

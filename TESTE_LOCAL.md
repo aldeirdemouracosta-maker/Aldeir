@@ -207,35 +207,94 @@ Para desinstalar:
 sudo ./empacotamento/desinstalar.sh
 ```
 
-## 11. Interpretar um mockup com um modelo de visão (experimental)
+## 11. Interpretar um mockup com um modelo de visão
 
 `visao_mockup/interpretar_mockup.py` é um agente reduzido: não fica
 ligado junto com o modelo de código (não cabem os dois ao mesmo tempo
 em 8GB de VRAM). Ele sobe um `llama-server` só com o modelo de visão,
 manda uma imagem, recebe a descrição dos elementos, e desliga o
-servidor sozinho — pensado para ser chamado pelo orquestrador só
-quando a instrução envolver uma imagem, não para rodar continuamente.
+servidor sozinho.
 
-Baixe um modelo de visão em GGUF com o `mmproj` (projetor multimodal)
-correspondente — por exemplo, procure por "LLaVA GGUF" ou
-"Qwen2-VL-7B-Instruct GGUF" no Hugging Face; precisa dos dois
-arquivos, o modelo principal e o `mmproj-*.gguf`. LLaVA tende a ter
-suporte mais maduro no backend Vulkan do llama.cpp por ser mais
-antigo — vale testar os dois e comparar.
+**Validado nesta sessão** contra Qwen2.5-VL-7B-Instruct numa RX 580 via
+Vulkan: a descrição bateu com precisão contra um mockup real (botões,
+cards, árvore de arquivos, menu — tudo lido corretamente).
+
+**Sobre o modelo**: apesar de LLaVA ser o nome mais conhecido, ele hoje
+é considerado legado no llama.cpp (exige scripts de conversão manual —
+ver `tools/mtmd/legacy-models`). A lista atual de modelos
+pré-quantizados prontos para `-hf` está em
+`~/llama.cpp/docs/multimodal.md` — Qwen2.5-VL-7B-Instruct-GGUF é o que
+validamos, mas Gemma 3, SmolVLM e InternVL também estão na lista se
+quiser comparar.
+
+Pré-requisito: o `llama.cpp` precisa ter sido compilado com suporte a
+HTTPS para o `-hf` baixar modelos do Hugging Face — se aparecer
+`HTTPS is not supported` no log, falta `libssl-dev`:
 
 ```bash
-python3 -m visao_mockup.interpretar_mockup \
-  --binario ./llama.cpp/build/bin/llama-server \
-  --modelo ~/modelos/llava-7b.gguf \
-  --mmproj ~/modelos/llava-7b-mmproj.gguf \
-  --imagem ~/mockups/tela_principal.png
+sudo apt install -y libssl-dev
+cd ~/llama.cpp
+rm -rf build
+cmake -B build -DGGML_VULKAN=ON
+cmake --build build --config Release -j$(nproc)
 ```
 
-Esperado: uma descrição em texto dos elementos visuais (botões,
-campos, cards) com posição aproximada. Ainda **não** está ligado ao
-orquestrador — é só o passo 1 (validar que o modelo de visão funciona
-de verdade no seu hardware) antes de virar uma ferramenta que o
-agente de código chama sob demanda.
+**Suba o servidor de visão em segundo plano** (se rodar em primeiro
+plano na mesma aba, ele morre assim que você digitar o próximo
+comando):
+
+```bash
+cd ~/llama.cpp
+nohup ./build/bin/llama-server -hf ggml-org/Qwen2.5-VL-7B-Instruct-GGUF --port 8082 > /tmp/llama-vision.log 2>&1 &
+sleep 3
+curl -s http://127.0.0.1:8082/v1/models   # confirma que subiu antes de seguir
+```
+
+**Gere a descrição do mockup** e salve num arquivo (a CLI do módulo já
+imprime pronto para redirecionar):
+
+```bash
+cd ~/Aldeir
+python3 -m visao_mockup.interpretar_mockup \
+  --binario ~/llama.cpp/build/bin/llama-server \
+  --modelo dummy --mmproj dummy \
+  --imagem ~/mockups/tela_principal.png > /tmp/descricao_mockup.txt
+```
+
+> Nota: como o servidor já está de pé manualmente (passo acima), é mais
+> simples chamar a função Python direto em vez da CLI completa (que
+> sobe/derruba seu próprio servidor). Veja o exemplo com
+> `interpretar_imagem` na seção de arquitetura, ou rode:
+> ```bash
+> python3 -c "
+> from pathlib import Path
+> from visao_mockup.interpretar_mockup import interpretar_imagem
+> print(interpretar_imagem('http://127.0.0.1:8082/v1', Path('~/mockups/tela_principal.png').expanduser(), timeout=180))
+> " > /tmp/descricao_mockup.txt
+> ```
+
+**Desligue o servidor de visão** e suba o de código (os dois não cabem
+juntos):
+
+```bash
+pkill -f llama-server
+./build/bin/llama-server -m ~/modelos/SEU_MODELO_DE_CODIGO.gguf --port 8080 --jinja
+```
+
+**Rode o orquestrador com a descrição do mockup como contexto** — a
+flag `--contexto-arquivo` soma com `--diagnostico` se os dois forem
+passados juntos:
+
+```bash
+cd ~/Aldeir
+python3 -m orquestrador.orquestrador --contexto-arquivo /tmp/descricao_mockup.txt \
+  /caminho/do/projeto "implemente a tela desse mockup"
+```
+
+A interpretação do mockup é sempre um passo separado, antes de ligar
+o modelo de código — não uma ferramenta que o agente chama no meio do
+raciocínio (o orquestrador não gerencia troca de servidor sozinho, e
+os dois modelos não cabem juntos na VRAM).
 
 Se o servidor não ficar pronto a tempo, `ServidorVisaoIndisponivelError`
 mostra o final do stderr do `llama-server` — normalmente falta de

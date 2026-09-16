@@ -372,15 +372,29 @@ def main() -> None:
         action="store_true",
         help="roda analisador_projeto antes e dá o diagnóstico de contexto ao agente",
     )
+    parser.add_argument(
+        "--contexto-arquivo",
+        type=Path,
+        default=None,
+        help=(
+            "arquivo de texto cujo conteúdo é acrescentado como contexto extra "
+            "antes da instrução — ex.: a descrição gerada por "
+            "`visao_mockup.interpretar_mockup` (motor de visão roda separado, "
+            "antes do texto, por causa de VRAM: ver TESTE_LOCAL.md)"
+        ),
+    )
     args = parser.parse_args()
 
-    contexto_extra = None
+    partes_contexto = []
     if args.diagnostico:
         from analisador_projeto.analisar_completude import analisar_completude, formatar_diagnostico_para_prompt
         from dataclasses import asdict
 
         relatorio = asdict(analisar_completude(args.diretorio_projeto))
-        contexto_extra = formatar_diagnostico_para_prompt(relatorio)
+        partes_contexto.append(formatar_diagnostico_para_prompt(relatorio))
+    if args.contexto_arquivo:
+        partes_contexto.append(args.contexto_arquivo.read_text())
+    contexto_extra = "\n\n".join(partes_contexto) or None
 
     orquestrador = Orquestrador(
         args.diretorio_projeto,
