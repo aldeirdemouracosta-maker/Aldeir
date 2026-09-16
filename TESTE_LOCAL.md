@@ -17,7 +17,7 @@ git checkout claude/friendly-rubin-xg4c53
 
 ```bash
 sudo apt update
-sudo apt install -y bubblewrap mesa-vulkan-drivers vulkan-tools build-essential cmake git python3
+sudo apt install -y bubblewrap mesa-vulkan-drivers vulkan-tools build-essential cmake git python3 glslc libvulkan-dev spirv-headers
 ```
 
 Confirme que a GPU aparece via Vulkan:
@@ -50,6 +50,25 @@ compatibilidade Polaris em
 [andrewdhannah/vulkan-polaris-llama](https://github.com/andrewdhannah/vulkan-polaris-llama)
 e [aivisionslab-studios/rx580-local-ai-guide](https://github.com/aivisionslab-studios/rx580-local-ai-guide)
 (referenciados em `ARQUITETURA_FABRICA_LOCAL_IA.md`, seção 6.1).
+
+Se a compilação falhar com algo como:
+
+```
+Vulkan_GLSLC_EXECUTABLE-NOTFOUND -fshader-stage=compute ...
+vulkan-shaders-gen: one or more shaders failed to compile
+```
+
+o pacote `glslc` (compilador de shaders) não estava instalado quando o
+CMake configurou o projeto — o passo 2 acima já inclui `glslc`, mas se
+você configurou antes de instalá-lo, o CMake guardou `NOTFOUND` em
+cache. Limpe o cache e reconfigure:
+
+```bash
+sudo apt install -y glslc libvulkan-dev spirv-headers
+rm -rf build
+cmake -B build -DGGML_VULKAN=ON
+cmake --build build --config Release -j$(nproc)
+```
 
 ## 4. Baixar um modelo GGUF pequeno para o primeiro teste
 
