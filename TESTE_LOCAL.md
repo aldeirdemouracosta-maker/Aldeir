@@ -111,8 +111,13 @@ mkdir -p ~/modelos
 ./llama.cpp/build/bin/llama-server \
   -m ~/modelos/SEU_MODELO.gguf \
   --port 8080 \
-  --host 127.0.0.1
+  --host 127.0.0.1 \
+  --jinja
 ```
+
+`--jinja` é obrigatório — ativa o processamento de chat template
+necessário para o tool calling do orquestrador funcionar (sem isso o
+modelo escreve texto comum em vez de uma chamada estruturada).
 
 Deixe rodando num terminal separado.
 
@@ -162,23 +167,38 @@ relatório pode ir direto para o `Orquestrador`. Se vier `false`,
 `arquivos_de_risco`/`padroes_suspeitos` no JSON explicam o motivo —
 revise antes de prosseguir.
 
+## Achados testando contra um modelo real (Xeon + RX 580, Qwen2.5-Coder-7B)
+
+Estes dois já foram encontrados e corrigidos nesta sessão — deixados
+aqui para quem seguir o guia não precisar redescobrir:
+
+1. **`llama-server` precisa de `--jinja`** para ativar o
+   processamento de chat template necessário para tool calling. Sem
+   isso, o modelo escreve texto comum em vez de uma chamada
+   estruturada.
+2. **Mesmo com `--jinja`, o Qwen2.5-Coder escreve a chamada de
+   ferramenta como JSON solto** em vez de embrulhada em `<tool_call>`
+   — formato que o parser do `llama-server` não reconhece, então a
+   chamada nunca chega como `tool_calls` estruturado. Corrigido
+   mandando `tool_choice: "required"` na requisição
+   (`orquestrador/orquestrador.py:chamar_llm`), que força o
+   `llama-server` a usar a gramática que garante o formato certo. Já
+   está no código — nada a fazer aqui.
+3. **Timeout**: processar o prompt inicial (system prompt + 4
+   ferramentas + diagnóstico) mais a geração com `tool_choice=required`
+   pode passar de 120s em CPU sem AVX2 + GPU híbrida. O padrão agora é
+   300s; se ainda assim der timeout, use `--timeout-llm 600` (ou mais)
+   na CLI do orquestrador.
+
 ## O que observar e reportar de volta
 
-Como o loop do orquestrador nunca foi testado contra um modelo real
-(só contra um mock nesta sessão de desenvolvimento), vale prestar
-atenção a três coisas específicas na primeira rodada:
+Se algo além do já corrigido aparecer:
 
-1. **Formato de `tool_calls` na resposta do llama-server** — o
-   parsing em `orquestrador/orquestrador.py:chamar_llm` espera o
-   formato padrão OpenAI (`choices[0].message.tool_calls`). Se o
-   llama-server devolver algo ligeiramente diferente, isso vai
-   aparecer como erro de `KeyError`/`json.JSONDecodeError` — me avise
-   com a resposta bruta do servidor para eu ajustar o parsing.
+1. **Formato de `tool_calls`** diferente do padrão OpenAI
+   (`choices[0].message.tool_calls`) ainda dá erro de
+   `KeyError`/`json.JSONDecodeError` — me avise com a resposta bruta
+   do servidor para eu ajustar o parsing.
 2. **Qualidade das decisões do modelo** — o `PROMPT_SISTEMA` é
    propositalmente simples; se o modelo ficar em loop, chamar
    ferramentas erradas, ou não finalizar, isso é ajuste de prompt, não
    bug de infraestrutura.
-3. **Tempo de resposta** — se `chamar_llm` der timeout (padrão de 120s
-   no HTTP, mais o `timeout_segundos` do sandbox por comando), pode
-   ser preciso aumentar os timeouts para modelos maiores rodando em
-   CPU+GPU híbrido.

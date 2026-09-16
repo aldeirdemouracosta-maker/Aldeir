@@ -201,10 +201,15 @@ class Orquestrador:
         raiz_projeto: Path,
         config_sandbox: Optional[ConfiguracaoSandbox] = None,
         max_iteracoes: int = 20,
+        timeout_llm: int = 300,
     ):
         self.raiz_projeto = raiz_projeto
         self.config_sandbox = config_sandbox or ConfiguracaoSandbox()
         self.max_iteracoes = max_iteracoes
+        # 300s de padrão: em CPU sem AVX2 + GPU híbrida, processar o prompt
+        # inicial (system prompt + ferramentas + diagnóstico) mais a geração
+        # com tool_choice=required pode passar de 120s na primeira chamada.
+        self.timeout_llm = timeout_llm
 
     def rodar(self, instrucao: str, contexto_extra: Optional[str] = None) -> dict:
         motor = selecionar_motor()
@@ -218,7 +223,7 @@ class Orquestrador:
         ]
 
         for _ in range(self.max_iteracoes):
-            mensagem_modelo = chamar_llm(motor["base_url"], mensagens)
+            mensagem_modelo = chamar_llm(motor["base_url"], mensagens, timeout=self.timeout_llm)
             mensagens.append(mensagem_modelo)
 
             chamadas = mensagem_modelo.get("tool_calls") or []
@@ -254,6 +259,12 @@ def main() -> None:
     parser.add_argument("instrucao")
     parser.add_argument("--timeout-comando", type=int, default=120)
     parser.add_argument(
+        "--timeout-llm",
+        type=int,
+        default=300,
+        help="segundos de espera por resposta do modelo (padrão 300; aumente em hardware sem AVX2/GPU híbrida)",
+    )
+    parser.add_argument(
         "--diagnostico",
         action="store_true",
         help="roda analisador_projeto antes e dá o diagnóstico de contexto ao agente",
@@ -271,6 +282,7 @@ def main() -> None:
     orquestrador = Orquestrador(
         args.diretorio_projeto,
         ConfiguracaoSandbox(timeout_segundos=args.timeout_comando),
+        timeout_llm=args.timeout_llm,
     )
     try:
         resultado = orquestrador.rodar(args.instrucao, contexto_extra=contexto_extra)
