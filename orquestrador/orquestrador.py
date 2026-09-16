@@ -23,7 +23,7 @@ import json
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from motor_ia.selecionar_motor import selecionar_motor
 from sandbox_execucao.executar_sandbox import (
@@ -286,10 +286,22 @@ class Orquestrador:
         self.timeout_llm = timeout_llm
         self.max_tokens_resposta = max_tokens_resposta
 
-    def rodar(self, instrucao: str, contexto_extra: Optional[str] = None) -> dict:
+    def rodar(
+        self,
+        instrucao: str,
+        contexto_extra: Optional[str] = None,
+        on_evento: Optional[Callable[[str], None]] = None,
+    ) -> dict:
+        """`on_evento`, se passado, recebe uma linha de texto a cada
+        etapa (útil para mostrar progresso ao vivo numa interface —
+        sem isso, `rodar()` só devolve algo quando termina, e uma
+        chamada real ao modelo pode levar minutos)."""
+        avisar = on_evento or (lambda _: None)
+
         motor = selecionar_motor()
         if not motor["escolhido"]:
             raise MotorIndisponivelError(motor["mensagem"])
+        avisar(f"Motor: {motor['escolhido']} ({motor['base_url']})")
 
         mensagem_usuario = instrucao if not contexto_extra else f"{contexto_extra}\n\n{instrucao}"
         mensagens = [
@@ -297,7 +309,8 @@ class Orquestrador:
             {"role": "user", "content": mensagem_usuario},
         ]
 
-        for _ in range(self.max_iteracoes):
+        for iteracao in range(self.max_iteracoes):
+            avisar(f"Chamando o modelo (tentativa {iteracao + 1}/{self.max_iteracoes})...")
             mensagem_modelo = chamar_llm(
                 motor["base_url"],
                 mensagens,
@@ -308,6 +321,7 @@ class Orquestrador:
 
             chamadas = mensagem_modelo.get("tool_calls") or []
             if not chamadas:
+                avisar("Modelo respondeu sem chamar nenhuma ferramenta.")
                 return {"resumo": mensagem_modelo.get("content", ""), "sucesso": None}
 
             for chamada in chamadas:
@@ -315,11 +329,14 @@ class Orquestrador:
                 argumentos = json.loads(chamada["function"]["arguments"] or "{}")
 
                 if nome == "finalizar":
+                    avisar(f"finalizar(sucesso={argumentos.get('sucesso')})")
                     return argumentos
 
+                avisar(f"{nome}({json.dumps(argumentos, ensure_ascii=False)})")
                 resultado = executar_ferramenta(
                     self.raiz_projeto, self.config_sandbox, nome, argumentos
                 )
+                avisar(f"  → {resultado[:200]}")
                 mensagens.append(
                     {
                         "role": "tool",

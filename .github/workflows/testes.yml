@@ -15,8 +15,10 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Instalar bubblewrap (sandbox_execucao)
-        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+      - name: Instalar bubblewrap (sandbox_execucao) e libs do Qt (interface)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap libegl1 libxkbcommon0 libxcb-cursor0 libgl1 libdbus-1-3 libfontconfig1
 
       - name: Permitir userns não privilegiado para o bwrap (restrição AppArmor do Ubuntu 24.04)
         run: |
@@ -33,8 +35,10 @@ jobs:
             sudo apparmor_parser -r /etc/apparmor.d/bwrap
           fi
 
-      - name: Instalar dependências de teste
-        run: pip install -r requirements-dev.txt
+      - name: Instalar dependências
+        run: pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Rodar suíte de testes
         run: python3 -m pytest -v
+        env:
+          QT_QPA_PLATFORM: offscreen

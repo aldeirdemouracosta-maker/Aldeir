@@ -161,7 +161,13 @@ tentando acessar rede/escrever fora de `/work` dentro do sandbox
   `importador_zip`). Implementa a tela "Projeto detectado" do modo
   "Terminar projeto" (seção 2) com um "estado estimado" heurístico
   documentado como tal, não uma métrica validada.
-- `tests/`: suíte pytest (36 testes) cobrindo os cinco módulos acima
+- `interface/`: janela desktop única (PySide6) — escolher pasta,
+  analisar projeto, escrever instrução, executar. Roda análise e
+  orquestrador em `QThread` separada (não trava esperando o modelo) e
+  mostra o progresso ao vivo via `on_evento`. Testada sem tela real
+  (`QT_QPA_PLATFORM=offscreen`), com botões clicados de verdade e
+  arquivo escrito em disco conferido no final.
+- `tests/`: suíte pytest (48 testes) cobrindo os seis módulos acima
   com casos maliciosos reais (zip-slip, zip bomb, padrão de comando
   perigoso, escrita/rede fora do sandbox, path traversal no
   orquestrador). `.github/workflows/testes.yml` roda a suíte em todo
@@ -322,6 +328,7 @@ REQUISITOS
 │ IMPORTAÇÃO SEGURA DE ZIP│ ← importador_zip/ (este repositório)
 │ SANDBOX DE EXECUÇÃO    │ ← sandbox_execucao/ (este repositório)
 │ ORQUESTRADOR (1 agente)│ ← orquestrador/ (este repositório)
+│ INTERFACE DESKTOP      │ ← interface/ (este repositório, PySide6)
 └──────────────────────────────┘
   ↓
 DESENVOLVIMENTO REAL      ← loop de agente existe; papéis especializados ainda precisam ser construídos

@@ -167,6 +167,20 @@ relatório pode ir direto para o `Orquestrador`. Se vier `false`,
 `arquivos_de_risco`/`padroes_suspeitos` no JSON explicam o motivo —
 revise antes de prosseguir.
 
+## 9. Abrir a interface desktop
+
+```bash
+sudo apt install -y libegl1 libxkbcommon0 libxcb-cursor0
+pip install -r requirements.txt
+python3 -m interface.janela_principal
+```
+
+Escolha a pasta do `~/projeto_teste` (ou outro projeto), clique em
+"Analisar projeto", escreva uma instrução e clique em "Executar" —
+mesmo fluxo do passo 7, mas com painel de progresso ao vivo em vez de
+esperar o JSON final no terminal. Ver `interface/README.md` para
+detalhes.
+
 ## Achados testando contra um modelo real (Xeon + RX 580, Qwen2.5-Coder-7B)
 
 Estes já foram encontrados e corrigidos nesta sessão — deixados aqui

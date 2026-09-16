@@ -186,6 +186,24 @@ def test_geracao_truncada_levanta_erro_em_vez_de_travar(projeto: Path):
     assert capturado["max_tokens"] == 64
 
 
+def test_on_evento_recebe_progresso_de_cada_etapa(projeto: Path, servidor_llm_mock):
+    base_url = servidor_llm_mock(
+        [
+            _msg_tool_call("1", "ler_arquivo", {"caminho": "existente.txt"}),
+            _msg_tool_call("2", "finalizar", {"resumo": "ok", "sucesso": True}),
+        ]
+    )
+    orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": base_url}
+
+    eventos = []
+    orq.Orquestrador(projeto).rodar("leia o arquivo", on_evento=eventos.append)
+
+    texto = "\n".join(eventos)
+    assert "Motor: mock" in texto
+    assert "ler_arquivo" in texto
+    assert "finalizar(sucesso=True)" in texto
+
+
 def test_extrair_chamada_de_texto_com_markdown_fence():
     texto = (
         '```json\n{\n  "name": "ler_arquivo",\n  "arguments": {\n    "caminho": "app.py"\n  }\n}\n```\n\n'
