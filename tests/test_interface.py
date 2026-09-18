@@ -371,3 +371,25 @@ def test_diagnostico_e_mockup_se_somam_como_contexto_na_execucao(qtbot, projeto:
     assert "função 'soma' sem implementação" in mensagem_usuario
     assert "Mockup: botão 'Salvar' no rodapé" in mensagem_usuario
     assert mensagem_usuario.endswith("implemente a tela do mockup")
+
+
+def test_redefinir_caminhos_visao_limpa_configuracoes_salvas(qtbot, tmp_path: Path, monkeypatch):
+    from PySide6.QtCore import QSettings
+
+    arquivo_config = str(tmp_path / "config.ini")
+    monkeypatch.setattr(
+        jp, "QSettings", lambda *a, **k: QSettings(arquivo_config, QSettings.IniFormat)
+    )
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela._configuracoes.setValue("visao/binario", "/caminho/errado")
+    janela._configuracoes.setValue("visao/modelo", "/caminho/errado.gguf")
+    janela._configuracoes.setValue("visao/mmproj", "/caminho/errado-mmproj.gguf")
+
+    janela.botao_redefinir_visao.click()
+
+    assert janela._configuracoes.value("visao/binario") is None
+    assert janela._configuracoes.value("visao/modelo") is None
+    assert janela._configuracoes.value("visao/mmproj") is None
+    assert "esquecidos" in janela.rotulo_mockup.text()

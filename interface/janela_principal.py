@@ -170,8 +170,15 @@ class JanelaPrincipal(QMainWindow):
             "Desligue o modelo de código antes — os dois não cabem na mesma GPU."
         )
         self.botao_descrever_mockup.clicked.connect(self._descrever_mockup)
+        self.botao_redefinir_visao = QPushButton("Redefinir caminhos…")
+        self.botao_redefinir_visao.setToolTip(
+            "Esquece o executável/modelo/mmproj salvos para o modelo de visão — "
+            "use se apontou um caminho errado por engano."
+        )
+        self.botao_redefinir_visao.clicked.connect(self._redefinir_caminhos_visao)
         self.rotulo_mockup = QLabel("Nenhuma descrição de mockup carregada.")
         linha_mockup.addWidget(self.botao_descrever_mockup)
+        linha_mockup.addWidget(self.botao_redefinir_visao)
         linha_mockup.addWidget(self.rotulo_mockup, stretch=1)
         layout.addLayout(linha_mockup)
 
@@ -397,6 +404,13 @@ class JanelaPrincipal(QMainWindow):
     def _mockup_com_erro(self, mensagem: str) -> None:
         self.area_log.appendPlainText(f"Erro ao descrever mockup: {mensagem}")
         self.rotulo_mockup.setText("Falha ao descrever mockup — ver log de progresso.")
+
+    def _redefinir_caminhos_visao(self) -> None:
+        for chave in ("visao/binario", "visao/modelo", "visao/mmproj"):
+            self._configuracoes.remove(chave)
+        self.rotulo_mockup.setText(
+            "Caminhos do modelo de visão esquecidos — serão pedidos de novo no próximo \"Descrever mockup…\"."
+        )
 
     # ---- executar orquestrador -----------------------------------------------
 
