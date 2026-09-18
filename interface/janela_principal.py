@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
 )
 
 from analisador_projeto.analisar_completude import analisar_completude, formatar_diagnostico_para_prompt
+from geracao_mockup.gerar_mockup_simples import gerar_mockup_simples
 from importador_zip.inspecionar_zip import analisar_projeto as analisar_zip
 from orquestrador.orquestrador import Orquestrador
 from visao_mockup.interpretar_mockup import interpretar_mockup as interpretar_mockup_imagem
@@ -123,6 +124,7 @@ class JanelaPrincipal(QMainWindow):
 
         self._ultimo_diagnostico: Optional[dict] = None
         self._ultima_descricao_mockup: Optional[str] = None
+        self._ultimo_mockup_gerado: Optional[Path] = None
         self._destino_zip_pendente: Optional[str] = None
         self._thread: Optional[QThread] = None
         self._trabalhador: Optional[QObject] = None
@@ -147,9 +149,16 @@ class JanelaPrincipal(QMainWindow):
         self.botao_procurar.clicked.connect(self._escolher_pasta)
         self.botao_abrir_zip = QPushButton("Abrir ZIP…")
         self.botao_abrir_zip.clicked.connect(self._escolher_zip)
+        self.botao_gerar_mockup_simples = QPushButton("Gerar mockup simples…")
+        self.botao_gerar_mockup_simples.setToolTip(
+            "Desenha um wireframe genérico local — sem IA, sem GPU, instantâneo — "
+            "como ponto de partida. Use \"Descrever mockup…\" depois para interpretá-lo."
+        )
+        self.botao_gerar_mockup_simples.clicked.connect(self._gerar_mockup_simples)
         linha_pasta.addWidget(self.campo_pasta)
         linha_pasta.addWidget(self.botao_procurar)
         linha_pasta.addWidget(self.botao_abrir_zip)
+        linha_pasta.addWidget(self.botao_gerar_mockup_simples)
         layout.addLayout(linha_pasta)
 
         linha_acoes_diag = QHBoxLayout()
@@ -355,9 +364,24 @@ class JanelaPrincipal(QMainWindow):
         self._configuracoes.setValue(chave, caminho)
         return caminho
 
+    def _gerar_mockup_simples(self) -> None:
+        diretorio = Path(tempfile.mkdtemp(prefix="fabrica_local_ia_mockup_"))
+        caminho_imagem = diretorio / "mockup_simples.png"
+        instrucao = self.campo_instrucao.toPlainText().strip()
+        elementos = [linha.strip() for linha in instrucao.splitlines() if linha.strip()] or None
+
+        gerar_mockup_simples(caminho_imagem, elementos=elementos)
+
+        self._ultimo_mockup_gerado = caminho_imagem
+        self.area_log.appendPlainText(f"Mockup simples gerado: {caminho_imagem}")
+        self.rotulo_mockup.setText(
+            "Mockup simples gerado — clique em \"Descrever mockup…\" para interpretá-lo."
+        )
+
     def _descrever_mockup(self) -> None:
+        diretorio_inicial = str(self._ultimo_mockup_gerado.parent) if self._ultimo_mockup_gerado else ""
         imagem, _ = QFileDialog.getOpenFileName(
-            self, "Escolher imagem do mockup", "", "Imagens (*.png *.jpg *.jpeg)"
+            self, "Escolher imagem do mockup", diretorio_inicial, "Imagens (*.png *.jpg *.jpeg)"
         )
         if not imagem:
             return

@@ -5,9 +5,10 @@ Janela única, minimalista, que reaproveita `analisador_projeto` e
 
 ```
 ┌──────────────────────────────────────────────────────┬─────────────┐
-│ Pasta do projeto  [________] [Procurar…] [Abrir ZIP…] │ Diagnóstico │
-│ [Analisar projeto] [Usar pasta extraída mesmo assim]  │ (dockável,  │
-│ [Descrever mockup…]  (status da descrição)            │  arrastável)│
+│ Pasta do projeto [___] [Procurar…] [Abrir ZIP…]       │ Diagnóstico │
+│                  [Gerar mockup simples…]              │ (dockável,  │
+│ [Analisar projeto] [Usar pasta extraída mesmo assim]  │  arrastável)│
+│ [Descrever mockup…]  (status da descrição)            │             │
 │                                                        │             │
 │ Instrução                                             │             │
 │ ┌────────────────────────────────────────────────────┐│             │
@@ -72,6 +73,24 @@ projeto atual.
   zip bomb por tamanho/razão de compressão): `extrair_seguro` recusa a
   extração inteira antes de gravar qualquer arquivo — a UI mostra o
   erro no painel de progresso e a pasta do projeto continua vazia.
+
+## Gerar um mockup simples (sem IA)
+
+"Gerar mockup simples…" desenha um wireframe genérico local via
+`geracao_mockup/gerar_mockup_simples.py` — retângulos rotulados (campos,
+botões, listas) desenhados com `QPainter`, sem nenhum modelo de IA e sem
+custo de GPU/VRAM, instantâneo. Serve como ponto de partida rascunhado
+quando ainda não existe nenhuma imagem de mockup de verdade: se o campo
+"Instrução" já tiver texto, cada linha vira o rótulo de um elemento; caso
+contrário usa uma lista padrão. O PNG gerado fica num diretório
+temporário, e "Descrever mockup…" já abre o diálogo de escolha de imagem
+nessa mesma pasta — fecha o ciclo gerar → descrever → usar como contexto
+no "Executar".
+
+Para um mockup desenhado à mão com mais controle (não um rascunho
+automático), veja a avaliação do Penpot em
+`PESQUISA_FERRAMENTAS_UIUX_OPENSOURCE.md` — self-hosted, fora deste
+repositório.
 
 ## Descrever um mockup (modelo de visão)
 

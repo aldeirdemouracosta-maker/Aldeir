@@ -393,3 +393,53 @@ def test_redefinir_caminhos_visao_limpa_configuracoes_salvas(qtbot, tmp_path: Pa
     assert janela._configuracoes.value("visao/modelo") is None
     assert janela._configuracoes.value("visao/mmproj") is None
     assert "esquecidos" in janela.rotulo_mockup.text()
+
+
+def test_gerar_mockup_simples_cria_arquivo_e_atualiza_estado(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela.botao_gerar_mockup_simples.click()
+
+    assert janela._ultimo_mockup_gerado is not None
+    assert janela._ultimo_mockup_gerado.is_file()
+    assert "Mockup simples gerado" in janela.rotulo_mockup.text()
+    assert "Mockup simples gerado" in janela.area_log.toPlainText()
+
+
+def test_gerar_mockup_simples_usa_linhas_da_instrucao_como_elementos(qtbot, monkeypatch):
+    capturado = {}
+
+    def _gerar_falso(caminho, elementos=None, **kwargs):
+        capturado["elementos"] = elementos
+        caminho.parent.mkdir(parents=True, exist_ok=True)
+        caminho.write_bytes(b"")
+        return caminho
+
+    monkeypatch.setattr(jp, "gerar_mockup_simples", _gerar_falso)
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela.campo_instrucao.setPlainText("Campo usuário\nBotão Entrar")
+
+    janela.botao_gerar_mockup_simples.click()
+
+    assert capturado["elementos"] == ["Campo usuário", "Botão Entrar"]
+
+
+def test_descrever_mockup_sugere_pasta_do_mockup_gerado(qtbot, monkeypatch, tmp_path: Path):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela._ultimo_mockup_gerado = tmp_path / "mockup_simples.png"
+
+    capturado = {}
+
+    def _dialogo_falso(parent, titulo, diretorio, filtro):
+        capturado["diretorio"] = diretorio
+        return "", ""
+
+    monkeypatch.setattr(jp.QFileDialog, "getOpenFileName", staticmethod(_dialogo_falso))
+
+    janela._descrever_mockup()
+
+    assert capturado["diretorio"] == str(tmp_path)
