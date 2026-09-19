@@ -17,6 +17,7 @@ Janela única, minimalista, que reaproveita `analisador_projeto` e
 │ │                                                      ││             │
 │ └────────────────────────────────────────────────────┘│             │
 │ [Executar] [Parar] [Configurar busca semântica…]      │             │
+│ [Verificar configuração da GPU]                       │             │
 │ (status)                                              │             │
 ├────────────────────────────────────────────────────────────────────┤
 │ Progresso ou Relatórios (abas, dockável, arrastável)                │
@@ -93,6 +94,17 @@ cada clique, não reaproveita um caminho salvo (evita repetir o bug do
 caminho de visão que travava). Opcional: sem configurar, "Executar"
 funciona normalmente, só sem a ferramenta `buscar_codigo` disponível
 pro agente.
+
+O botão **"Verificar configuração da GPU"** lista (via
+`motor_ia.listar_processos_llama_server`, lendo `/proc` — Linux) todo
+processo `llama-server` rodando agora e avisa, no painel "Relatórios",
+se algum foi iniciado **sem** `-ngl`/`--n-gpu-layers`. Existe porque o
+servidor do modelo de código é subido manualmente pelo usuário, fora
+do controle da Fábrica — nada no código impede rodar sem limite de
+GPU, e isso já derrubou uma GPU sob carga sustentada numa sessão real
+(ver `TESTE_LOCAL.md`). Esse botão só torna o problema visível, não o
+resolve sozinho — o usuário ainda precisa reiniciar o `llama-server`
+manualmente com a flag certa se o aviso aparecer.
 
 ## Abrir um projeto em ZIP
 

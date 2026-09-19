@@ -178,6 +178,55 @@ def test_execucao_com_erro_registra_no_relatorio(qtbot):
     assert "MotorIndisponivelError" in janela.area_relatorios.toPlainText()
 
 
+def test_verificar_gpu_sem_processos_avisa_no_relatorio(qtbot, monkeypatch):
+    monkeypatch.setattr(jp, "listar_processos_llama_server", lambda: [])
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._verificar_configuracao_gpu()
+
+    assert "Nenhum llama-server" in janela.area_relatorios.toPlainText()
+    assert "Nenhum llama-server" in janela.rotulo_status.text()
+
+
+def test_verificar_gpu_com_limite_configurado_nao_avisa(qtbot, monkeypatch):
+    monkeypatch.setattr(
+        jp,
+        "listar_processos_llama_server",
+        lambda: [{"pid": 111, "porta": 8080, "tem_limite_gpu": True, "cmdline": "..."}],
+    )
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._verificar_configuracao_gpu()
+
+    relatorio = janela.area_relatorios.toPlainText()
+    assert "PID 111" in relatorio
+    assert "OK" in relatorio
+    assert "⚠" not in relatorio
+    assert "Todos" in janela.rotulo_status.text()
+
+
+def test_verificar_gpu_sem_limite_avisa_no_relatorio_e_status(qtbot, monkeypatch):
+    monkeypatch.setattr(
+        jp,
+        "listar_processos_llama_server",
+        lambda: [{"pid": 222, "porta": 8080, "tem_limite_gpu": False, "cmdline": "..."}],
+    )
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._verificar_configuracao_gpu()
+
+    relatorio = janela.area_relatorios.toPlainText()
+    assert "PID 222" in relatorio
+    assert "SEM limite de GPU" in relatorio
+    assert "sem limite de GPU" in janela.rotulo_status.text()
+
+
 def test_execucao_interrompida_registra_no_relatorio(qtbot):
     janela = JanelaPrincipal()
     qtbot.addWidget(janela)

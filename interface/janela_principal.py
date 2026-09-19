@@ -39,6 +39,7 @@ from PySide6.QtWidgets import (
 from analisador_projeto.analisar_completude import analisar_completude, formatar_diagnostico_para_prompt
 from geracao_mockup.gerar_mockup_simples import gerar_mockup_simples
 from importador_zip.inspecionar_zip import analisar_projeto as analisar_zip
+from motor_ia.selecionar_motor import listar_processos_llama_server
 from orquestrador.orquestrador import ExecucaoInterrompidaError, Orquestrador
 from visao_mockup.interpretar_mockup import interpretar_mockup as interpretar_mockup_imagem
 
@@ -270,9 +271,17 @@ class JanelaPrincipal(QMainWindow):
             "configurado, o Executar funciona normalmente, só sem essa ferramenta."
         )
         self.botao_configurar_busca.clicked.connect(self._configurar_busca_semantica)
+        self.botao_verificar_gpu = QPushButton("Verificar configuração da GPU")
+        self.botao_verificar_gpu.setToolTip(
+            "Lista processos llama-server rodando agora e avisa se algum foi "
+            "iniciado sem limite de camadas na GPU (-ngl) — sem isso, sob carga "
+            "sustentada o driver pode travar (visto na prática nesta máquina)."
+        )
+        self.botao_verificar_gpu.clicked.connect(self._verificar_configuracao_gpu)
         linha_executar.addWidget(self.botao_executar)
         linha_executar.addWidget(self.botao_parar)
         linha_executar.addWidget(self.botao_configurar_busca)
+        linha_executar.addWidget(self.botao_verificar_gpu)
         layout.addLayout(linha_executar)
 
         self.rotulo_status = QLabel("")
@@ -663,6 +672,30 @@ class JanelaPrincipal(QMainWindow):
 
     def _registrar_relatorio(self, mensagem: str) -> None:
         self.area_relatorios.appendPlainText(f"[{time.strftime('%H:%M:%S')}] {mensagem}")
+
+    def _verificar_configuracao_gpu(self) -> None:
+        processos = listar_processos_llama_server()
+        if not processos:
+            self._registrar_relatorio("[GPU] Nenhum llama-server rodando no momento.")
+            self.rotulo_status.setText("Nenhum llama-server encontrado.")
+            return
+
+        sem_limite = [p for p in processos if not p["tem_limite_gpu"]]
+        for p in processos:
+            porta = f"porta {p['porta']}" if p["porta"] else "porta desconhecida"
+            if p["tem_limite_gpu"]:
+                self._registrar_relatorio(f"[GPU] PID {p['pid']} ({porta}): OK, rodando com limite de GPU.")
+            else:
+                self._registrar_relatorio(
+                    f"[GPU] ⚠ PID {p['pid']} ({porta}): SEM limite de GPU (-ngl) — risco de sobrecarga."
+                )
+
+        if sem_limite:
+            self.rotulo_status.setText(
+                f"⚠ {len(sem_limite)} llama-server sem limite de GPU — ver painel Relatórios."
+            )
+        else:
+            self.rotulo_status.setText("Todos os llama-server rodando com limite de GPU configurado.")
 
     def _atualizar_painel_codigo(self, linha: str) -> None:
         prefixo = "escrever_arquivo("

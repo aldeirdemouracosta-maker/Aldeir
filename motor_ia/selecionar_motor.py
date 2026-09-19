@@ -20,6 +20,7 @@ import subprocess
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable, Optional
 
 
@@ -143,6 +144,53 @@ def selecionar_motor(motores: Optional[list] = None) -> dict:
             "ou instale/inicie um dos motores futuros (Ollama, LM Studio)."
         ),
     }
+
+
+FLAGS_LIMITE_GPU = ("-ngl", "--n-gpu-layers", "--gpu-layers")
+
+
+def listar_processos_llama_server(raiz_proc: Path = Path("/proc")) -> list:
+    """Lista processos `llama-server` rodando agora (Linux, lendo
+    `/proc/<pid>/cmdline` — sem dependência nova, sem precisar de root),
+    e se cada um foi iniciado com algum limite de GPU (-ngl/--n-gpu-layers).
+
+    Existe por causa de um incidente real: o servidor do modelo de
+    código é subido manualmente pelo usuário, fora do controle do
+    orquestrador — nada aqui impede alguém de esquecer a flag e rodar
+    sem limite nenhum, o que já derrubou uma GPU sob carga sustentada.
+    Isso não conserta o problema sozinho, só torna visível."""
+    processos = []
+    if not raiz_proc.is_dir():
+        return processos
+
+    for entrada in raiz_proc.iterdir():
+        if not entrada.name.isdigit():
+            continue
+        try:
+            bruto = (entrada / "cmdline").read_bytes()
+        except OSError:
+            continue
+
+        args = [a for a in bruto.decode("utf-8", errors="replace").split("\x00") if a]
+        if not args or "llama-server" not in Path(args[0]).name:
+            continue
+
+        porta = None
+        if "--port" in args:
+            try:
+                porta = int(args[args.index("--port") + 1])
+            except (ValueError, IndexError):
+                pass
+
+        processos.append(
+            {
+                "pid": int(entrada.name),
+                "porta": porta,
+                "tem_limite_gpu": any(flag in args for flag in FLAGS_LIMITE_GPU),
+                "cmdline": " ".join(args),
+            }
+        )
+    return processos
 
 
 if __name__ == "__main__":
