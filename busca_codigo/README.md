@@ -7,16 +7,39 @@ achar onde procurar.
 
 ## Como funciona
 
-Sobe um `llama-server` temporário com um modelo de **embeddings**
-pequeno em modo `--embeddings` (recomendado:
-[CodeRankEmbed](https://huggingface.co/nomic-ai/CodeRankEmbed) —
-137M parâmetros, MIT, treinado especificamente pra recuperação de
-código, GGUF já disponível em
-`awhiteside/CodeRankEmbed-Q8_0-GGUF`), indexa os arquivos de código do
-projeto em pedaços de ~60 linhas, calcula a similaridade de cosseno
-entre a pergunta e cada pedaço, devolve os `top_k` mais parecidos, e
-desliga o servidor — mesmo padrão de "agente reduzido, sobe sob
-demanda" usado em `visao_mockup/interpretar_mockup.py`.
+Busca **híbrida**: combina duas pontuações por pedaço de código,
+ponderadas por `peso_bm25` (padrão 0.4):
+
+- **Semântica** — sobe um `llama-server` temporário com um modelo de
+  **embeddings** pequeno em modo `--embeddings` (recomendado:
+  [CodeRankEmbed](https://huggingface.co/nomic-ai/CodeRankEmbed) —
+  137M parâmetros, MIT, treinado especificamente pra recuperação de
+  código, GGUF já disponível em `awhiteside/CodeRankEmbed-Q8_0-GGUF`)
+  e calcula similaridade de cosseno entre a pergunta e cada pedaço.
+- **Palavra-chave** — BM25 clássico, implementado direto em Python
+  (sem dependência nova, o corpus é sempre pequeno). Importante pra
+  quando a pergunta cita um nome exato de função/variável, que
+  embeddings sozinhos às vezes deixam passar. O tokenizador separa
+  `snake_case` e `camelCase` em sub-palavras — sem isso,
+  `validar_login` nunca bateria com a pergunta "validar login".
+
+Desliga o servidor de embeddings no final — mesmo padrão de "agente
+reduzido, sobe sob demanda" usado em
+`visao_mockup/interpretar_mockup.py`.
+
+## Divisão em pedaços (chunking)
+
+Arquivos **Python** são cortados por função/classe de nível superior
+usando o módulo `ast` (mesmo já usado em `analisador_projeto`) — pedaço
+= uma função inteira ou uma classe inteira, não uma janela de linhas
+arbitrária. Cai pro chunking por linha (com sobreposição) se o arquivo
+tiver erro de sintaxe ou não tiver nenhuma função/classe de nível
+superior.
+
+Outras linguagens ainda usam só o chunking por linha — um Tree-sitter
+de verdade (chunking estrutural pra JS/Java/C/etc.) ficaria melhor,
+mas exigiria uma dependência nativa nova por linguagem; adiado até
+haver necessidade real comprovada.
 
 Não depende de nenhuma ferramenta externa (Go, Docker, servidor à
 parte): é só Python + o mesmo `llama.cpp` que já roda o modelo de
@@ -59,9 +82,11 @@ configurado, "Executar" funciona normalmente, só sem a ferramenta
 
 ## Limites atuais
 
-- Chunking por linha, não por função/classe (Tree-sitter melhoraria
-  isso, mas é dependência nova — fica pra depois).
-- Sem suporte a busca por palavra-chave (BM25) — só semântica.
+- Chunking estrutural (`ast`) só pra Python — outras linguagens ainda
+  usam janela de linhas (ver acima).
 - Cache por projeto é um JSON simples, não um banco vetorial de
   verdade — adequado pra projetos pequenos/médios, não escala pra
   bases de código enormes.
+- BM25 recalcula o índice inteiro a cada busca (custo baixo pro
+  tamanho de projeto que esperamos aqui, mas não incremental como o
+  cache de embeddings).

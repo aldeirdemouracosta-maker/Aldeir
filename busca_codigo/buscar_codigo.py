@@ -1,13 +1,27 @@
 #!/usr/bin/env python3
-"""Busca semantica de codigo local via embeddings (CodeRankEmbed + llama.cpp).
+"""Busca semantica + por palavra-chave de codigo local (CodeRankEmbed +
+llama.cpp + BM25).
 
 Sobe um llama-server temporario com um modelo de embeddings pequeno
 (CodeRankEmbed, ~150-300MB em GGUF — nomic-ai/CodeRankEmbed, MIT), indexa
-os arquivos de codigo do projeto em pedacos por linha, e devolve os
-trechos mais proximos semanticamente de uma pergunta em linguagem
-natural — sem o agente precisar ler arquivo por arquivo pra achar o
-trecho certo. Mesmo padrao de "agente reduzido, sobe sob demanda e
-desliga" usado em visao_mockup/interpretar_mockup.py.
+os arquivos de codigo do projeto em pedacos, e devolve os trechos mais
+relevantes pra uma pergunta em linguagem natural — sem o agente precisar
+ler arquivo por arquivo pra achar o trecho certo. Mesmo padrao de "agente
+reduzido, sobe sob demanda e desliga" usado em
+visao_mockup/interpretar_mockup.py.
+
+Pontuacao final combina duas buscas (busca hibrida):
+- semantica: similaridade de cosseno entre os embeddings do CodeRankEmbed;
+- por palavra-chave: BM25 puro-Python (sem dependencia nova) — ajuda
+  muito quando a pergunta cita um nome exato de funcao/variavel, que
+  embeddings sozinhos as vezes deixam passar.
+
+Divisao em pedacos: arquivos Python usam o modulo `ast` (ja usado em
+analisador_projeto) pra cortar por funcao/classe de nivel superior —
+pedacos semanticamente coerentes, nao janelas de linha arbitrarias.
+Outras linguagens ainda usam janelas de linha com sobreposicao (chunking
+estrutural tipo Tree-sitter pra elas fica pra depois — evita puxar uma
+dependencia nativa nova so pra isso agora).
 
 O cache de embeddings fica em <raiz_projeto>/.fabrica_indice_busca.json,
 e so reprocessa arquivos que mudaram desde a ultima indexacao (mtime +
@@ -22,16 +36,18 @@ Uso:
 """
 
 import argparse
+import ast
 import json
 import math
 import os
+import re
 import subprocess
 import time
 import urllib.error
 import urllib.request
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from motor_ia.selecionar_motor import endpoint_responde
 
@@ -78,7 +94,7 @@ def _listar_arquivos_codigo(raiz_projeto: Path) -> List[Path]:
     return arquivos
 
 
-def _dividir_em_pedacos(caminho_relativo: str, texto: str) -> List[Pedaco]:
+def _dividir_por_linhas(caminho_relativo: str, texto: str) -> List[Pedaco]:
     linhas = texto.splitlines()
     if not linhas:
         return []
@@ -94,6 +110,49 @@ def _dividir_em_pedacos(caminho_relativo: str, texto: str) -> List[Pedaco]:
             break
         inicio += passo
     return pedacos
+
+
+def _dividir_python_por_ast(caminho_relativo: str, texto: str) -> Optional[List[Pedaco]]:
+    """Corta um arquivo Python por funcao/classe de nivel superior usando
+    `ast` — pedacos coerentes (uma funcao inteira, uma classe inteira) em
+    vez de uma janela de linhas arbitraria. Devolve None se o arquivo nao
+    parsear (ex.: erro de sintaxe) ou nao tiver nenhuma funcao/classe de
+    nivel superior — nesses casos quem chama cai pro chunking por linha."""
+    try:
+        arvore = ast.parse(texto)
+    except (SyntaxError, ValueError):
+        return None
+
+    nos = [n for n in arvore.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))]
+    if not nos:
+        return None
+
+    linhas = texto.splitlines()
+    nos_ordenados = sorted(nos, key=lambda n: n.lineno)
+    pedacos = []
+
+    preambulo_fim = nos_ordenados[0].lineno - 1
+    if preambulo_fim > 0:
+        trecho = "\n".join(linhas[:preambulo_fim]).strip()
+        if trecho:
+            pedacos.append(Pedaco(caminho_relativo, 1, preambulo_fim, trecho))
+
+    for no in nos_ordenados:
+        inicio = no.lineno
+        fim = getattr(no, "end_lineno", None) or len(linhas)
+        trecho = "\n".join(linhas[inicio - 1 : fim])
+        if trecho.strip():
+            pedacos.append(Pedaco(caminho_relativo, inicio, fim, trecho))
+
+    return pedacos
+
+
+def _dividir_arquivo(caminho_relativo: str, texto: str) -> List[Pedaco]:
+    if caminho_relativo.endswith(".py"):
+        pedacos = _dividir_python_por_ast(caminho_relativo, texto)
+        if pedacos is not None:
+            return pedacos
+    return _dividir_por_linhas(caminho_relativo, texto)
 
 
 def _assinatura_arquivo(caminho: Path) -> str:
@@ -137,6 +196,83 @@ def _similaridade_cosseno(a: List[float], b: List[float]) -> float:
     return produto / (norma_a * norma_b)
 
 
+BM25_K1 = 1.5
+BM25_B = 0.75
+
+_PADRAO_IDENTIFICADOR = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*")
+_PADRAO_PARTE_CAMEL_CASE = re.compile(r"[A-Z]?[a-z0-9]+|[A-Z]+(?![a-z])")
+
+
+def _tokenizar(texto: str) -> List[str]:
+    """Separa identificadores em sub-palavras (snake_case e camelCase) —
+    sem isso, `validar_login` vira um token só e nunca bate com uma
+    pergunta em linguagem natural como "validar login" (visto na
+    prática: BM25 dando pontuação zero pra tudo por causa disso)."""
+    tokens = []
+    for identificador in _PADRAO_IDENTIFICADOR.findall(texto):
+        for parte in identificador.split("_"):
+            if not parte:
+                continue
+            subpartes = _PADRAO_PARTE_CAMEL_CASE.findall(parte) or [parte]
+            tokens.extend(sub.lower() for sub in subpartes)
+    return tokens
+
+
+@dataclass
+class IndiceBM25:
+    frequencias_documento: List[dict]
+    frequencia_nos_documentos: dict
+    tamanhos: List[int]
+    tamanho_medio: float
+
+
+def _construir_indice_bm25(textos: List[str]) -> IndiceBM25:
+    frequencias_documento = []
+    frequencia_nos_documentos: dict = {}
+    for texto in textos:
+        freq: dict = {}
+        for token in _tokenizar(texto):
+            freq[token] = freq.get(token, 0) + 1
+        frequencias_documento.append(freq)
+        for token in freq:
+            frequencia_nos_documentos[token] = frequencia_nos_documentos.get(token, 0) + 1
+    tamanhos = [sum(freq.values()) for freq in frequencias_documento]
+    tamanho_medio = sum(tamanhos) / len(tamanhos) if tamanhos else 0.0
+    return IndiceBM25(frequencias_documento, frequencia_nos_documentos, tamanhos, tamanho_medio)
+
+
+def _pontuar_bm25(indice: IndiceBM25, pergunta: str) -> List[float]:
+    """BM25 clássico (Robertson-Sparck Jones), implementação direta sem
+    dependência nova — o corpus aqui é sempre pequeno (pedaços de um
+    projeto local), não precisa de índice invertido otimizado."""
+    n_documentos = len(indice.frequencias_documento)
+    pontuacoes = [0.0] * n_documentos
+    if n_documentos == 0 or indice.tamanho_medio == 0:
+        return pontuacoes
+
+    for termo in set(_tokenizar(pergunta)):
+        n_t = indice.frequencia_nos_documentos.get(termo, 0)
+        if n_t == 0:
+            continue
+        idf = math.log((n_documentos - n_t + 0.5) / (n_t + 0.5) + 1)
+        for i, freq in enumerate(indice.frequencias_documento):
+            f = freq.get(termo, 0)
+            if f == 0:
+                continue
+            denominador = f + BM25_K1 * (1 - BM25_B + BM25_B * indice.tamanhos[i] / indice.tamanho_medio)
+            pontuacoes[i] += idf * (f * (BM25_K1 + 1)) / denominador
+    return pontuacoes
+
+
+def _normalizar(valores: List[float]) -> List[float]:
+    if not valores:
+        return []
+    minimo, maximo = min(valores), max(valores)
+    if maximo == minimo:
+        return [0.0 for _ in valores]
+    return [(v - minimo) / (maximo - minimo) for v in valores]
+
+
 def _aguardar_pronto(base_url: str, timeout: float) -> None:
     fim = time.monotonic() + timeout
     while time.monotonic() < fim:
@@ -173,7 +309,7 @@ def indexar_projeto(raiz_projeto: Path, base_url: str) -> dict:
             texto = caminho.read_text(errors="replace")
         except OSError:
             continue
-        pedacos_a_calcular.extend(_dividir_em_pedacos(relativo, texto))
+        pedacos_a_calcular.extend(_dividir_arquivo(relativo, texto))
 
     if pedacos_a_calcular:
         embeddings = _embutir_textos(base_url, [p.texto for p in pedacos_a_calcular])
@@ -193,11 +329,16 @@ def buscar_codigo(
     porta: int = 8082,
     top_k: int = 5,
     timeout_subida: float = 30,
+    peso_bm25: float = 0.4,
 ) -> List[dict]:
     """Sobe um llama-server com o modelo de embeddings so para esta
     chamada, (re)indexa o projeto sob demanda, busca os pedacos mais
-    proximos de `pergunta`, desliga o servidor, e devolve os resultados —
-    ordenados por similaridade, mais relevante primeiro."""
+    relevantes pra `pergunta` combinando similaridade semantica (embeddings)
+    com BM25 (palavra-chave) — `peso_bm25` controla o peso do BM25 na
+    combinacao (0 = so semantica, 1 = so palavra-chave; 0.4 por padrao
+    porque semantica sozinha as vezes erra nome exato de funcao/variavel).
+    Desliga o servidor no final, devolve os resultados ordenados,
+    mais relevante primeiro."""
     if not (caminho_binario_llama_server.is_file() and os.access(caminho_binario_llama_server, os.X_OK)):
         raise ServidorBuscaIndisponivelError(
             f"binario do llama-server nao encontrado ou sem permissao de execucao: {caminho_binario_llama_server}"
@@ -235,16 +376,24 @@ def buscar_codigo(
             return []
 
         embedding_pergunta = _embutir_textos(base_url, [PREFIXO_QUERY + pergunta])[0]
-        resultados = [
-            {
-                "arquivo": p["arquivo"],
-                "linha_inicio": p["linha_inicio"],
-                "linha_fim": p["linha_fim"],
-                "trecho": p["texto"],
-                "pontuacao": _similaridade_cosseno(embedding_pergunta, p["embedding"]),
-            }
-            for p in pedacos
-        ]
+        pontuacoes_semanticas = [_similaridade_cosseno(embedding_pergunta, p["embedding"]) for p in pedacos]
+
+        indice_bm25 = _construir_indice_bm25([p["texto"] for p in pedacos])
+        pontuacoes_palavras = _normalizar(_pontuar_bm25(indice_bm25, pergunta))
+
+        resultados = []
+        for p, pont_semantica, pont_palavras in zip(pedacos, pontuacoes_semanticas, pontuacoes_palavras):
+            resultados.append(
+                {
+                    "arquivo": p["arquivo"],
+                    "linha_inicio": p["linha_inicio"],
+                    "linha_fim": p["linha_fim"],
+                    "trecho": p["texto"],
+                    "pontuacao": (1 - peso_bm25) * pont_semantica + peso_bm25 * pont_palavras,
+                    "pontuacao_semantica": pont_semantica,
+                    "pontuacao_palavras": pont_palavras,
+                }
+            )
         resultados.sort(key=lambda r: r["pontuacao"], reverse=True)
         return resultados[:top_k]
     finally:
@@ -265,6 +414,9 @@ def main() -> None:
     parser.add_argument("--porta", type=int, default=8082)
     parser.add_argument("--top-k", type=int, default=5)
     parser.add_argument("--timeout-subida", type=float, default=30)
+    parser.add_argument(
+        "--peso-bm25", type=float, default=0.4, help="0 = só semântica, 1 = só palavra-chave (padrão 0.4)"
+    )
     args = parser.parse_args()
 
     resultados = buscar_codigo(
@@ -275,6 +427,7 @@ def main() -> None:
         porta=args.porta,
         top_k=args.top_k,
         timeout_subida=args.timeout_subida,
+        peso_bm25=args.peso_bm25,
     )
     for resultado in resultados:
         print(f"{resultado['arquivo']}:{resultado['linha_inicio']}-{resultado['linha_fim']} "

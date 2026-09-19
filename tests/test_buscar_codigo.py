@@ -9,27 +9,33 @@ import pytest
 from busca_codigo.buscar_codigo import (
     ServidorBuscaIndisponivelError,
     _assinatura_arquivo,
-    _dividir_em_pedacos,
+    _construir_indice_bm25,
+    _dividir_arquivo,
+    _dividir_por_linhas,
+    _dividir_python_por_ast,
     _embutir_textos,
     _listar_arquivos_codigo,
+    _normalizar,
+    _pontuar_bm25,
     _similaridade_cosseno,
+    _tokenizar,
     buscar_codigo,
     indexar_projeto,
 )
 
 
-def test_dividir_em_pedacos_arquivo_pequeno_vira_um_pedaco_so():
+def test_dividir_por_linhas_arquivo_pequeno_vira_um_pedaco_so():
     texto = "\n".join(f"linha {i}" for i in range(10))
-    pedacos = _dividir_em_pedacos("app.py", texto)
+    pedacos = _dividir_por_linhas("app.txt", texto)
 
     assert len(pedacos) == 1
     assert pedacos[0].linha_inicio == 1
     assert pedacos[0].linha_fim == 10
 
 
-def test_dividir_em_pedacos_arquivo_grande_gera_varios_pedacos_sobrepostos():
+def test_dividir_por_linhas_arquivo_grande_gera_varios_pedacos_sobrepostos():
     texto = "\n".join(f"linha {i}" for i in range(150))
-    pedacos = _dividir_em_pedacos("app.py", texto)
+    pedacos = _dividir_por_linhas("app.txt", texto)
 
     assert len(pedacos) > 1
     assert pedacos[0].linha_inicio == 1
@@ -38,8 +44,98 @@ def test_dividir_em_pedacos_arquivo_grande_gera_varios_pedacos_sobrepostos():
     assert pedacos[1].linha_inicio < pedacos[0].linha_fim
 
 
-def test_dividir_em_pedacos_texto_vazio_nao_gera_pedaco():
-    assert _dividir_em_pedacos("vazio.py", "") == []
+def test_dividir_por_linhas_texto_vazio_nao_gera_pedaco():
+    assert _dividir_por_linhas("vazio.txt", "") == []
+
+
+def test_dividir_python_por_ast_separa_funcoes_e_classes():
+    texto = (
+        "import os\n"
+        "\n"
+        "def somar(a, b):\n"
+        "    return a + b\n"
+        "\n"
+        "\n"
+        "class Pessoa:\n"
+        "    def __init__(self, nome):\n"
+        "        self.nome = nome\n"
+    )
+    pedacos = _dividir_python_por_ast("app.py", texto)
+
+    assert pedacos is not None
+    textos = [p.texto for p in pedacos]
+    assert any("import os" in t for t in textos)
+    assert any(t.startswith("def somar") for t in textos)
+    assert any(t.startswith("class Pessoa") for t in textos)
+
+
+def test_dividir_python_por_ast_sem_funcao_ou_classe_devolve_none():
+    assert _dividir_python_por_ast("constantes.py", "X = 1\nY = 2\n") is None
+
+
+def test_dividir_python_por_ast_com_erro_de_sintaxe_devolve_none():
+    assert _dividir_python_por_ast("quebrado.py", "def f(:\n") is None
+
+
+def test_dividir_arquivo_python_usa_ast_quando_possivel():
+    texto = "def f():\n    return 1\n"
+    pedacos = _dividir_arquivo("app.py", texto)
+
+    assert len(pedacos) == 1
+    assert pedacos[0].texto.startswith("def f")
+
+
+def test_dividir_arquivo_python_com_erro_de_sintaxe_cai_no_fallback_por_linha():
+    texto = "def f(:\n" + "\n".join(f"linha {i}" for i in range(100))
+    pedacos = _dividir_arquivo("quebrado.py", texto)
+
+    assert len(pedacos) > 1  # veio do fallback por linha, nao do ast
+
+
+def test_dividir_arquivo_nao_python_usa_linhas():
+    texto = "\n".join(f"linha {i}" for i in range(10))
+    pedacos = _dividir_arquivo("app.js", texto)
+
+    assert len(pedacos) == 1
+    assert pedacos[0].texto == texto
+
+
+def test_tokenizar_ignora_pontuacao_e_normaliza_caixa():
+    assert _tokenizar("def Validar(usuario):") == ["def", "validar", "usuario"]
+
+
+def test_tokenizar_separa_snake_case():
+    assert _tokenizar("validar_login") == ["validar", "login"]
+
+
+def test_tokenizar_separa_camel_case():
+    assert _tokenizar("validarLogin") == ["validar", "login"]
+
+
+def test_pontuar_bm25_favorece_documento_com_termo_da_pergunta():
+    indice = _construir_indice_bm25(["def validar_login(usuario, senha): pass", "def formatar_data(d): pass"])
+
+    pontuacoes = _pontuar_bm25(indice, "validar login")
+
+    assert pontuacoes[0] > pontuacoes[1]
+
+
+def test_pontuar_bm25_pergunta_sem_termo_conhecido_e_zero():
+    indice = _construir_indice_bm25(["def a(): pass", "def b(): pass"])
+
+    assert _pontuar_bm25(indice, "xyzabc123") == [0.0, 0.0]
+
+
+def test_normalizar_coloca_extremos_em_zero_e_um():
+    assert _normalizar([5.0, 10.0, 0.0]) == [0.5, 1.0, 0.0]
+
+
+def test_normalizar_valores_iguais_nao_quebra():
+    assert _normalizar([3.0, 3.0, 3.0]) == [0.0, 0.0, 0.0]
+
+
+def test_normalizar_lista_vazia():
+    assert _normalizar([]) == []
 
 
 def test_similaridade_cosseno_vetores_identicos_e_um():
@@ -220,7 +316,11 @@ def test_buscar_codigo_ordena_por_similaridade(tmp_path: Path, servidor_embeddin
 
     assert len(resultados) == 2
     assert resultados[0]["pontuacao"] >= resultados[1]["pontuacao"]
-    assert {"arquivo", "linha_inicio", "linha_fim", "trecho", "pontuacao"} <= resultados[0].keys()
+    campos_esperados = {"arquivo", "linha_inicio", "linha_fim", "trecho", "pontuacao", "pontuacao_semantica", "pontuacao_palavras"}
+    assert campos_esperados <= resultados[0].keys()
+    # "validar login" bate por palavra-chave com validar_login (snake_case
+    # separado no tokenizer), então login.py deve vir na frente de outro.py
+    assert resultados[0]["arquivo"] == "login.py"
 
 
 class _ProcessoFalso:
