@@ -12,6 +12,7 @@ Uso:
 """
 
 import argparse
+import json
 from pathlib import Path
 from typing import List, Optional
 
@@ -31,6 +32,13 @@ def _garantir_aplicacao_qt() -> None:
         QApplication([])
 
 
+def caminho_layout_json(caminho_imagem: Path) -> Path:
+    """Onde o JSON de geometria de um mockup gerado por
+    `gerar_mockup_simples` fica salvo — mesmo diretório e nome-base do
+    PNG, extensão `.json`."""
+    return caminho_imagem.with_suffix(".json")
+
+
 def gerar_mockup_simples(
     caminho_saida: Path,
     titulo: str = "Tela sem título",
@@ -40,12 +48,21 @@ def gerar_mockup_simples(
 ) -> Path:
     """Desenha um wireframe genérico (retângulos rotulados) e salva como
     PNG em `caminho_saida`. Não usa nenhum modelo de IA — é só um
-    esqueleto estrutural, instantâneo, sem custo de VRAM."""
+    esqueleto estrutural, instantâneo, sem custo de VRAM.
+
+    Salva também um JSON (`caminho_layout_json`) com a posição/tamanho
+    exatos de cada elemento — a mesma geometria usada para desenhar, que
+    senão seria descartada ao virar só um PNG. Um agente que for gerar a
+    interface de verdade a partir daqui tem coordenadas determinísticas
+    em vez de precisar adivinhar posição a partir de uma descrição em
+    texto livre de um modelo de visão."""
     elementos = elementos or ELEMENTOS_PADRAO
     _garantir_aplicacao_qt()
 
     imagem = QImage(largura, altura, QImage.Format_RGB32)
     imagem.fill(QColor("white"))
+
+    layout_elementos = []
 
     pintor = QPainter(imagem)
     try:
@@ -74,12 +91,24 @@ def gerar_mockup_simples(
             pintor.drawRoundedRect(margem, y, largura - margem * 2, altura_item, 6, 6)
             pintor.setPen(QColor("#2f3640"))
             pintor.drawText(QRect(margem, y, largura - margem * 2, altura_item), Qt.AlignCenter, rotulo)
+            layout_elementos.append(
+                {"rotulo": rotulo, "x": margem, "y": y, "largura": largura - margem * 2, "altura": altura_item}
+            )
             y += altura_item + espacamento
     finally:
         pintor.end()
 
     caminho_saida.parent.mkdir(parents=True, exist_ok=True)
     imagem.save(str(caminho_saida), "PNG")
+
+    layout = {
+        "titulo": titulo,
+        "largura": largura,
+        "altura": altura,
+        "elementos": layout_elementos,
+    }
+    caminho_layout_json(caminho_saida).write_text(json.dumps(layout, ensure_ascii=False, indent=2))
+
     return caminho_saida
 
 

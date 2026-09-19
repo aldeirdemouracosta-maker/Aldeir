@@ -87,6 +87,13 @@ temporário, e "Descrever mockup…" já abre o diálogo de escolha de imagem
 nessa mesma pasta — fecha o ciclo gerar → descrever → usar como contexto
 no "Executar".
 
+Ao lado do PNG, também é salvo um JSON (mesmo nome, extensão `.json`,
+via `caminho_layout_json`) com a posição/tamanho exatos de cada
+elemento — a mesma geometria usada para desenhar, que senão seria
+perdida ao virar só uma imagem. Um agente que for gerar a interface real
+a partir desse mockup pode ler esse JSON diretamente em vez de precisar
+extrair coordenadas de uma descrição em texto livre do modelo de visão.
+
 Para um mockup desenhado à mão com mais controle (não um rascunho
 automático), veja a avaliação do Penpot em
 `PESQUISA_FERRAMENTAS_UIUX_OPENSOURCE.md` — self-hosted, fora deste
