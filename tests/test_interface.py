@@ -1,0 +1,989 @@
+"""Testes da interface desktop (PySide6). Rodam sem tela real via
+QT_QPA_PLATFORM=offscreen — a variável precisa estar definida antes de
+qualquer import do Qt, por isso vem logo no topo do arquivo."""
+
+import os
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+import json
+import shutil
+from pathlib import Path
+
+import pytest
+
+pytest.importorskip("PySide6")
+
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QDockWidget, QMessageBox
+
+import interface.janela_principal as jp
+import orquestrador.orquestrador as orq
+from interface.janela_principal import JanelaPrincipal
+
+pytestmark = pytest.mark.skipif(
+    shutil.which("bwrap") is None,
+    reason="bubblewrap (bwrap) não instalado neste ambiente — sudo apt install bubblewrap",
+)
+
+
+def _msg_tool_call(id_, nome, argumentos):
+    return {
+        "role": "assistant",
+        "content": None,
+        "tool_calls": [
+            {"id": id_, "type": "function", "function": {"name": nome, "arguments": json.dumps(argumentos)}}
+        ],
+    }
+
+
+@pytest.fixture
+def projeto(tmp_path: Path) -> Path:
+    (tmp_path / "app.py").write_text("def soma(a, b):\n    pass\n")
+    return tmp_path
+
+
+@pytest.fixture(autouse=True)
+def _restaurar_selecionar_motor():
+    original = orq.selecionar_motor
+    yield
+    orq.selecionar_motor = original
+
+
+def test_analisar_projeto_mostra_diagnostico_na_tela(qtbot, projeto: Path):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela.campo_pasta.setText(str(projeto))
+    janela.botao_analisar.click()
+
+    qtbot.waitUntil(lambda: janela.botao_analisar.isEnabled(), timeout=5000)
+
+    texto = janela.area_diagnostico.toPlainText()
+    assert "função 'soma' sem implementação" in texto
+    assert "Estado estimado" in janela.rotulo_status.text()
+
+
+def test_pasta_inexistente_mostra_erro_sem_travar(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela.campo_pasta.setText("/caminho/que/nao/existe/xyz")
+    janela.botao_analisar.click()
+
+    assert "não encontrada" in janela.rotulo_status.text()
+
+
+def test_executar_orquestrador_escreve_arquivo_e_mostra_log(qtbot, projeto: Path, servidor_llm_mock):
+    base_url = servidor_llm_mock(
+        [
+            _msg_tool_call(
+                "1", "escrever_arquivo", {"caminho": "app.py", "conteudo": "def soma(a, b):\n    return a + b\n"}
+            ),
+            _msg_tool_call("2", "finalizar", {"resumo": "implementado via UI", "sucesso": True}),
+        ]
+    )
+    orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": base_url}
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela.campo_pasta.setText(str(projeto))
+    janela.campo_instrucao.setPlainText("implemente a função soma")
+    janela.botao_executar.click()
+
+    assert janela.botao_executar.isEnabled() is False
+    qtbot.waitUntil(lambda: janela.botao_executar.isEnabled(), timeout=5000)
+
+    log = janela.area_log.toPlainText()
+    assert "escrever_arquivo" in log
+    assert "finalizar(sucesso=True)" in log
+    assert janela.rotulo_status.text() == "Concluído com sucesso."
+    assert (projeto / "app.py").read_text() == "def soma(a, b):\n    return a + b\n"
+
+    # painel de "Código" mostra o conteúdo formatado (quebra de linha
+    # real, não escapada como no log JSON)
+    assert janela.area_codigo.toPlainText() == "def soma(a, b):\n    return a + b\n"
+    assert "app.py" in janela.dock_codigo.windowTitle()
+
+
+def test_atualizar_painel_codigo_ignora_linhas_que_nao_sao_escrever_arquivo(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._atualizar_painel_codigo("Chamando o modelo (tentativa 1/20)...")
+
+    assert janela.area_codigo.toPlainText() == ""
+
+
+def test_relatorio_registra_erro_da_ferramenta_com_contexto(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._atualizar_relatorio_erros('escrever_arquivo({"caminho": "app.py", "conteudo": "x"})')
+    janela._atualizar_relatorio_erros("erro: Arquivo ou diretório inexistente")
+
+    relatorio = janela.area_relatorios.toPlainText()
+    assert "escrever_arquivo" in relatorio
+    assert "erro: Arquivo ou diretório inexistente" in relatorio
+
+
+def test_relatorio_registra_comando_com_codigo_de_saida_diferente_de_zero(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._atualizar_relatorio_erros('executar_comando({"comando": ["pytest"]})')
+    janela._atualizar_relatorio_erros(
+        '  → {"codigo_saida": 1, "expirou": false, "stdout": "", "stderr": "1 failed"}'
+    )
+
+    relatorio = janela.area_relatorios.toPlainText()
+    assert "executar_comando" in relatorio
+    assert "código de saída 1" in relatorio
+    assert "1 failed" in relatorio
+
+
+def test_relatorio_ignora_comando_com_codigo_de_saida_zero(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._atualizar_relatorio_erros('executar_comando({"comando": ["pytest"]})')
+    janela._atualizar_relatorio_erros('  → {"codigo_saida": 0, "expirou": false, "stdout": "ok", "stderr": ""}')
+
+    assert janela.area_relatorios.toPlainText() == ""
+
+
+def test_relatorio_nao_e_limpo_ao_executar_de_novo(qtbot, projeto: Path, servidor_llm_mock):
+    base_url = servidor_llm_mock([_msg_tool_call("1", "finalizar", {"resumo": "ok", "sucesso": True})])
+    orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": base_url}
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela._registrar_relatorio("[teste] entrada antiga")
+
+    janela.campo_pasta.setText(str(projeto))
+    janela.campo_instrucao.setPlainText("faça algo")
+    janela.botao_executar.click()
+    qtbot.waitUntil(lambda: janela.botao_executar.isEnabled(), timeout=5000)
+
+    assert "entrada antiga" in janela.area_relatorios.toPlainText()
+
+
+def test_execucao_com_erro_registra_no_relatorio(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._execucao_com_erro("MotorIndisponivelError: nenhum motor")
+
+    assert "MotorIndisponivelError" in janela.area_relatorios.toPlainText()
+
+
+def test_verificar_gpu_sem_processos_avisa_no_relatorio(qtbot, monkeypatch):
+    monkeypatch.setattr(jp, "listar_processos_llama_server", lambda: [])
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._verificar_configuracao_gpu()
+
+    assert "Nenhum llama-server" in janela.area_relatorios.toPlainText()
+    assert "Nenhum llama-server" in janela.rotulo_status.text()
+
+
+def test_verificar_gpu_com_limite_configurado_nao_avisa(qtbot, monkeypatch):
+    monkeypatch.setattr(
+        jp,
+        "listar_processos_llama_server",
+        lambda: [{"pid": 111, "porta": 8080, "tem_limite_gpu": True, "cmdline": "..."}],
+    )
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._verificar_configuracao_gpu()
+
+    relatorio = janela.area_relatorios.toPlainText()
+    assert "PID 111" in relatorio
+    assert "OK" in relatorio
+    assert "⚠" not in relatorio
+    assert "Todos" in janela.rotulo_status.text()
+
+
+def test_verificar_gpu_sem_limite_avisa_no_relatorio_e_status(qtbot, monkeypatch):
+    monkeypatch.setattr(
+        jp,
+        "listar_processos_llama_server",
+        lambda: [{"pid": 222, "porta": 8080, "tem_limite_gpu": False, "cmdline": "..."}],
+    )
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._verificar_configuracao_gpu()
+
+    relatorio = janela.area_relatorios.toPlainText()
+    assert "PID 222" in relatorio
+    assert "SEM limite de GPU" in relatorio
+    assert "sem limite de GPU" in janela.rotulo_status.text()
+
+
+def test_verificar_gpu_mostra_temperatura_quando_disponivel(qtbot, monkeypatch):
+    monkeypatch.setattr(jp, "temperatura_gpu_celsius", lambda: 72.0)
+    monkeypatch.setattr(jp, "listar_processos_llama_server", lambda: [])
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._verificar_configuracao_gpu()
+
+    assert "72" in janela.area_relatorios.toPlainText()
+
+
+def test_encerrar_llama_server_sem_processos_avisa(qtbot, monkeypatch):
+    monkeypatch.setattr(jp, "listar_processos_llama_server", lambda: [])
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._encerrar_llama_server()
+
+    assert "Nenhum llama-server" in janela.area_relatorios.toPlainText()
+
+
+def test_encerrar_llama_server_pede_confirmacao_e_encerra(qtbot, monkeypatch):
+    monkeypatch.setattr(
+        jp,
+        "listar_processos_llama_server",
+        lambda: [{"pid": 333, "porta": 8080, "tem_limite_gpu": False, "cmdline": "..."}],
+    )
+    chamados = {}
+
+    def _encerrar_falso():
+        chamados["chamou"] = True
+        return [333]
+
+    monkeypatch.setattr(jp, "encerrar_processos_llama_server", _encerrar_falso)
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._encerrar_llama_server()
+
+    assert chamados.get("chamou") is True
+    assert "333" in janela.area_relatorios.toPlainText()
+    assert "encerrado" in janela.rotulo_status.text()
+
+
+def test_encerrar_llama_server_cancelado_nao_encerra(qtbot, monkeypatch):
+    monkeypatch.setattr(
+        jp,
+        "listar_processos_llama_server",
+        lambda: [{"pid": 333, "porta": 8080, "tem_limite_gpu": False, "cmdline": "..."}],
+    )
+    chamados = {}
+
+    def _encerrar_falso():
+        chamados["chamou"] = True
+        return [333]
+
+    monkeypatch.setattr(jp, "encerrar_processos_llama_server", _encerrar_falso)
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.No)
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._encerrar_llama_server()
+
+    assert "chamou" not in chamados
+
+
+def test_execucao_interrompida_registra_no_relatorio(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._execucao_interrompida()
+
+    assert "interrompida" in janela.area_relatorios.toPlainText()
+
+
+def test_executar_sem_diagnostico_mostra_aviso_mas_nao_bloqueia(qtbot, projeto: Path, servidor_llm_mock):
+    base_url = servidor_llm_mock([_msg_tool_call("1", "finalizar", {"resumo": "ok", "sucesso": True})])
+    orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": base_url}
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela.campo_pasta.setText(str(projeto))
+    janela.campo_instrucao.setPlainText("faça algo")
+    assert janela._ultimo_diagnostico is None
+
+    janela.botao_executar.click()
+    qtbot.waitUntil(lambda: janela.botao_executar.isEnabled(), timeout=5000)
+
+    assert "Sem diagnóstico" in janela.area_log.toPlainText()
+    assert janela.rotulo_status.text() == "Concluído com sucesso."
+
+
+def test_executar_com_diagnostico_nao_mostra_aviso(qtbot, projeto: Path, servidor_llm_mock):
+    base_url = servidor_llm_mock([_msg_tool_call("1", "finalizar", {"resumo": "ok", "sucesso": True})])
+    orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": base_url}
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela.campo_pasta.setText(str(projeto))
+    janela.botao_analisar.click()
+    qtbot.waitUntil(lambda: janela.botao_analisar.isEnabled(), timeout=5000)
+
+    janela.campo_instrucao.setPlainText("faça algo")
+    janela.botao_executar.click()
+    qtbot.waitUntil(lambda: janela.botao_executar.isEnabled(), timeout=5000)
+
+    assert "Sem diagnóstico" not in janela.area_log.toPlainText()
+
+
+def test_executar_sem_instrucao_nao_dispara_nada(qtbot, projeto: Path):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela.campo_pasta.setText(str(projeto))
+    janela.botao_executar.click()
+
+    assert janela.botao_executar.isEnabled() is True
+    assert "instrução" in janela.rotulo_status.text().lower()
+
+
+def test_abrir_zip_legitimo_preenche_pasta_automaticamente(qtbot, zip_legitimo: Path):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    from interface.janela_principal import TrabalhadorImportacaoZip
+
+    trabalhador = TrabalhadorImportacaoZip(zip_legitimo)
+    resultado = {}
+    trabalhador.concluido.connect(lambda r: resultado.update(r))
+    trabalhador.rodar()
+
+    qtbot.waitUntil(lambda: bool(resultado), timeout=5000)
+    janela._zip_importado(resultado)
+
+    assert resultado["pode_auto_prosseguir"] is True
+    assert janela.campo_pasta.text() == resultado["diretorio_extraido"]
+    assert Path(janela.campo_pasta.text(), "main.py").is_file()
+    assert janela.botao_usar_mesmo_assim.isVisible() is False
+    assert "sem riscos detectados" in janela.rotulo_status.text()
+
+
+def test_abrir_zip_suspeito_exige_confirmacao_antes_de_usar_pasta(qtbot, zip_com_padrao_suspeito: Path):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela.show()  # isVisible() só reflete o estado real com a janela exibida
+
+    from interface.janela_principal import TrabalhadorImportacaoZip
+
+    trabalhador = TrabalhadorImportacaoZip(zip_com_padrao_suspeito)
+    resultado = {}
+    trabalhador.concluido.connect(lambda r: resultado.update(r))
+    trabalhador.rodar()
+
+    qtbot.waitUntil(lambda: bool(resultado), timeout=5000)
+    janela._zip_importado(resultado)
+
+    assert resultado["pode_auto_prosseguir"] is False
+    assert janela.campo_pasta.text() == ""
+    assert janela.botao_usar_mesmo_assim.isVisible() is True
+    assert "malicioso.py" in janela.area_log.toPlainText()
+
+    janela.botao_usar_mesmo_assim.click()
+
+    assert janela.campo_pasta.text() == resultado["diretorio_extraido"]
+    assert janela.botao_usar_mesmo_assim.isVisible() is False
+
+
+def test_abrir_zip_com_zip_slip_mostra_erro_sem_travar(qtbot, zip_slip: Path):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    from interface.janela_principal import TrabalhadorImportacaoZip
+
+    trabalhador = TrabalhadorImportacaoZip(zip_slip)
+    mensagens = []
+    trabalhador.erro.connect(mensagens.append)
+    trabalhador.rodar()
+
+    qtbot.waitUntil(lambda: bool(mensagens), timeout=5000)
+    janela._zip_com_erro(mensagens[0])
+
+    assert "ZipInseguroError" in mensagens[0]
+    assert janela.campo_pasta.text() == ""
+    assert "Falha ao importar" in janela.rotulo_status.text()
+
+
+def test_diagnostico_da_tela_e_usado_como_contexto_na_execucao(qtbot, projeto: Path, servidor_llm_mock):
+    """Analisar o projeto primeiro deve enriquecer a instrução enviada
+    ao modelo com o diagnóstico, igual à flag --diagnostico da CLI."""
+    capturado = {}
+
+    import socket
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    resposta_finalizar = _msg_tool_call("1", "finalizar", {"resumo": "ok", "sucesso": True})
+
+    class _HandlerCaptura(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_POST(self):
+            tamanho = int(self.headers.get("Content-Length", 0))
+            corpo = json.loads(self.rfile.read(tamanho))
+            capturado["mensagens"] = corpo["messages"]
+            saida = json.dumps({"choices": [{"message": resposta_finalizar}]}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(saida)))
+            self.end_headers()
+            self.wfile.write(saida)
+
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    porta = s.getsockname()[1]
+    s.close()
+    servidor = HTTPServer(("127.0.0.1", porta), _HandlerCaptura)
+    threading.Thread(target=servidor.serve_forever, daemon=True).start()
+    orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": f"http://127.0.0.1:{porta}/v1"}
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela.campo_pasta.setText(str(projeto))
+    janela.botao_analisar.click()
+    qtbot.waitUntil(lambda: janela.botao_analisar.isEnabled(), timeout=5000)
+
+    janela.campo_instrucao.setPlainText("termine a implementação")
+    janela.botao_executar.click()
+    try:
+        qtbot.waitUntil(lambda: janela.botao_executar.isEnabled(), timeout=5000)
+    finally:
+        servidor.shutdown()
+
+    mensagem_usuario = capturado["mensagens"][1]["content"]
+    assert "função 'soma' sem implementação" in mensagem_usuario
+    assert mensagem_usuario.endswith("termine a implementação")
+
+
+def test_paineis_diagnostico_e_progresso_sao_dockwidgets_reposicionaveis(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    assert isinstance(janela.dock_diagnostico, QDockWidget)
+    assert janela.dock_diagnostico.widget() is janela.area_diagnostico
+    assert janela.dock_diagnostico.features() & QDockWidget.DockWidgetMovable
+    assert janela.dockWidgetArea(janela.dock_diagnostico) == Qt.RightDockWidgetArea
+
+    assert isinstance(janela.dock_progresso, QDockWidget)
+    assert janela.dock_progresso.widget() is janela.area_log
+    assert janela.dock_progresso.features() & QDockWidget.DockWidgetMovable
+    assert janela.dockWidgetArea(janela.dock_progresso) == Qt.BottomDockWidgetArea
+
+
+def test_layout_dos_docks_e_salvo_e_restaurado_entre_janelas(qtbot, tmp_path: Path, monkeypatch):
+    from PySide6.QtCore import QSettings
+
+    arquivo_config = str(tmp_path / "config.ini")
+    monkeypatch.setattr(
+        jp, "QSettings", lambda *a, **k: QSettings(arquivo_config, QSettings.IniFormat)
+    )
+
+    janela1 = JanelaPrincipal()
+    qtbot.addWidget(janela1)
+    janela1.dock_diagnostico.setFloating(True)
+    janela1.close()
+
+    janela2 = JanelaPrincipal()
+    qtbot.addWidget(janela2)
+
+    assert janela2.dock_diagnostico.isFloating() is True
+
+
+def test_mockup_descrito_atualiza_estado_e_aparece_no_log(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._mockup_descrito("Botão 'Salvar' no rodapé, campo 'Nome' no topo.")
+
+    assert janela._ultima_descricao_mockup == "Botão 'Salvar' no rodapé, campo 'Nome' no topo."
+    assert "Botão 'Salvar' no rodapé" in janela.area_log.toPlainText()
+    assert "pronta" in janela.rotulo_mockup.text()
+
+
+def test_erro_ao_descrever_mockup_mostra_mensagem_sem_travar(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._mockup_com_erro("ServidorVisaoIndisponivelError: binário não encontrado")
+
+    assert "Falha ao descrever mockup" in janela.rotulo_mockup.text()
+    assert "ServidorVisaoIndisponivelError" in janela.area_log.toPlainText()
+
+
+def test_trabalhador_descricao_mockup_chama_interpretar_e_emite_resultado(qtbot, monkeypatch):
+    capturado = {}
+
+    def _interpretar_falso(binario, modelo, mmproj, imagem):
+        capturado.update(binario=binario, modelo=modelo, mmproj=mmproj, imagem=imagem)
+        return "descrição gerada pelo modelo de visão"
+
+    monkeypatch.setattr(jp, "interpretar_mockup_imagem", _interpretar_falso)
+
+    trabalhador = jp.TrabalhadorDescricaoMockup(
+        Path("/bin/llama-server"), Path("/modelos/m.gguf"), Path("/modelos/mmproj.gguf"), Path("/img/mockup.png")
+    )
+    resultados = []
+    trabalhador.concluido.connect(resultados.append)
+    trabalhador.rodar()
+
+    assert resultados == ["descrição gerada pelo modelo de visão"]
+    assert capturado["binario"] == Path("/bin/llama-server")
+    assert capturado["imagem"] == Path("/img/mockup.png")
+
+
+def test_trabalhador_descricao_mockup_emite_erro_sem_travar(qtbot, monkeypatch):
+    def _interpretar_com_falha(binario, modelo, mmproj, imagem):
+        raise RuntimeError("servidor de visão não subiu")
+
+    monkeypatch.setattr(jp, "interpretar_mockup_imagem", _interpretar_com_falha)
+
+    trabalhador = jp.TrabalhadorDescricaoMockup(Path("/a"), Path("/b"), Path("/c"), Path("/d"))
+    erros = []
+    trabalhador.erro.connect(erros.append)
+    trabalhador.rodar()
+
+    assert erros == ["RuntimeError: servidor de visão não subiu"]
+
+
+def test_diagnostico_e_mockup_se_somam_como_contexto_na_execucao(qtbot, projeto: Path, servidor_llm_mock):
+    capturado = {}
+    resposta_finalizar = _msg_tool_call("1", "finalizar", {"resumo": "ok", "sucesso": True})
+
+    import socket
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    class _HandlerCaptura(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_POST(self):
+            tamanho = int(self.headers.get("Content-Length", 0))
+            corpo = json.loads(self.rfile.read(tamanho))
+            capturado["mensagens"] = corpo["messages"]
+            saida = json.dumps({"choices": [{"message": resposta_finalizar}]}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(saida)))
+            self.end_headers()
+            self.wfile.write(saida)
+
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    porta = s.getsockname()[1]
+    s.close()
+    servidor = HTTPServer(("127.0.0.1", porta), _HandlerCaptura)
+    threading.Thread(target=servidor.serve_forever, daemon=True).start()
+    orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": f"http://127.0.0.1:{porta}/v1"}
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela.campo_pasta.setText(str(projeto))
+    janela.botao_analisar.click()
+    qtbot.waitUntil(lambda: janela.botao_analisar.isEnabled(), timeout=5000)
+
+    janela._mockup_descrito("Mockup: botão 'Salvar' no rodapé, campo 'Nome' no topo.")
+
+    janela.campo_instrucao.setPlainText("implemente a tela do mockup")
+    janela.botao_executar.click()
+    try:
+        qtbot.waitUntil(lambda: janela.botao_executar.isEnabled(), timeout=5000)
+    finally:
+        servidor.shutdown()
+
+    mensagem_usuario = capturado["mensagens"][1]["content"]
+    assert "função 'soma' sem implementação" in mensagem_usuario
+    assert "Mockup: botão 'Salvar' no rodapé" in mensagem_usuario
+    assert mensagem_usuario.endswith("implemente a tela do mockup")
+
+
+def test_redefinir_caminhos_visao_limpa_configuracoes_salvas(qtbot, tmp_path: Path, monkeypatch):
+    from PySide6.QtCore import QSettings
+
+    arquivo_config = str(tmp_path / "config.ini")
+    monkeypatch.setattr(
+        jp, "QSettings", lambda *a, **k: QSettings(arquivo_config, QSettings.IniFormat)
+    )
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela._configuracoes.setValue("visao/binario", "/caminho/errado")
+    janela._configuracoes.setValue("visao/modelo", "/caminho/errado.gguf")
+    janela._configuracoes.setValue("visao/mmproj", "/caminho/errado-mmproj.gguf")
+
+    janela.botao_redefinir_visao.click()
+
+    assert janela._configuracoes.value("visao/binario") is None
+    assert janela._configuracoes.value("visao/modelo") is None
+    assert janela._configuracoes.value("visao/mmproj") is None
+    assert "esquecidos" in janela.rotulo_mockup.text()
+
+
+def test_gerar_mockup_simples_cria_arquivo_e_atualiza_estado(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela.botao_gerar_mockup_simples.click()
+
+    assert janela._ultimo_mockup_gerado is not None
+    assert janela._ultimo_mockup_gerado.is_file()
+    assert "Mockup simples gerado" in janela.rotulo_mockup.text()
+    assert "Mockup simples gerado" in janela.area_log.toPlainText()
+
+
+def test_gerar_mockup_simples_usa_linhas_do_campo_de_elementos(qtbot, monkeypatch):
+    capturado = {}
+
+    def _gerar_falso(caminho, elementos=None, **kwargs):
+        capturado["elementos"] = elementos
+        caminho.parent.mkdir(parents=True, exist_ok=True)
+        caminho.write_bytes(b"")
+        return caminho
+
+    monkeypatch.setattr(jp, "gerar_mockup_simples", _gerar_falso)
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela.campo_elementos_mockup.setPlainText("Campo usuário\nBotão Entrar")
+
+    janela.botao_gerar_mockup_simples.click()
+
+    assert capturado["elementos"] == ["Campo usuário", "Botão Entrar"]
+
+
+def test_gerar_mockup_simples_nao_usa_texto_do_campo_instrucao(qtbot, monkeypatch):
+    # campo_instrucao e campo_elementos_mockup são propositalmente
+    # separados agora — texto na instrução não deve vazar pro mockup.
+    capturado = {}
+
+    def _gerar_falso(caminho, elementos=None, **kwargs):
+        capturado["elementos"] = elementos
+        caminho.parent.mkdir(parents=True, exist_ok=True)
+        caminho.write_bytes(b"")
+        return caminho
+
+    monkeypatch.setattr(jp, "gerar_mockup_simples", _gerar_falso)
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela.campo_instrucao.setPlainText("termine a implementação pendente")
+
+    janela.botao_gerar_mockup_simples.click()
+
+    assert capturado["elementos"] is None
+
+
+def test_trocar_pasta_do_projeto_esquece_diagnostico_e_mockup_da_pasta_anterior(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._analise_concluida({
+        "estado_estimado_percentual": 50,
+        "linguagem_principal": "Python",
+        "todos_encontrados": [],
+        "funcoes_incompletas": [],
+        "modulos_stub": [],
+        "total_arquivos_codigo": 15,
+        "observacoes": [],
+    })
+    janela._mockup_descrito("Botão 'Salvar' no rodapé.")
+
+    assert janela._ultimo_diagnostico is not None
+    assert janela._ultima_descricao_mockup is not None
+
+    janela._definir_pasta_projeto("/outro/projeto")
+
+    assert janela.campo_pasta.text() == "/outro/projeto"
+    assert janela._ultimo_diagnostico is None
+    assert janela._ultima_descricao_mockup is None
+    assert janela.area_diagnostico.toPlainText() == ""
+    assert "Nenhuma descrição" in janela.rotulo_mockup.text()
+
+
+def test_combo_exemplos_instrucao_preenche_campo_instrucao(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela.combo_exemplos_instrucao.setCurrentIndex(1)
+
+    assert janela.campo_instrucao.toPlainText() == jp.EXEMPLOS_INSTRUCAO[0]
+    # volta pro placeholder, pronto pra escolher outro exemplo em seguida
+    assert janela.combo_exemplos_instrucao.currentIndex() == 0
+
+
+def test_combo_exemplos_instrucao_placeholder_nao_mexe_no_campo(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela.campo_instrucao.setPlainText("texto já escrito")
+
+    janela._aplicar_exemplo_instrucao(0)
+
+    assert janela.campo_instrucao.toPlainText() == "texto já escrito"
+
+
+def test_botao_parar_comeca_desabilitado(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    assert janela.botao_parar.isEnabled() is False
+
+
+def test_parar_orquestrador_desabilita_botao_e_pede_parada_ao_trabalhador(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    chamadas = []
+
+    class _TrabalhadorFalso:
+        def solicitar_parada(self):
+            chamadas.append(True)
+
+    janela._trabalhador = _TrabalhadorFalso()
+    janela.botao_parar.setEnabled(True)
+
+    janela._parar_orquestrador()
+
+    assert chamadas == [True]
+    assert janela.botao_parar.isEnabled() is False
+    assert "Parando" in janela.rotulo_status.text()
+
+
+def test_execucao_interrompida_atualiza_status_e_log(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._execucao_interrompida()
+
+    assert janela.rotulo_status.text() == "Interrompida."
+    assert "interrompida pelo usuário" in janela.area_log.toPlainText()
+
+
+def test_trabalhador_orquestrador_emite_interrompido_quando_parada_solicitada_antes(qtbot, tmp_path: Path, servidor_llm_mock):
+    resposta_finalizar = _msg_tool_call("1", "finalizar", {"resumo": "ok", "sucesso": True})
+    base_url = servidor_llm_mock([resposta_finalizar])
+    orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": base_url}
+
+    trabalhador = jp.TrabalhadorOrquestrador(tmp_path, "faça algo", None)
+    trabalhador.solicitar_parada()
+
+    interrompidos = []
+    erros = []
+    trabalhador.interrompido.connect(lambda: interrompidos.append(True))
+    trabalhador.erro.connect(erros.append)
+    trabalhador.rodar()
+
+    assert interrompidos == [True]
+    assert erros == []
+
+
+def test_configurar_busca_semantica_salva_caminhos(qtbot, monkeypatch, tmp_path: Path):
+    from PySide6.QtCore import QSettings
+
+    arquivo_config = str(tmp_path / "config.ini")
+    monkeypatch.setattr(jp, "QSettings", lambda *a, **k: QSettings(arquivo_config, QSettings.IniFormat))
+
+    binario = tmp_path / "llama-server"
+    binario.write_text("#!/bin/sh\n")
+    modelo = tmp_path / "coderankembed.gguf"
+    modelo.write_bytes(b"fake")
+
+    respostas = iter([(str(binario), ""), (str(modelo), "")])
+    monkeypatch.setattr(jp.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: next(respostas)))
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._configurar_busca_semantica()
+
+    assert janela._configuracoes.value("busca/binario") == str(binario)
+    assert janela._configuracoes.value("busca/modelo") == str(modelo)
+    assert "configurada" in janela.rotulo_status.text()
+
+
+def test_configurar_busca_semantica_cancelado_nao_salva_nada(qtbot, monkeypatch, tmp_path: Path):
+    from PySide6.QtCore import QSettings
+
+    arquivo_config = str(tmp_path / "config.ini")
+    monkeypatch.setattr(jp, "QSettings", lambda *a, **k: QSettings(arquivo_config, QSettings.IniFormat))
+    monkeypatch.setattr(jp.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: ("", "")))
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._configurar_busca_semantica()
+
+    assert janela._configuracoes.value("busca/binario") is None
+
+
+def test_executar_orquestrador_passa_caminhos_de_busca_configurados(qtbot, projeto: Path, servidor_llm_mock, monkeypatch, tmp_path: Path):
+    from PySide6.QtCore import QSettings
+
+    arquivo_config = str(tmp_path / "config.ini")
+    monkeypatch.setattr(jp, "QSettings", lambda *a, **k: QSettings(arquivo_config, QSettings.IniFormat))
+
+    binario = tmp_path / "llama-server"
+    binario.write_text("#!/bin/sh\n")
+    modelo = tmp_path / "coderankembed.gguf"
+    modelo.write_bytes(b"fake")
+
+    base_url = servidor_llm_mock([_msg_tool_call("1", "finalizar", {"resumo": "ok", "sucesso": True})])
+    orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": base_url}
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela._configuracoes.setValue("busca/binario", str(binario))
+    janela._configuracoes.setValue("busca/modelo", str(modelo))
+    janela.campo_pasta.setText(str(projeto))
+    janela.campo_instrucao.setPlainText("faça algo")
+
+    janela.botao_executar.click()
+    qtbot.waitUntil(lambda: janela.botao_executar.isEnabled(), timeout=5000)
+
+    assert janela._trabalhador.caminho_binario_busca == binario
+    assert janela._trabalhador.caminho_modelo_busca == modelo
+
+
+def test_executar_orquestrador_sem_configuracao_de_busca_usa_none(qtbot, projeto: Path, servidor_llm_mock, monkeypatch, tmp_path: Path):
+    from PySide6.QtCore import QSettings
+
+    arquivo_config = str(tmp_path / "config.ini")
+    monkeypatch.setattr(jp, "QSettings", lambda *a, **k: QSettings(arquivo_config, QSettings.IniFormat))
+
+    base_url = servidor_llm_mock([_msg_tool_call("1", "finalizar", {"resumo": "ok", "sucesso": True})])
+    orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": base_url}
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela.campo_pasta.setText(str(projeto))
+    janela.campo_instrucao.setPlainText("faça algo")
+
+    janela.botao_executar.click()
+    qtbot.waitUntil(lambda: janela.botao_executar.isEnabled(), timeout=5000)
+
+    assert janela._trabalhador.caminho_binario_busca is None
+    assert janela._trabalhador.caminho_modelo_busca is None
+
+
+def test_configurar_microagente_salva_caminhos(qtbot, monkeypatch, tmp_path: Path):
+    from PySide6.QtCore import QSettings
+
+    arquivo_config = str(tmp_path / "config.ini")
+    monkeypatch.setattr(jp, "QSettings", lambda *a, **k: QSettings(arquivo_config, QSettings.IniFormat))
+
+    binario = tmp_path / "llama-server"
+    binario.write_text("#!/bin/sh\n")
+    modelo = tmp_path / "qwen-0.5b.gguf"
+    modelo.write_bytes(b"fake")
+
+    respostas = iter([(str(binario), ""), (str(modelo), "")])
+    monkeypatch.setattr(jp.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: next(respostas)))
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._configurar_microagente()
+
+    assert janela._configuracoes.value("microagente/binario") == str(binario)
+    assert janela._configuracoes.value("microagente/modelo") == str(modelo)
+    assert "configurado" in janela.rotulo_status.text()
+
+
+def test_configurar_microagente_cancelado_nao_salva_nada(qtbot, monkeypatch, tmp_path: Path):
+    from PySide6.QtCore import QSettings
+
+    arquivo_config = str(tmp_path / "config.ini")
+    monkeypatch.setattr(jp, "QSettings", lambda *a, **k: QSettings(arquivo_config, QSettings.IniFormat))
+    monkeypatch.setattr(jp.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: ("", "")))
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._configurar_microagente()
+
+    assert janela._configuracoes.value("microagente/binario") is None
+
+
+def test_executar_orquestrador_passa_caminhos_de_microagente_configurados(
+    qtbot, projeto: Path, servidor_llm_mock, monkeypatch, tmp_path: Path
+):
+    from PySide6.QtCore import QSettings
+
+    arquivo_config = str(tmp_path / "config.ini")
+    monkeypatch.setattr(jp, "QSettings", lambda *a, **k: QSettings(arquivo_config, QSettings.IniFormat))
+
+    binario = tmp_path / "llama-server"
+    binario.write_text("#!/bin/sh\n")
+    modelo = tmp_path / "qwen-0.5b.gguf"
+    modelo.write_bytes(b"fake")
+
+    base_url = servidor_llm_mock([_msg_tool_call("1", "finalizar", {"resumo": "ok", "sucesso": True})])
+    orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": base_url}
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela._configuracoes.setValue("microagente/binario", str(binario))
+    janela._configuracoes.setValue("microagente/modelo", str(modelo))
+    janela.campo_pasta.setText(str(projeto))
+    janela.campo_instrucao.setPlainText("faça algo")
+
+    janela.botao_executar.click()
+    qtbot.waitUntil(lambda: janela.botao_executar.isEnabled(), timeout=5000)
+
+    assert janela._trabalhador.caminho_binario_microagente == binario
+    assert janela._trabalhador.caminho_modelo_microagente == modelo
+
+
+def test_executar_orquestrador_sem_configuracao_de_microagente_usa_none(
+    qtbot, projeto: Path, servidor_llm_mock, monkeypatch, tmp_path: Path
+):
+    from PySide6.QtCore import QSettings
+
+    arquivo_config = str(tmp_path / "config.ini")
+    monkeypatch.setattr(jp, "QSettings", lambda *a, **k: QSettings(arquivo_config, QSettings.IniFormat))
+
+    base_url = servidor_llm_mock([_msg_tool_call("1", "finalizar", {"resumo": "ok", "sucesso": True})])
+    orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": base_url}
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela.campo_pasta.setText(str(projeto))
+    janela.campo_instrucao.setPlainText("faça algo")
+
+    janela.botao_executar.click()
+    qtbot.waitUntil(lambda: janela.botao_executar.isEnabled(), timeout=5000)
+
+    assert janela._trabalhador.caminho_binario_microagente is None
+    assert janela._trabalhador.caminho_modelo_microagente is None
+
+
+def test_descrever_mockup_sugere_pasta_do_mockup_gerado(qtbot, monkeypatch, tmp_path: Path):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela._ultimo_mockup_gerado = tmp_path / "mockup_simples.png"
+
+    capturado = {}
+
+    def _dialogo_falso(parent, titulo, diretorio, filtro):
+        capturado["diretorio"] = diretorio
+        return "", ""
+
+    monkeypatch.setattr(jp.QFileDialog, "getOpenFileName", staticmethod(_dialogo_falso))
+
+    janela._descrever_mockup()
+
+    assert capturado["diretorio"] == str(tmp_path)
