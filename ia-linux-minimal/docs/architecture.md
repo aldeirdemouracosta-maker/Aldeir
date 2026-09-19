@@ -90,10 +90,17 @@ BIOS                              UEFI
 ┌─────────────────────┐          ┌─────────────────────┐
 │ SYSTEM     512 MiB   │          │ EFI          64 MiB  │
 │ RECOVERY   128 MiB   │          │ SYSTEM      512 MiB  │
-│ DATA       512 MiB+  │          │ RECOVERY    128 MiB  │
-└─────────────────────┘          │ DATA        512 MiB+ │
+│ DATA       (ajustável)│         │ RECOVERY    128 MiB  │
+└─────────────────────┘          │ DATA        (ajustável)│
                                     └─────────────────────┘
 ```
+
+O tamanho de DATA é fixo em `size = ...` em `genimage-bios.cfg`/
+`genimage-uefi.cfg` — não cresce sozinho para preencher o disco de
+destino. Está atualmente em `96G`, dimensionado para um SSD "de
+110 GB" (fabricante usa GB decimal; o SO relata ~102,4 GiB reais —
+`96G` + partições fixas deixa ~5,7 GiB de margem). Para outro
+dispositivo, edite `size` nesses dois arquivos antes de compilar.
 
 SYSTEM é montada normalmente leitura-escrita nesta versão (candidata a
 `EROFS` somente-leitura numa versão futura — `CONFIG_EROFS_FS` já

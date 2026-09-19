@@ -15,6 +15,16 @@ MODE="${1:-bios}"
 # placeholder substituído em algum passo de build.
 SYSTEM_FS_UUID="11111111-1111-4111-8111-111111111111"
 
+# Tamanho do filesystem de DATA gravado aqui — precisa bater com o
+# "size" da partição "data" em genimage-bios.cfg/genimage-uefi.cfg
+# (senão genimage preenche a partição com padding zerado além do
+# filesystem, que fica menor do que a partição). Sem passo de template
+# entre os dois lugares (mesma decisão de grub.cfg/SYSTEM_FS_UUID
+# acima): os dois arquivos são a fonte da verdade e precisam ser
+# editados juntos. Valor atual (96G) dimensionado para um SSD "de
+# 110 GB" — ver comentário nos .cfg e docs/architecture.md.
+DATA_FS_SIZE="96G"
+
 case "${MODE}" in
     bios) GENIMAGE_CFG="${BOARD_DIR}/genimage-bios.cfg" ;;
     uefi) GENIMAGE_CFG="${BOARD_DIR}/genimage-uefi.cfg" ;;
@@ -49,7 +59,7 @@ cp "${ROOTFS_IMAGE}" "${BINARIES_DIR}/system.ext4"
 
 # ext4 de dados vazio; será preenchido pelo usuário/instalador
 mkdir -p "${BINARIES_DIR}/data-empty"
-"${HOST_DIR}/sbin/mkfs.ext4" -L IA_DATA -d "${BINARIES_DIR}/data-empty" "${BINARIES_DIR}/data.ext4" 512M
+"${HOST_DIR}/sbin/mkfs.ext4" -L IA_DATA -d "${BINARIES_DIR}/data-empty" "${BINARIES_DIR}/data.ext4" "${DATA_FS_SIZE}"
 mkdir -p "${BINARIES_DIR}/recovery-empty"
 "${HOST_DIR}/sbin/mkfs.ext4" -L IA_RECOVERY -d "${BINARIES_DIR}/recovery-empty" "${BINARIES_DIR}/recovery.ext4" 128M
 
