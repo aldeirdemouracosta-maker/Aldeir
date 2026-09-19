@@ -246,10 +246,22 @@ class JanelaPrincipal(QMainWindow):
 
     # ---- pasta do projeto ---------------------------------------------------
 
+    def _definir_pasta_projeto(self, pasta: str) -> None:
+        """Troca a pasta do projeto e esquece diagnóstico/descrição de
+        mockup da pasta anterior — sem isso, trocar de projeto sem clicar
+        em "Analisar projeto" de novo faz o "Executar" usar contexto de
+        um projeto diferente (visto na prática: resumo citando arquivos
+        da Fábrica ao rodar sobre outro projeto)."""
+        self.campo_pasta.setText(pasta)
+        self._ultimo_diagnostico = None
+        self._ultima_descricao_mockup = None
+        self.area_diagnostico.clear()
+        self.rotulo_mockup.setText("Nenhuma descrição de mockup carregada.")
+
     def _escolher_pasta(self) -> None:
         pasta = QFileDialog.getExistingDirectory(self, "Escolher pasta do projeto")
         if pasta:
-            self.campo_pasta.setText(pasta)
+            self._definir_pasta_projeto(pasta)
 
     def _escolher_zip(self) -> None:
         caminho_texto, _ = QFileDialog.getOpenFileName(self, "Abrir projeto em ZIP", "", "Arquivos ZIP (*.zip)")
@@ -288,7 +300,7 @@ class JanelaPrincipal(QMainWindow):
             self.area_log.appendPlainText(f"  risco: {risco['arquivo']} — {risco['motivo']}")
 
         if relatorio["pode_auto_prosseguir"]:
-            self.campo_pasta.setText(destino)
+            self._definir_pasta_projeto(destino)
             self.rotulo_status.setText("ZIP importado — sem riscos detectados.")
         else:
             self._destino_zip_pendente = destino
@@ -303,7 +315,7 @@ class JanelaPrincipal(QMainWindow):
 
     def _usar_extraido_mesmo_assim(self) -> None:
         if self._destino_zip_pendente:
-            self.campo_pasta.setText(self._destino_zip_pendente)
+            self._definir_pasta_projeto(self._destino_zip_pendente)
             self.rotulo_status.setText("Usando pasta extraída do ZIP apesar dos itens sinalizados.")
         self.botao_usar_mesmo_assim.setVisible(False)
         self._destino_zip_pendente = None

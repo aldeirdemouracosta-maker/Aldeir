@@ -427,6 +427,33 @@ def test_gerar_mockup_simples_usa_linhas_da_instrucao_como_elementos(qtbot, monk
     assert capturado["elementos"] == ["Campo usuário", "Botão Entrar"]
 
 
+def test_trocar_pasta_do_projeto_esquece_diagnostico_e_mockup_da_pasta_anterior(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._analise_concluida({
+        "estado_estimado_percentual": 50,
+        "linguagem_principal": "Python",
+        "todos_encontrados": [],
+        "funcoes_incompletas": [],
+        "modulos_stub": [],
+        "total_arquivos_codigo": 15,
+        "observacoes": [],
+    })
+    janela._mockup_descrito("Botão 'Salvar' no rodapé.")
+
+    assert janela._ultimo_diagnostico is not None
+    assert janela._ultima_descricao_mockup is not None
+
+    janela._definir_pasta_projeto("/outro/projeto")
+
+    assert janela.campo_pasta.text() == "/outro/projeto"
+    assert janela._ultimo_diagnostico is None
+    assert janela._ultima_descricao_mockup is None
+    assert janela.area_diagnostico.toPlainText() == ""
+    assert "Nenhuma descrição" in janela.rotulo_mockup.text()
+
+
 def test_descrever_mockup_sugere_pasta_do_mockup_gerado(qtbot, monkeypatch, tmp_path: Path):
     janela = JanelaPrincipal()
     qtbot.addWidget(janela)
