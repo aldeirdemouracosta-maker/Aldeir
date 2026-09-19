@@ -30,6 +30,22 @@ da raiz do projeto é rejeitado (`CaminhoForaDoProjetoError`) e o
 modelo recebe uma mensagem de erro em vez de um caminho para escapar
 do projeto.
 
+`PROMPT_SISTEMA` e as descrições das ferramentas avisam o modelo que a
+sandbox não tem rede e não mantém estado entre chamadas — mas um
+modelo pequeno pode ignorar isso e insistir em `pip install`/`git
+clone`/etc. mesmo assim (visto na prática). Por isso `executar_comando`
+também acrescenta um campo `"aviso"` no próprio resultado JSON sempre
+que o comando começa com um binário de `COMANDOS_DE_REDE` (`pip`,
+`curl`, `git`, `npm`, `apt`...) e falha — reforço no ponto exato da
+falha, não só no início da conversa.
+
+Note também: `bwrap: execvp <comando>: No such file or directory`
+(binário não instalado) não é falha de infraestrutura do bwrap — o
+sandbox montou certo, só o comando pedido não existe. `sandbox_execucao`
+distingue isso de uma falha real de `bwrap` (que levanta
+`SandboxIndisponivelError`) e devolve como `ResultadoExecucao` normal,
+com código de saída != 0.
+
 ## Tool calling: nativo com fallback de texto
 
 `chamar_llm` pede `tool_choice: "required"` ao motor, mas nem todo

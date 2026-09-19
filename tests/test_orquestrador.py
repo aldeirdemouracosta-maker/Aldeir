@@ -366,6 +366,32 @@ def test_deve_parar_true_antes_da_primeira_chamada_nao_completa_o_loop(projeto: 
         orq.Orquestrador(projeto).rodar("faça algo", deve_parar=lambda: True)
 
 
+def test_executar_ferramenta_avisa_quando_comando_de_rede_falha(projeto: Path):
+    resultado = orq.executar_ferramenta(
+        projeto,
+        orq.ConfiguracaoSandbox(timeout_segundos=15),
+        "executar_comando",
+        {"comando": ["git", "clone", "https://exemplo-invalido.test/repo.git"]},
+    )
+    payload = json.loads(resultado)
+
+    assert payload["codigo_saida"] != 0
+    assert "rede" in payload["aviso"]
+
+
+def test_executar_ferramenta_nao_avisa_para_comando_comum_que_falha(projeto: Path):
+    resultado = orq.executar_ferramenta(
+        projeto,
+        orq.ConfiguracaoSandbox(timeout_segundos=15),
+        "executar_comando",
+        {"comando": ["/bin/ls", "/caminho/que/nao/existe"]},
+    )
+    payload = json.loads(resultado)
+
+    assert payload["codigo_saida"] != 0
+    assert "aviso" not in payload
+
+
 def test_deve_parar_interrompe_entre_rodadas_sem_esperar_finalizar(projeto: Path, servidor_llm_mock):
     # nunca chama finalizar — sem deve_parar, isso estouraria LimiteDeIteracoesError
     base_url = servidor_llm_mock([_msg_tool_call("1", "ler_arquivo", {"caminho": "existente.txt"})])

@@ -127,12 +127,18 @@ def executar_comando_sandbox(
         expirou = True
         codigo_saida = None
 
-    if not expirou and codigo_saida != 0 and stderr.startswith("bwrap: "):
+    if not expirou and codigo_saida != 0 and stderr.startswith("bwrap: ") and not stderr.startswith("bwrap: execvp"):
         # O próprio bwrap falhou ao montar o sandbox (ex.: namespace de
         # rede bloqueado por política do host) — isso nunca chegou a
         # rodar `comando`. Tratar como resultado de execução (código de
         # saída do comando) esconderia uma falha de infraestrutura como
         # se fosse o comportamento do projeto sendo testado.
+        #
+        # "bwrap: execvp <comando>: ..." é diferente: o sandbox montou
+        # certo, só o binário pedido não existe (ex.: `pytest` não
+        # instalado) — isso é resultado normal do comando, não falha de
+        # infraestrutura, e vira ResultadoExecucao como qualquer outro
+        # comando que não roda.
         raise SandboxIndisponivelError(f"bwrap falhou ao montar o sandbox: {stderr.strip()}")
 
     return ResultadoExecucao(

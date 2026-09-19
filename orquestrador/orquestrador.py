@@ -50,6 +50,11 @@ Duas limitações do ambiente que já são esperadas, não bugs a contornar:
   inteiro só para corrigir um trecho pequeno — isso apaga tudo que não
   fazia parte do problema."""
 
+# Comandos que dependem de rede — usado por executar_ferramenta para
+# reforçar, no próprio resultado da chamada, que vão sempre falhar
+# aqui (a sandbox roda com --unshare-net por padrão).
+COMANDOS_DE_REDE = ("pip", "pip3", "curl", "wget", "git", "npm", "yarn", "apt", "apt-get", "conda")
+
 FERRAMENTAS = [
     {
         "type": "function",
@@ -283,14 +288,26 @@ def executar_ferramenta(
             )
         except SandboxIndisponivelError as erro:
             return f"erro: {erro}"
-        return json.dumps(
-            {
-                "codigo_saida": resultado.codigo_saida,
-                "expirou": resultado.expirou,
-                "stdout": resultado.stdout[-4000:],
-                "stderr": resultado.stderr[-4000:],
-            }
-        )
+
+        payload = {
+            "codigo_saida": resultado.codigo_saida,
+            "expirou": resultado.expirou,
+            "stdout": resultado.stdout[-4000:],
+            "stderr": resultado.stderr[-4000:],
+        }
+        comando = argumentos.get("comando") or []
+        if resultado.codigo_saida not in (0, None) and comando and comando[0] in COMANDOS_DE_REDE:
+            # Reforço no próprio resultado da ferramenta, não só no prompt
+            # do sistema — visto na prática: um modelo pequeno repetindo
+            # `pip install` várias vezes seguidas mesmo com a limitação já
+            # documentada no início da conversa. Um aviso bem no ponto em
+            # que a falha acontece tem mais chance de ser seguido.
+            payload["aviso"] = (
+                f"'{comando[0]}' depende de rede, que esta sandbox não tem — isto vai "
+                "falhar sempre do mesmo jeito. Não repita este comando; assuma que a "
+                "dependência já está instalada ou informe no resumo que ela falta."
+            )
+        return json.dumps(payload)
 
     return f"erro: ferramenta desconhecida {nome!r}"
 

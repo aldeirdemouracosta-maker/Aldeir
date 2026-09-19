@@ -87,6 +87,20 @@ def test_falha_do_bwrap_ao_montar_sandbox_nao_vira_resultado_de_comando(tmp_path
         )
 
 
+def test_comando_inexistente_dentro_do_sandbox_vira_resultado_nao_erro(projeto: Path):
+    # "bwrap: execvp <comando>: ..." é o sandbox funcionando normalmente
+    # e recusando rodar um binário que não existe (ex.: pytest não
+    # instalado) — não é falha de infraestrutura do bwrap, então não
+    # deve levantar SandboxIndisponivelError (visto na prática: o
+    # orquestrador tratando isso como "sandbox quebrada" em vez de só
+    # "comando não encontrado").
+    resultado = executar_comando_sandbox(
+        projeto, ["comando_que_nao_existe_de_verdade_xyz"], ConfiguracaoSandbox(timeout_segundos=10)
+    )
+    assert resultado.codigo_saida != 0
+    assert "No such file or directory" in resultado.stderr
+
+
 def test_executar_pos_inspecao_recusa_sem_liberacao():
     relatorio = {"pode_auto_prosseguir": False, "diretorio_extraido": "/tmp"}
     with pytest.raises(RiscoNaoRevisadoError):
