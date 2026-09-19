@@ -1,0 +1,15 @@
+#!/bin/sh
+# rcK — executado por BusyBox init em shutdown/reboot (linha "::shutdown:"
+# em /etc/inittab). Encerra o llama-server se estiver ativo e desmonta
+# /data de forma limpa antes do kernel finalizar.
+set -e
+
+if [ -f /run/ia-server.pid ] && kill -0 "$(cat /run/ia-server.pid)" 2>/dev/null; then
+    kill "$(cat /run/ia-server.pid)"
+fi
+
+sync
+umount /recovery 2>/dev/null || true
+umount /data 2>/dev/null || true
+
+exit 0

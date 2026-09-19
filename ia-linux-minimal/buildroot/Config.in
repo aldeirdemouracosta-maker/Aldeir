@@ -1,0 +1,2 @@
+source "$BR2_EXTERNAL_IA_LINUX_PATH/package/ai-core/Config.in"
+source "$BR2_EXTERNAL_IA_LINUX_PATH/package/ai-shell/Config.in"

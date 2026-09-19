@@ -1,0 +1,39 @@
+# Fragmento específico de PC físico x86_64: armazenamento, USB, rede,
+# GPU AMD. Aplicado nos defconfigs ia_linux_bios_x86_64 e ia_linux_uefi_x86_64.
+
+# Armazenamento
+CONFIG_ATA=y
+CONFIG_ATA_PIIX=y
+CONFIG_SATA_AHCI=y
+CONFIG_BLK_DEV_NVME=y
+CONFIG_NVME_CORE=y
+
+# USB (teclado, pendrive de instalação)
+CONFIG_USB=y
+CONFIG_USB_XHCI_HCD=y
+CONFIG_USB_EHCI_HCD=y
+CONFIG_USB_STORAGE=y
+CONFIG_HID=y
+CONFIG_USB_HID=y
+CONFIG_KEYBOARD_ATKBD=y
+CONFIG_MOUSE_PS2=y
+
+# Rede (Intel e Realtek — cobre a maioria dos PCs de mesa usados de referência)
+CONFIG_E1000=y
+CONFIG_E1000E=y
+CONFIG_R8169=y
+
+# PCI/PCIe
+CONFIG_PCI=y
+CONFIG_PCIEPORTBUS=y
+
+# GPU AMD — AMDGPU cobre GCN/RDNA (inclui RX 580 / Polaris); firmware
+# via linux-firmware (ver buildroot/configs/*_defconfig e docs/licenses.md)
+CONFIG_DRM=y
+CONFIG_DRM_AMDGPU=y
+CONFIG_DRM_AMDGPU_SI=y
+CONFIG_DRM_AMDGPU_CIK=y
+CONFIG_FB=y
+# CONFIG_DRM_RADEON is not set
+# usamos apenas amdgpu (kernel moderno já cobre GCN 1.1+ incluindo Polaris);
+# radeon ficaria reservado para GPUs pré-GCN, fora do escopo inicial.

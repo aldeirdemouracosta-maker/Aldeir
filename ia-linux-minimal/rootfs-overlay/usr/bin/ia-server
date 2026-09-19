@@ -1,0 +1,68 @@
+#!/bin/sh
+# ia-server — controla o llama-server local (somente 127.0.0.1:8080 por
+# padrão — ver docs/architecture.md sobre acesso remoto opcional).
+set -e
+# shellcheck source=../lib/ia-linux/common.sh
+. /usr/lib/ia-linux/common.sh
+
+PID_FILE="/run/ia-server.pid"
+LOG_FILE="${LOG_DIR}/llama-server.log"
+
+usage() {
+    echo "uso: ia-server <start|status|stop>"
+}
+
+is_running() {
+    [ -f "${PID_FILE}" ] && kill -0 "$(cat "${PID_FILE}")" 2>/dev/null
+}
+
+start() {
+    if is_running; then
+        echo "ia-server já está em execução (PID $(cat "${PID_FILE}"))"
+        return 0
+    fi
+
+    command -v llama-server >/dev/null 2>&1 || die "llama-server não está instalado nesta imagem"
+    MODEL_PATH="$(require_active_model_path)"
+    HW_OUT="$(ia_core HW)"
+    THREADS="$(echo "${HW_OUT}" | ia_core_field threads_efetivas)"
+    CTX="$(echo "${HW_OUT}" | ia_core_field contexto_efetivo)"
+    RESOLVED="$(ia_core BACKEND GET | sed -n 's/.*resolvido=\([a-z]*\).*/\1/p')"
+
+    NGL_ARGS=""
+    if [ "${RESOLVED}" = "vulkan" ]; then
+        NGL_ARGS="-ngl 999"
+    fi
+
+    mkdir -p "${LOG_DIR}"
+    # shellcheck disable=SC2086
+    llama-server -m "${MODEL_PATH}" -t "${THREADS}" -c "${CTX}" ${NGL_ARGS} \
+        --host 127.0.0.1 --port 8080 >"${LOG_FILE}" 2>&1 &
+    echo $! > "${PID_FILE}"
+    echo "ia-server iniciado em 127.0.0.1:8080 (PID $!, backend=${RESOLVED})"
+}
+
+status() {
+    if is_running; then
+        echo "em execução (PID $(cat "${PID_FILE}")), 127.0.0.1:8080 — log: ${LOG_FILE}"
+    else
+        echo "parado"
+    fi
+}
+
+stop() {
+    if is_running; then
+        kill "$(cat "${PID_FILE}")"
+        rm -f "${PID_FILE}"
+        echo "ia-server parado"
+    else
+        echo "ia-server não está em execução"
+    fi
+}
+
+case "${1:-}" in
+    start) start ;;
+    status) status ;;
+    stop) stop ;;
+    *) usage; exit 1 ;;
+esac

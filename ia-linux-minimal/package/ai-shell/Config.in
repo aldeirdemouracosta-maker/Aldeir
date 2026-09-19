@@ -1,0 +1,15 @@
+config BR2_PACKAGE_AI_SHELL
+	bool "ai-shell"
+	select BR2_PACKAGE_AI_CORE
+	select BR2_PACKAGE_UTIL_LINUX
+	select BR2_PACKAGE_UTIL_LINUX_LSBLK
+	help
+	  Console interativo (prompt "IA>") e utilitários de linha de
+	  comando (ia-model, ia-chat, ia-benchmark, ia-server, ia-gpu,
+	  ia-hwdetect) do IA Linux Minimal.
+
+	  Os scripts em si são instalados via BR2_ROOTFS_OVERLAY
+	  (rootfs-overlay/usr/bin, rootfs-overlay/etc) — este pacote não
+	  compila nada; ele apenas garante, via 'select', que ai-core e as
+	  ferramentas de diagnóstico das quais os scripts dependem estejam
+	  presentes na imagem final.

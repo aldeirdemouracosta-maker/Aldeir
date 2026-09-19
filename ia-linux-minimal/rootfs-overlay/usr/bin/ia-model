@@ -1,0 +1,38 @@
+#!/bin/sh
+# ia-model — gerencia modelos GGUF via ai-core. Cliente fino: toda a
+# lógica (listar, selecionar, recomendar por perfil) vive em ai-core.
+set -e
+# shellcheck source=../lib/ia-linux/common.sh
+. /usr/lib/ia-linux/common.sh
+
+usage() {
+    cat <<EOF
+uso: ia-model <comando>
+
+comandos:
+  list        lista modelos GGUF em ${MODELS_DIR}
+  select N    define o modelo de índice N (ver 'list') como ativo
+  active      mostra o modelo ativo
+  recommend   sugere um tamanho de modelo para o perfil de hardware atual
+EOF
+}
+
+case "${1:-}" in
+    list)
+        ia_core MODEL LIST
+        ;;
+    select)
+        [ -n "${2:-}" ] || { usage; exit 1; }
+        ia_core MODEL SELECT "$2"
+        ;;
+    active)
+        ia_core MODEL ACTIVE
+        ;;
+    recommend)
+        ia_core MODEL RECOMMEND
+        ;;
+    *)
+        usage
+        exit 1
+        ;;
+esac

@@ -1,0 +1,14 @@
+config BR2_PACKAGE_AI_CORE
+	bool "ai-core"
+	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_CPU_ARCHS_SUPPORTS
+	help
+	  Daemon central do IA Linux Minimal: detecção de hardware,
+	  gerenciamento de modelos GGUF e seleção de backend de inferência
+	  (CPU/Vulkan), exposto via socket Unix (/run/ai-core.sock) a
+	  ia-shell e aos demais utilitários ia-*.
+
+	  Compilado a partir de ai-core/ (na raiz deste BR2_EXTERNAL) via
+	  infraestrutura cargo-package do Buildroot.
+
+comment "ai-core precisa de um toolchain host com suporte a Rust"
+	depends on !BR2_PACKAGE_HOST_RUSTC_TARGET_CPU_ARCHS_SUPPORTS

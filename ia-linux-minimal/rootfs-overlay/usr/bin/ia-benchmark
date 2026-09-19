@@ -1,0 +1,38 @@
+#!/bin/sh
+# ia-benchmark — mede tokens/s do modelo ativo via llama-bench, em CPU,
+# Vulkan, ou ambos (compare) — ver docs/architecture.md.
+set -e
+# shellcheck source=../lib/ia-linux/common.sh
+. /usr/lib/ia-linux/common.sh
+
+usage() {
+    echo "uso: ia-benchmark <cpu|vulkan|compare>"
+}
+
+run_bench() {
+    ngl="$1"
+    label="$2"
+    MODEL_PATH="$(require_active_model_path)"
+    echo "== ${label} =="
+    llama-bench -m "${MODEL_PATH}" -ngl "${ngl}"
+}
+
+command -v llama-bench >/dev/null 2>&1 || die "llama-bench não está instalado nesta imagem"
+
+case "${1:-compare}" in
+    cpu)
+        run_bench 0 CPU
+        ;;
+    vulkan)
+        run_bench 999 Vulkan
+        ;;
+    compare)
+        run_bench 0 CPU
+        echo
+        run_bench 999 Vulkan
+        ;;
+    *)
+        usage
+        exit 1
+        ;;
+esac

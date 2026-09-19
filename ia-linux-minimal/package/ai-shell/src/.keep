@@ -1,0 +1,9 @@
+Diretório de origem "local" para o pacote Buildroot ai-shell.
+
+ai-shell não tem código-fonte para compilar — os scripts reais estão em
+rootfs-overlay/usr/bin e rootfs-overlay/etc (instalados via
+BR2_ROOTFS_OVERLAY). Este diretório existe apenas para que
+package/ai-shell/ai-shell.mk possa usar SITE_METHOD=local, o mesmo
+mecanismo usado por package/ai-core (ver ai-core.mk), evitando depender
+de um padrão de "pacote sem fonte nenhuma" cujos detalhes variam entre
+versões do Buildroot.

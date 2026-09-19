@@ -1,0 +1,41 @@
+#!/bin/sh
+# rcS — inicialização mínima do IA Linux Minimal.
+set -e
+
+/bin/mount -t proc proc /proc
+/bin/mount -t sysfs sysfs /sys
+/bin/mount -t devtmpfs devtmpfs /dev 2>/dev/null || true
+/bin/mkdir -p /dev/pts /dev/shm
+/bin/mount -t devpts devpts /dev/pts 2>/dev/null || true
+/bin/mount -t tmpfs tmpfs /dev/shm 2>/dev/null || true
+/bin/mount -t tmpfs tmpfs /run 2>/dev/null || true
+
+/sbin/hostname -F /etc/hostname 2>/dev/null || true
+
+# Partição DATA (rótulo IA_DATA) é opcional: sua ausência não deve
+# impedir o boot — o sistema entra em modo reduzido (ver docs/roadmap.md,
+# modo RECOVERY). ai-core já cria os subdiretórios em /data mesmo que
+# nada esteja montado ali (ver buildroot/board/ia-linux/post-build.sh).
+mkdir -p /data
+if ! mountpoint -q /data 2>/dev/null; then
+    DATA_DEV="$(findfs LABEL=IA_DATA 2>/dev/null || true)"
+    if [ -n "${DATA_DEV}" ]; then
+        mount -t ext4 "${DATA_DEV}" /data || echo "rcS: falha ao montar IA_DATA, seguindo sem /data" >&2
+    else
+        echo "rcS: partição IA_DATA não encontrada, seguindo em modo reduzido" >&2
+    fi
+fi
+mkdir -p /data/models /data/rag /data/agents /data/workspace /data/sessions /data/logs /data/config
+
+# RECOVERY é montada somente leitura quando presente (ver docs/architecture.md)
+mkdir -p /recovery
+if ! mountpoint -q /recovery 2>/dev/null; then
+    RECOVERY_DEV="$(findfs LABEL=IA_RECOVERY 2>/dev/null || true)"
+    if [ -n "${RECOVERY_DEV}" ]; then
+        mount -t ext4 -o ro "${RECOVERY_DEV}" /recovery 2>/dev/null || true
+    fi
+fi
+
+/sbin/ldconfig 2>/dev/null || true
+
+exit 0

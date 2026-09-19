@@ -1,0 +1,43 @@
+#!/bin/sh
+# ia-gpu — diagnóstico e seleção de backend (CPU/Vulkan) via ai-core.
+set -e
+# shellcheck source=../lib/ia-linux/common.sh
+. /usr/lib/ia-linux/common.sh
+
+usage() {
+    cat <<EOF
+uso: ia-gpu <comando>
+
+comandos:
+  status         backend configurado, backend resolvido, driver, render node
+  list           lista dispositivos Vulkan visíveis a llama.cpp
+  vulkaninfo     roda 'vulkaninfo --summary' (requer GPU + Vulkan funcionando)
+  mode <valor>   define o modo: auto | cpu | vulkan
+EOF
+}
+
+case "${1:-}" in
+    status)
+        ia_core HW
+        ia_core BACKEND GET
+        ;;
+    list)
+        if command -v llama-cli >/dev/null 2>&1; then
+            llama-cli --list-devices
+        else
+            die "llama-cli não está instalado nesta imagem"
+        fi
+        ;;
+    vulkaninfo)
+        command -v vulkaninfo >/dev/null 2>&1 || die "vulkaninfo não está instalado nesta imagem"
+        vulkaninfo --summary
+        ;;
+    mode)
+        [ -n "${2:-}" ] || { usage; exit 1; }
+        ia_core BACKEND SET "$2"
+        ;;
+    *)
+        usage
+        exit 1
+        ;;
+esac

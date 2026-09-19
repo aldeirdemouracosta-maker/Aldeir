@@ -1,0 +1,6 @@
+# Fragmento OPCIONAL — liga sched_ext (etapa 0.7, AI Scheduler).
+# Não incluído em nenhum defconfig por padrão nesta versão (0.4.0-alpha5).
+# Para experimentar: adicione este arquivo a BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES.
+CONFIG_SCHED_CLASS_EXT=y
+CONFIG_BPF_JIT_ALWAYS_ON=y
+CONFIG_DEBUG_INFO_BTF=y

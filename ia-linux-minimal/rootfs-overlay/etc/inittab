@@ -1,0 +1,10 @@
+# /etc/inittab — BusyBox init. Console somente texto: sem display manager,
+# sem systemd. ai-core roda supervisionado (respawn) desde o boot; se o
+# daemon travar ou sair, init o reinicia automaticamente — mesma filosofia
+# de "o kernel nunca fica refém do agente de IA" aplicada ao user-space.
+::sysinit:/etc/init.d/rcS
+::respawn:/usr/bin/ai-core
+tty1::respawn:/usr/bin/ia-shell
+ttyS0::respawn:/usr/bin/ia-shell
+::shutdown:/etc/init.d/rcK
+::ctrlaltdel:/sbin/reboot

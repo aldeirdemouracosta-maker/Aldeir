@@ -1,0 +1,24 @@
+#!/bin/sh
+# ia-chat — conversa interativa com o modelo ativo via llama-cli.
+# Threads, contexto e backend vêm de ai-core (hardware.rs / backend.rs),
+# não são recalculados aqui.
+set -e
+# shellcheck source=../lib/ia-linux/common.sh
+. /usr/lib/ia-linux/common.sh
+
+command -v llama-cli >/dev/null 2>&1 || die "llama-cli não está instalado nesta imagem"
+
+MODEL_PATH="$(require_active_model_path)"
+HW_OUT="$(ia_core HW)"
+THREADS="$(echo "${HW_OUT}" | ia_core_field threads_efetivas)"
+CTX="$(echo "${HW_OUT}" | ia_core_field contexto_efetivo)"
+RESOLVED="$(ia_core BACKEND GET | sed -n 's/.*resolvido=\([a-z]*\).*/\1/p')"
+
+NGL_ARGS=""
+if [ "${RESOLVED}" = "vulkan" ]; then
+    NGL_ARGS="-ngl 999"
+fi
+
+echo "ia-chat: modelo=$(basename "${MODEL_PATH}") threads=${THREADS} ctx=${CTX} backend=${RESOLVED}"
+# shellcheck disable=SC2086
+exec llama-cli -m "${MODEL_PATH}" -t "${THREADS}" -c "${CTX}" ${NGL_ARGS} -cnv

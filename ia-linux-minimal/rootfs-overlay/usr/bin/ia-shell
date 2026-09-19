@@ -1,0 +1,96 @@
+#!/bin/sh
+# ia-shell — console interativo do IA Linux Minimal (prompt "IA>").
+# Cliente fino: cada comando chama ai-core ou um dos ia-* (ia-model,
+# ia-chat, ia-benchmark, ia-server, ia-gpu); nenhuma lógica de negócio
+# vive aqui. Ver rootfs-overlay/etc/inittab (é o shell de tty1/ttyS0).
+# shellcheck source=../lib/ia-linux/common.sh
+. /usr/lib/ia-linux/common.sh
+
+VERSION_FILE=/etc/ia-linux-release
+
+print_banner() {
+    clear 2>/dev/null || true
+    [ -f "${VERSION_FILE}" ] && cat "${VERSION_FILE}" || echo "IA Linux Minimal"
+    echo
+    ia_core STATUS 2>/dev/null | sed -n \
+        -e 's/^cpu=/CPU     : /p' \
+        -e 's/^ram_gb=/RAM     : /p' \
+        -e 's/^perfil=/Perfil  : /p' \
+        -e 's/^gpu=/GPU     : /p' \
+        -e 's/^backend_resolvido=/Backend : /p' \
+        -e 's/^modelo_ativo=/Modelo  : /p'
+    echo
+    echo "Digite 'help' para comandos."
+    echo
+}
+
+print_help() {
+    cat <<'EOF'
+Comandos:
+  help                        esta ajuda
+  status                      status completo (ai-core STATUS)
+  version                     versão do IA Linux Minimal
+  models                      lista modelos GGUF
+  model select N               define o modelo ativo
+  model active                 mostra o modelo ativo
+  model recommend               sugestão de modelo para este hardware
+  chat                          conversa interativa (llama-cli)
+  benchmark [cpu|vulkan|compare] mede desempenho do modelo ativo
+  server start|status|stop      controla o llama-server local
+  gpu status|list|mode <m>      diagnóstico/seleção de backend
+  hwdetect                      sonda de hardware standalone (não depende do ai-core)
+  workspace                     abre um shell em /data/workspace
+  shell                          abre um shell ash completo
+  clear                          limpa a tela
+  reboot                         reinicia o sistema
+  poweroff                       desliga o sistema
+  exit                            encerra esta sessão do IA Shell
+EOF
+}
+
+print_banner
+
+while true; do
+    printf 'IA> '
+    if ! IFS=' ' read -r cmd arg1 arg2; then
+        echo
+        break
+    fi
+
+    case "${cmd}" in
+        "") ;;
+        help) print_help ;;
+        status) ia_core STATUS ;;
+        version) [ -f "${VERSION_FILE}" ] && cat "${VERSION_FILE}" || echo "IA Linux Minimal" ;;
+        models) ia-model list ;;
+        model)
+            case "${arg1}" in
+                select) ia-model select "${arg2}" ;;
+                active) ia-model active ;;
+                recommend) ia-model recommend ;;
+                *) echo "uso: model select N | model active | model recommend" ;;
+            esac
+            ;;
+        chat) ia-chat ;;
+        benchmark) ia-benchmark "${arg1:-compare}" ;;
+        server) ia-server "${arg1:-status}" ;;
+        gpu)
+            case "${arg1}" in
+                status|list) ia-gpu "${arg1}" ;;
+                mode) ia-gpu mode "${arg2}" ;;
+                *) ia-gpu status ;;
+            esac
+            ;;
+        hwdetect) ia-hwdetect ;;
+        workspace)
+            mkdir -p "${DATA_DIR}/workspace"
+            ( cd "${DATA_DIR}/workspace" && /bin/sh )
+            ;;
+        shell) /bin/sh ;;
+        clear) clear 2>/dev/null || true ;;
+        reboot) reboot ;;
+        poweroff) poweroff ;;
+        exit) break ;;
+        *) echo "comando desconhecido: ${cmd} (digite 'help')" ;;
+    esac
+done
