@@ -36,7 +36,7 @@ from PySide6.QtWidgets import (
 from analisador_projeto.analisar_completude import analisar_completude, formatar_diagnostico_para_prompt
 from geracao_mockup.gerar_mockup_simples import gerar_mockup_simples
 from importador_zip.inspecionar_zip import analisar_projeto as analisar_zip
-from orquestrador.orquestrador import Orquestrador
+from orquestrador.orquestrador import ExecucaoInterrompidaError, Orquestrador
 from visao_mockup.interpretar_mockup import interpretar_mockup as interpretar_mockup_imagem
 
 FONTE_MONO = "Menlo, Consolas, 'DejaVu Sans Mono', monospace"
@@ -98,20 +98,34 @@ class TrabalhadorOrquestrador(QObject):
     evento = Signal(str)
     concluido = Signal(dict)
     erro = Signal(str)
+    interrompido = Signal()
 
     def __init__(self, diretorio: Path, instrucao: str, contexto_extra: Optional[str]):
         super().__init__()
         self.diretorio = diretorio
         self.instrucao = instrucao
         self.contexto_extra = contexto_extra
+        self._parar_solicitado = False
+
+    def solicitar_parada(self) -> None:
+        """Chamado pela thread principal (botão "Parar…") — só marca um
+        sinalizador; o loop do orquestrador é quem checa e para sozinho
+        entre chamadas, então uma chamada ao modelo já em andamento
+        termina normalmente antes de parar."""
+        self._parar_solicitado = True
 
     def rodar(self) -> None:
         try:
             orquestrador = Orquestrador(self.diretorio)
             resultado = orquestrador.rodar(
-                self.instrucao, contexto_extra=self.contexto_extra, on_evento=self.evento.emit
+                self.instrucao,
+                contexto_extra=self.contexto_extra,
+                on_evento=self.evento.emit,
+                deve_parar=lambda: self._parar_solicitado,
             )
             self.concluido.emit(resultado)
+        except ExecucaoInterrompidaError:
+            self.interrompido.emit()
         except Exception as erro:  # noqa: BLE001 — idem: erro visível na UI, nunca trava sem explicação
             self.erro.emit(f"{type(erro).__name__}: {erro}")
 
@@ -197,9 +211,19 @@ class JanelaPrincipal(QMainWindow):
         self.campo_instrucao.setFixedHeight(70)
         layout.addWidget(self.campo_instrucao)
 
+        linha_executar = QHBoxLayout()
         self.botao_executar = QPushButton("Executar")
         self.botao_executar.clicked.connect(self._executar_orquestrador)
-        layout.addWidget(self.botao_executar)
+        self.botao_parar = QPushButton("Parar")
+        self.botao_parar.setToolTip(
+            "Pede para o orquestrador parar antes da próxima chamada ao modelo ou "
+            "ferramenta — não interrompe uma chamada já em andamento."
+        )
+        self.botao_parar.setEnabled(False)
+        self.botao_parar.clicked.connect(self._parar_orquestrador)
+        linha_executar.addWidget(self.botao_executar)
+        linha_executar.addWidget(self.botao_parar)
+        layout.addLayout(linha_executar)
 
         self.rotulo_status = QLabel("")
         layout.addWidget(self.rotulo_status)
@@ -467,6 +491,7 @@ class JanelaPrincipal(QMainWindow):
         contexto_extra = "\n\n".join(partes_contexto) or None
 
         self.botao_executar.setEnabled(False)
+        self.botao_parar.setEnabled(True)
         self.area_log.clear()
         self.rotulo_status.setText("Executando…")
 
@@ -477,13 +502,22 @@ class JanelaPrincipal(QMainWindow):
         trabalhador.evento.connect(self.area_log.appendPlainText)
         trabalhador.concluido.connect(self._execucao_concluida)
         trabalhador.erro.connect(self._execucao_com_erro)
+        trabalhador.interrompido.connect(self._execucao_interrompida)
         trabalhador.concluido.connect(thread.quit)
         trabalhador.erro.connect(thread.quit)
+        trabalhador.interrompido.connect(thread.quit)
         thread.finished.connect(lambda: self.botao_executar.setEnabled(True))
+        thread.finished.connect(lambda: self.botao_parar.setEnabled(False))
 
         self._thread = thread
         self._trabalhador = trabalhador
         thread.start()
+
+    def _parar_orquestrador(self) -> None:
+        if self._trabalhador is not None:
+            self._trabalhador.solicitar_parada()
+        self.botao_parar.setEnabled(False)
+        self.rotulo_status.setText("Parando — aguardando a chamada atual terminar…")
 
     def _execucao_concluida(self, resultado: dict) -> None:
         self.area_log.appendPlainText(f"\nResumo: {resultado.get('resumo', '')}")
@@ -498,6 +532,10 @@ class JanelaPrincipal(QMainWindow):
     def _execucao_com_erro(self, mensagem: str) -> None:
         self.area_log.appendPlainText(f"\nErro: {mensagem}")
         self.rotulo_status.setText("Falha na execução — ver log acima.")
+
+    def _execucao_interrompida(self) -> None:
+        self.area_log.appendPlainText("\nExecução interrompida pelo usuário.")
+        self.rotulo_status.setText("Interrompida.")
 
 
 def main() -> None:

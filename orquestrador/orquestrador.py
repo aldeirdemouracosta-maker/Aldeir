@@ -121,6 +121,11 @@ class GeracaoTruncadaError(Exception):
     geração descontrolada, não um problema de timeout."""
 
 
+class ExecucaoInterrompidaError(Exception):
+    """O usuário pediu para parar a execução (via `deve_parar`) antes do
+    modelo chamar `finalizar` ou do limite de iterações estourar."""
+
+
 def _resolver_caminho_seguro(raiz: Path, relativo: str) -> Path:
     raiz = raiz.resolve()
     alvo = (raiz / relativo).resolve()
@@ -291,12 +296,22 @@ class Orquestrador:
         instrucao: str,
         contexto_extra: Optional[str] = None,
         on_evento: Optional[Callable[[str], None]] = None,
+        deve_parar: Optional[Callable[[], bool]] = None,
     ) -> dict:
         """`on_evento`, se passado, recebe uma linha de texto a cada
         etapa (útil para mostrar progresso ao vivo numa interface —
         sem isso, `rodar()` só devolve algo quando termina, e uma
-        chamada real ao modelo pode levar minutos)."""
+        chamada real ao modelo pode levar minutos).
+
+        `deve_parar`, se passado, é checado entre chamadas ao modelo e
+        entre ferramentas de uma mesma rodada — se retornar True, a
+        execução para com `ExecucaoInterrompidaError` em vez de esperar
+        o modelo chamar `finalizar` ou o limite de iterações estourar.
+        Não interrompe uma chamada ao modelo ou ferramenta já em
+        andamento (isso exigiria cancelamento de rede/subprocesso), só
+        evita começar a próxima."""
         avisar = on_evento or (lambda _: None)
+        parar_pedido = deve_parar or (lambda: False)
 
         motor = selecionar_motor()
         if not motor["escolhido"]:
@@ -310,6 +325,10 @@ class Orquestrador:
         ]
 
         for iteracao in range(self.max_iteracoes):
+            if parar_pedido():
+                avisar("Execução interrompida pelo usuário.")
+                raise ExecucaoInterrompidaError("interrompida pelo usuário antes de chamar o modelo")
+
             avisar(f"Chamando o modelo (tentativa {iteracao + 1}/{self.max_iteracoes})...")
             mensagem_modelo = chamar_llm(
                 motor["base_url"],
@@ -325,6 +344,10 @@ class Orquestrador:
                 return {"resumo": mensagem_modelo.get("content", ""), "sucesso": None}
 
             for chamada in chamadas:
+                if parar_pedido():
+                    avisar("Execução interrompida pelo usuário.")
+                    raise ExecucaoInterrompidaError("interrompida pelo usuário entre chamadas de ferramenta")
+
                 nome = chamada["function"]["name"]
                 argumentos = json.loads(chamada["function"]["arguments"] or "{}")
 

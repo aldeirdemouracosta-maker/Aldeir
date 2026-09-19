@@ -356,3 +356,28 @@ def test_cli_contexto_arquivo_e_diagnostico_se_somam(projeto: Path, servidor_llm
     mensagem_usuario = capturado["mensagens"][1]["content"]
     assert "Mockup: botão 'Salvar' no rodapé" in mensagem_usuario
     assert mensagem_usuario.endswith("implemente a tela do mockup")
+
+
+def test_deve_parar_true_antes_da_primeira_chamada_nao_completa_o_loop(projeto: Path, servidor_llm_mock):
+    base_url = servidor_llm_mock([_msg_tool_call("1", "finalizar", {"resumo": "ok", "sucesso": True})])
+    orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": base_url}
+
+    with pytest.raises(orq.ExecucaoInterrompidaError):
+        orq.Orquestrador(projeto).rodar("faça algo", deve_parar=lambda: True)
+
+
+def test_deve_parar_interrompe_entre_rodadas_sem_esperar_finalizar(projeto: Path, servidor_llm_mock):
+    # nunca chama finalizar — sem deve_parar, isso estouraria LimiteDeIteracoesError
+    base_url = servidor_llm_mock([_msg_tool_call("1", "ler_arquivo", {"caminho": "existente.txt"})])
+    orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": base_url}
+
+    contador = {"n": 0}
+
+    def deve_parar():
+        contador["n"] += 1
+        return contador["n"] > 3
+
+    with pytest.raises(orq.ExecucaoInterrompidaError):
+        orq.Orquestrador(projeto).rodar("faça algo", deve_parar=deve_parar)
+
+    assert contador["n"] >= 1

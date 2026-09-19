@@ -50,6 +50,16 @@ contexto) → escrever a instrução → "Executar". O botão fica
 desabilitado durante a execução; o painel de progresso mostra cada
 chamada de ferramenta e o resultado.
 
+O botão **"Parar"** (ao lado de "Executar", habilitado só durante uma
+execução) pede pro orquestrador parar antes da próxima chamada ao
+modelo ou ferramenta — não cancela uma chamada já em andamento (isso
+exigiria cancelar uma requisição HTTP ou matar um processo de sandbox
+no meio), só evita começar a próxima rodada. Existe porque, na prática,
+um modelo pequeno pode entrar num padrão de "correção" ruim (ex.:
+reescrever um arquivo inteiro repetidamente tentando "consertar" um
+falso positivo do diagnóstico) e antes não havia como interromper sem
+fechar a janela inteira.
+
 ## Abrir um projeto em ZIP
 
 "Abrir ZIP…" usa `importador_zip/inspecionar_zip.py` (o mesmo portão

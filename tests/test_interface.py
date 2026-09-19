@@ -454,6 +454,61 @@ def test_trocar_pasta_do_projeto_esquece_diagnostico_e_mockup_da_pasta_anterior(
     assert "Nenhuma descrição" in janela.rotulo_mockup.text()
 
 
+def test_botao_parar_comeca_desabilitado(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    assert janela.botao_parar.isEnabled() is False
+
+
+def test_parar_orquestrador_desabilita_botao_e_pede_parada_ao_trabalhador(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    chamadas = []
+
+    class _TrabalhadorFalso:
+        def solicitar_parada(self):
+            chamadas.append(True)
+
+    janela._trabalhador = _TrabalhadorFalso()
+    janela.botao_parar.setEnabled(True)
+
+    janela._parar_orquestrador()
+
+    assert chamadas == [True]
+    assert janela.botao_parar.isEnabled() is False
+    assert "Parando" in janela.rotulo_status.text()
+
+
+def test_execucao_interrompida_atualiza_status_e_log(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._execucao_interrompida()
+
+    assert janela.rotulo_status.text() == "Interrompida."
+    assert "interrompida pelo usuário" in janela.area_log.toPlainText()
+
+
+def test_trabalhador_orquestrador_emite_interrompido_quando_parada_solicitada_antes(qtbot, tmp_path: Path, servidor_llm_mock):
+    resposta_finalizar = _msg_tool_call("1", "finalizar", {"resumo": "ok", "sucesso": True})
+    base_url = servidor_llm_mock([resposta_finalizar])
+    orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": base_url}
+
+    trabalhador = jp.TrabalhadorOrquestrador(tmp_path, "faça algo", None)
+    trabalhador.solicitar_parada()
+
+    interrompidos = []
+    erros = []
+    trabalhador.interrompido.connect(lambda: interrompidos.append(True))
+    trabalhador.erro.connect(erros.append)
+    trabalhador.rodar()
+
+    assert interrompidos == [True]
+    assert erros == []
+
+
 def test_descrever_mockup_sugere_pasta_do_mockup_gerado(qtbot, monkeypatch, tmp_path: Path):
     janela = JanelaPrincipal()
     qtbot.addWidget(janela)
