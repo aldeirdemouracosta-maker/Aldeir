@@ -11,6 +11,7 @@ mod hardware;
 mod ipc;
 mod json;
 mod llama_client;
+mod memory;
 mod model;
 
 use std::env;
@@ -30,12 +31,18 @@ const DEFAULT_DATA_DIR: &str = "/data";
 // llama-server sozinho, apenas fala com ele quando uma tarefa é
 // submetida (ver agent.rs).
 const DEFAULT_LLAMA_ADDR: &str = "127.0.0.1:8080";
+// Mesmo diretório que ia-server usa para o PID file (/run/ia-server.pid)
+// — ai-core lê esse PID para saber o que proteger via cgroup (memory.rs).
+const DEFAULT_RUN_DIR: &str = "/run";
 
 pub struct State {
     data_dir: PathBuf,
     hardware: HardwareInfo,
     backend_mode: Mutex<BackendMode>,
     agent_manager: Arc<AgentManager>,
+    damon_dir: PathBuf,
+    cgroup_root: PathBuf,
+    run_dir: PathBuf,
 }
 
 fn main() {
@@ -86,6 +93,15 @@ fn run_server() {
     let hw = hardware::detect();
     let backend_mode = config::load_backend_mode(&data_dir);
     let llama_addr = env::var("IA_LLAMA_ADDR").unwrap_or_else(|_| DEFAULT_LLAMA_ADDR.to_string());
+    let damon_dir = PathBuf::from(
+        env::var("IA_DAMON_SYSFS")
+            .unwrap_or_else(|_| memory::DEFAULT_DAMON_RECLAIM_DIR.to_string()),
+    );
+    let cgroup_root = PathBuf::from(
+        env::var("IA_CGROUP_ROOT").unwrap_or_else(|_| memory::DEFAULT_CGROUP_ROOT.to_string()),
+    );
+    let run_dir =
+        PathBuf::from(env::var("IA_RUN_DIR").unwrap_or_else(|_| DEFAULT_RUN_DIR.to_string()));
 
     eprintln!(
         "ai-core {VERSION}: CPU='{}' threads={} RAM={:.1}GiB perfil={} GPU={}",
@@ -106,6 +122,9 @@ fn run_server() {
         hardware: hw,
         backend_mode: Mutex::new(backend_mode),
         agent_manager,
+        damon_dir,
+        cgroup_root,
+        run_dir,
     });
 
     if let Err(e) = ipc::serve(&socket_path, state, dispatch) {
@@ -128,6 +147,7 @@ fn dispatch(line: &str, state: &State) -> Vec<String> {
         "MODEL" => model_dispatch(&rest, state),
         "BACKEND" => backend_dispatch(&rest, state),
         "AGENT" => agent_dispatch(&rest, state),
+        "MEMORY" => memory_dispatch(&rest, state),
         "" => vec!["ERRO comando vazio".to_string()],
         other => vec![format!("ERRO comando desconhecido: {other}")],
     }
@@ -158,6 +178,18 @@ fn status_lines(state: &State) -> Vec<String> {
         format!("modelos_disponiveis={model_count}"),
         format!("modelo_ativo={active}"),
         agent::status_line(&state.agent_manager),
+        format!(
+            "memoria_damon={}",
+            if memory::read_status(&state.damon_dir).is_some() {
+                "disponivel"
+            } else {
+                "indisponivel"
+            }
+        ),
+        format!(
+            "memoria_protegida={}",
+            memory::read_protection_status(&state.cgroup_root).is_some()
+        ),
     ]
 }
 
@@ -316,6 +348,90 @@ fn agent_dispatch(rest: &[&str], state: &State) -> Vec<String> {
     }
 }
 
+fn memory_dispatch(rest: &[&str], state: &State) -> Vec<String> {
+    match rest.first() {
+        Some(&"STATUS") | None => {
+            let mut lines = match memory::read_status(&state.damon_dir) {
+                Some(p) => vec![format!(
+                    "damon_reclaim: enabled={} min_age_ms={} quota_ms={} quota_sz_bytes={}",
+                    p.enabled, p.min_age_ms, p.quota_ms, p.quota_sz_bytes
+                )],
+                None => vec!["damon_reclaim: indisponivel neste kernel (modulo nao carregado ou nao suportado)".to_string()],
+            };
+            match memory::read_protection_status(&state.cgroup_root) {
+                Some((low, procs)) => {
+                    lines.push(format!("cgroup: memory.low={low} bytes pids={:?}", procs))
+                }
+                None => lines.push("cgroup: nenhuma protecao ativa ainda".to_string()),
+            }
+            lines
+        }
+        Some(&"APPLY") => memory_apply(state),
+        Some(&"PROTECT") => match rest.get(1).and_then(|s| s.parse::<u64>().ok()) {
+            Some(bytes) => memory_protect_running_server(state, bytes),
+            None => vec!["ERRO uso: MEMORY PROTECT <bytes>".to_string()],
+        },
+        Some(other) => vec![format!("ERRO subcomando MEMORY desconhecido: {other}")],
+    }
+}
+
+fn memory_apply(state: &State) -> Vec<String> {
+    let mut lines = Vec::new();
+
+    match memory::apply_profile(&state.damon_dir, state.hardware.profile()) {
+        Ok(p) => lines.push(format!(
+            "damon_reclaim: aplicado enabled={} min_age_ms={} quota_ms={} quota_sz_bytes={}",
+            p.enabled, p.min_age_ms, p.quota_ms, p.quota_sz_bytes
+        )),
+        Err(e) => lines.push(format!("damon_reclaim: nao aplicado ({e})")),
+    }
+
+    let pid_file = state.run_dir.join("ia-server.pid");
+    match memory::read_pid_file(&pid_file) {
+        Some(pid) if memory::is_pid_alive(pid) => {
+            match model::active_model_entry(&state.data_dir) {
+                Some(entry) => {
+                    let overrides = config::load_runtime_conf(&state.data_dir);
+                    let factor = overrides
+                        .get("IA_MEM_FLOOR_PERCENT")
+                        .and_then(|v| v.parse().ok())
+                        .unwrap_or(memory::DEFAULT_FLOOR_PERCENT);
+                    let floor = memory::floor_bytes_for_model(entry.size_bytes, factor);
+                    match memory::protect_pid(&state.cgroup_root, pid, floor) {
+                    Ok(()) => lines.push(format!(
+                        "cgroup: pid={pid} protegido com memory.low={floor} bytes (modelo={}, fator={factor}%)",
+                        entry.name
+                    )),
+                    Err(e) => lines.push(format!("cgroup: nao aplicado ({e})")),
+                }
+                }
+                None => {
+                    lines.push("cgroup: nenhum modelo ativo para calcular a protecao".to_string())
+                }
+            }
+        }
+        Some(_) => {
+            lines.push("cgroup: ia-server.pid encontrado mas o processo nao esta ativo".to_string())
+        }
+        None => lines.push("cgroup: ia-server nao esta em execucao (nada a proteger)".to_string()),
+    }
+
+    lines
+}
+
+fn memory_protect_running_server(state: &State, floor_bytes: u64) -> Vec<String> {
+    let pid_file = state.run_dir.join("ia-server.pid");
+    match memory::read_pid_file(&pid_file).filter(|&pid| memory::is_pid_alive(pid)) {
+        Some(pid) => match memory::protect_pid(&state.cgroup_root, pid, floor_bytes) {
+            Ok(()) => vec![format!(
+                "cgroup: pid={pid} protegido com memory.low={floor_bytes} bytes"
+            )],
+            Err(e) => vec![format!("ERRO {e}")],
+        },
+        None => vec!["ERRO ia-server nao esta em execucao".to_string()],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -327,9 +443,15 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(dir.join("models")).unwrap();
         fs::create_dir_all(dir.join("config")).unwrap();
+        // damon_dir/cgroup_root/run_dir apontam para diretórios comuns,
+        // não para sysfs/cgroupfs reais — este ambiente de
+        // desenvolvimento não tem damon_reclaim nem cgroup v2 montados
+        // (ver memory.rs). run_dir fica vazio por padrão (sem
+        // ia-server.pid), simulando "ia-server não está em execução".
+        fs::create_dir_all(dir.join("run")).unwrap();
 
         State {
-            data_dir: dir,
+            data_dir: dir.clone(),
             hardware: HardwareInfo {
                 cpu_model: "Xeon de teste".into(),
                 cpu_threads: 12,
@@ -342,6 +464,9 @@ mod tests {
             // não o conteúdo de uma resposta real do llama-server (isso é
             // coberto em agent.rs com um servidor de mentira).
             agent_manager: AgentManager::spawn("127.0.0.1:1".to_string()),
+            damon_dir: dir.join("damon-does-not-exist"),
+            cgroup_root: dir.join("cgroup"),
+            run_dir: dir.join("run"),
         }
     }
 
@@ -383,10 +508,14 @@ mod tests {
     }
 
     #[test]
-    fn status_ends_with_agent_summary_line() {
+    fn status_includes_agent_and_memory_summary_lines() {
         let state = test_state("status");
         let resp = dispatch("STATUS", &state);
-        assert!(resp.last().unwrap().contains("multiagente"));
+        assert!(resp.iter().any(|l| l.contains("multiagente")));
+        assert!(resp
+            .iter()
+            .any(|l| l.contains("memoria_damon=indisponivel")));
+        assert!(resp.iter().any(|l| l.contains("memoria_protegida=false")));
         fs::remove_dir_all(&state.data_dir).unwrap();
     }
 
@@ -443,6 +572,81 @@ mod tests {
         let state = test_state("agentlistempty");
         let resp = dispatch("AGENT LIST", &state);
         assert_eq!(resp, vec!["nenhuma tarefa enfileirada ainda".to_string()]);
+        fs::remove_dir_all(&state.data_dir).unwrap();
+    }
+
+    #[test]
+    fn memory_status_reports_damon_unavailable_and_no_protection() {
+        let state = test_state("memorystatus");
+        let resp = dispatch("MEMORY STATUS", &state);
+        assert!(resp[0].contains("indisponivel"));
+        assert!(resp[1].contains("nenhuma protecao ativa"));
+        fs::remove_dir_all(&state.data_dir).unwrap();
+    }
+
+    #[test]
+    fn memory_apply_reports_damon_failure_and_no_server_running() {
+        let state = test_state("memoryapply");
+        let resp = dispatch("MEMORY APPLY", &state);
+        assert!(resp[0].starts_with("damon_reclaim: nao aplicado"));
+        assert!(resp[1].contains("ia-server nao esta em execucao"));
+        fs::remove_dir_all(&state.data_dir).unwrap();
+    }
+
+    #[test]
+    fn memory_apply_protects_running_server_with_active_model() {
+        let state = test_state("memoryapplyfull");
+        fs::write(
+            state.data_dir.join("models").join("m.gguf"),
+            vec![0u8; 1000],
+        )
+        .unwrap();
+        model::set_active_by_index(&state.data_dir, 1).unwrap();
+        fs::write(
+            state.run_dir.join("ia-server.pid"),
+            process::id().to_string(),
+        )
+        .unwrap();
+
+        let resp = dispatch("MEMORY APPLY", &state);
+        let cgroup_line = resp
+            .iter()
+            .find(|l| l.starts_with("cgroup:"))
+            .expect("linha de cgroup ausente");
+        assert!(cgroup_line.contains("protegido"));
+        assert!(cgroup_line.contains("memory.low=1500 bytes")); // 1000 * 150%
+
+        let (low, procs) = memory::read_protection_status(&state.cgroup_root).unwrap();
+        assert_eq!(low, 1500);
+        assert_eq!(procs, vec![process::id()]);
+
+        fs::remove_dir_all(&state.data_dir).unwrap();
+    }
+
+    #[test]
+    fn memory_protect_without_running_server_is_an_error() {
+        let state = test_state("memoryprotectnoserver");
+        let resp = dispatch("MEMORY PROTECT 1000", &state);
+        assert_eq!(resp.len(), 1);
+        assert!(resp[0].starts_with("ERRO"));
+        fs::remove_dir_all(&state.data_dir).unwrap();
+    }
+
+    #[test]
+    fn memory_protect_with_running_server_sets_floor() {
+        let state = test_state("memoryprotectok");
+        fs::write(
+            state.run_dir.join("ia-server.pid"),
+            process::id().to_string(),
+        )
+        .unwrap();
+
+        let resp = dispatch("MEMORY PROTECT 2048", &state);
+        assert!(resp[0].contains("memory.low=2048 bytes"));
+
+        let (low, _) = memory::read_protection_status(&state.cgroup_root).unwrap();
+        assert_eq!(low, 2048);
+
         fs::remove_dir_all(&state.data_dir).unwrap();
     }
 }

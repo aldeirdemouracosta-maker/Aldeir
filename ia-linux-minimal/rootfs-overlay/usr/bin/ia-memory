@@ -1,0 +1,42 @@
+#!/bin/sh
+# ia-memory — interface de linha de comando para a AI Memory (etapa 0.6):
+# ajuste do DAMON_RECLAIM por perfil de hardware e proteção via cgroup v2
+# da memória do modelo ativo/KV cache. Cliente fino: toda a lógica vive
+# em ai-core/src/memory.rs.
+set -e
+# shellcheck source=../lib/ia-linux/common.sh
+. /usr/lib/ia-linux/common.sh
+
+usage() {
+    cat <<EOF
+uso: ia-memory <comando>
+
+comandos:
+  status              estado do DAMON_RECLAIM e da proteção de cgroup
+  apply               ajusta DAMON_RECLAIM ao perfil de hardware atual e
+                       protege o llama-server em execução (se houver)
+  protect <bytes>     protege manualmente o llama-server em execução com
+                       um piso de memory.low específico
+
+'apply' é chamado automaticamente por 'ia-server start' — normalmente
+você só precisa rodar isto manualmente para inspecionar o estado ou
+ajustar o piso de proteção à mão.
+EOF
+}
+
+case "${1:-}" in
+    status)
+        ia_core MEMORY STATUS
+        ;;
+    apply)
+        ia_core MEMORY APPLY
+        ;;
+    protect)
+        [ -n "${2:-}" ] || { usage; exit 1; }
+        ia_core MEMORY PROTECT "$2"
+        ;;
+    *)
+        usage
+        exit 1
+        ;;
+esac

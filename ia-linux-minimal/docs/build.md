@@ -40,7 +40,7 @@ Esta árvore foi escrita e testada **sem** acesso a `buildroot.org` (o
 sandbox onde o projeto foi montado não tem esse acesso de rede). Por
 isso:
 
-- `ai-core` foi compilado, testado (`cargo test`, 47 testes) e verificado
+- `ai-core` foi compilado, testado (`cargo test`, 65 testes) e verificado
   com `cargo clippy -- -D warnings` diretamente — isso não depende do
   Buildroot.
 - Todos os scripts shell (`rootfs-overlay/`, `scripts/`, `buildroot/board/`)
@@ -54,12 +54,17 @@ isso:
 - A compilação completa (download do kernel/llama.cpp/Mesa pelo
   Buildroot, cross-compilação, geração de `disk.img`) **não foi
   executada** neste ambiente.
+- Este ambiente também não tem `/sys/module/damon_reclaim` nem cgroup v2
+  montados — a AI Memory (0.6, `ai-core/src/memory.rs`) foi validada com
+  diretórios temporários simulando a mesma estrutura de arquivos simples
+  do kernel (ver `IA_DAMON_SYSFS`/`IA_CGROUP_ROOT` abaixo), não contra o
+  kernel real.
 
 ## Desenvolvendo apenas o `ai-core` (sem Buildroot/QEMU)
 
 ```sh
 cd ai-core
-cargo test              # 47 testes unitários (a maioria sem dependências externas; alguns usam sockets TCP/Unix locais)
+cargo test              # 65 testes unitários (a maioria sem dependências externas; alguns usam sockets TCP/Unix locais)
 cargo clippy -- -D warnings
 cargo run                # roda como servidor; Ctrl+C para parar
 IA_DATA_DIR=/tmp/data IA_CORE_SOCKET=/tmp/ai-core.sock cargo run &
@@ -69,7 +74,13 @@ ai-core STATUS            # (após 'cargo build', use target/debug/ai-core como 
 `IA_DATA_DIR` e `IA_CORE_SOCKET` (variáveis de ambiente) sobrepõem os
 padrões `/data` e `/run/ai-core.sock` — é assim que os testes de
 integração e o smoke test manual deste projeto rodam sem precisar de
-root nem de um sistema de arquivos real montado em `/data`.
+root nem de um sistema de arquivos real montado em `/data`. Da mesma
+forma, `IA_LLAMA_ADDR` sobrepõe `127.0.0.1:8080` (endereço do
+llama-server), e `IA_DAMON_SYSFS`/`IA_CGROUP_ROOT`/`IA_RUN_DIR`
+sobrepõem `/sys/module/damon_reclaim/parameters`,
+`/sys/fs/cgroup/ia-linux` e `/run` respectivamente (ver
+`ai-core/src/memory.rs`) — em produção usam os caminhos reais do
+kernel; em desenvolvimento, apontam para diretórios temporários.
 
 ## Instalação física (`bios`/`uefi`)
 

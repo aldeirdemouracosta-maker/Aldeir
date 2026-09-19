@@ -1,5 +1,38 @@
 # Changelog — IA Linux Minimal
 
+## 0.6.0-alpha7 — AI Memory
+
+- Novo módulo `ai-core/src/memory.rs` com duas responsabilidades
+  separadas: (1) ajustar os parâmetros do módulo `damon_reclaim`
+  (`enabled`, `min_age`, `quota_ms`, `quota_sz`) por perfil de hardware
+  (TINY/LOW/MEDIUM/LARGE — perfis com menos RAM reclamam páginas frias
+  mais cedo); (2) proteger a memória do modelo ativo/KV cache via cgroup
+  v2 `memory.low`, calculado como tamanho do arquivo `.gguf` × um fator
+  configurável (`IA_MEM_FLOOR_PERCENT` em `runtime.conf`, padrão 150%).
+- Novo comando IPC `MEMORY` (`STATUS`, `APPLY`, `PROTECT <bytes>`) e
+  utilitário `ia-memory`, mais o comando `memory` em `ia-shell`.
+- `ia-server start` chama `ia-memory apply` automaticamente (melhor
+  esforço, nunca derruba o início do servidor) depois de escrever
+  `/run/ia-server.pid`.
+- `model.rs` ganha `active_model_entry()` (nome + tamanho do modelo
+  ativo, usado para calcular o piso de proteção).
+- `STATUS` ganha duas linhas: `memoria_damon` (disponível/indisponível)
+  e `memoria_protegida` (true/false).
+- Nota honesta de escopo: este ambiente de desenvolvimento não tem
+  `/sys/module/damon_reclaim` nem cgroup v2 montados — não foi possível
+  testar contra o kernel real. Por isso os caminhos sysfs/cgroupfs são
+  parametrizáveis (`IA_DAMON_SYSFS`, `IA_CGROUP_ROOT`, `IA_RUN_DIR`), e a
+  validação foi feita com diretórios temporários simulando a mesma
+  estrutura de arquivos simples do kernel, incluindo um smoke test
+  manual ponta a ponta. A implementação usa apenas os parâmetros planos
+  de `damon_reclaim`, não a hierarquia sysfs completa de
+  kdamonds/contexts/schemes (mais complexa e fora do escopo validável
+  aqui) — ver `ai-core/src/memory.rs` para a justificativa completa.
+- `kernel/config/ia_linux_x86_64.config` já tinha `CONFIG_MEMCG` e
+  `CONFIG_DAMON_RECLAIM` habilitados desde a 0.1 (preparação antecipada);
+  comentários atualizados para refletir o uso real.
+- 65 testes unitários (eram 47 na 0.5).
+
 ## 0.5.0-alpha6 — Multiagente
 
 - `ai-core` ganha `AgentManager` (`ai-core/src/agent.rs`): fila de

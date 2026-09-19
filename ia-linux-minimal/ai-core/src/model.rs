@@ -65,6 +65,15 @@ pub fn active_model(data_dir: &Path) -> Option<String> {
     Some(name)
 }
 
+/// Como `active_model`, mas retorna a entrada completa (com
+/// `size_bytes`) em vez de só o nome — usado por `memory.rs` para
+/// calcular o piso de proteção de cgroup. `None` também quando o modelo
+/// marcado como ativo não existe mais em `models_dir` (foi removido).
+pub fn active_model_entry(data_dir: &Path) -> Option<ModelEntry> {
+    let name = active_model(data_dir)?;
+    list_models(data_dir).into_iter().find(|m| m.name == name)
+}
+
 /// Marca o modelo de índice `idx` (1-based, como exibido por `MODEL LIST`)
 /// como ativo, persistindo o nome em `config/active-model`.
 pub fn set_active_by_index(data_dir: &Path, idx: usize) -> Result<String, String> {
@@ -152,6 +161,32 @@ mod tests {
     fn active_model_none_when_file_absent() {
         let dir = tmp_data_dir("noactive");
         assert_eq!(active_model(&dir), None);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn active_model_entry_returns_full_entry() {
+        let dir = tmp_data_dir("entry");
+        write_gguf(&dir, "a.gguf", b"1");
+        write_gguf(&dir, "b.gguf", b"22222222");
+        set_active_by_index(&dir, 2).unwrap();
+
+        let entry = active_model_entry(&dir).unwrap();
+        assert_eq!(entry.name, "b.gguf");
+        assert_eq!(entry.size_bytes, 8);
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn active_model_entry_none_when_active_file_removed_from_disk() {
+        let dir = tmp_data_dir("entrymissing");
+        write_gguf(&dir, "a.gguf", b"1");
+        set_active_by_index(&dir, 1).unwrap();
+        fs::remove_file(dir.join("models").join("a.gguf")).unwrap();
+
+        assert_eq!(active_model_entry(&dir), None);
+
         fs::remove_dir_all(&dir).unwrap();
     }
 }

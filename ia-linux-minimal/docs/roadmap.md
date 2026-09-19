@@ -7,8 +7,8 @@
 | 0.2.0-alpha3 | inferência CPU (llama.cpp) | especificado |
 | 0.3.0-alpha4 | Vulkan/RADV | especificado |
 | 0.4.0-alpha5 | AI Core (Rust) — daemon + IPC | implementado |
-| **0.5.0-alpha6** | **Multiagente** | **implementado nesta árvore** |
-| 0.6 | AI Memory (DAMON adaptativo) | planejado |
+| 0.5.0-alpha6 | Multiagente | implementado |
+| **0.6.0-alpha7** | **AI Memory (DAMON_RECLAIM + cgroup v2)** | **implementado nesta árvore** |
 | 0.7 | AI Scheduler (sched_ext + eBPF/Rust) | planejado |
 | 0.8 | Scheduler adaptativo (telemetria + aprendizado) | planejado |
 | 0.9 | Imagem instalável (ISO/IMG para SSD/pendrive) | planejado |
@@ -31,13 +31,29 @@ Ainda não implementado (candidato a uma etapa futura, não necessariamente
 outros agentes (ex.: um "crítico" revisando a saída de um "programador"
 automaticamente).
 
-## 0.6 — AI Memory
+## 0.6 — AI Memory (implementado)
 
-`DAMON`/`DAMON_RECLAIM` (já habilitados em
-`kernel/config/ia_linux_x86_64.config`) passam a ser lidos e ajustados
-por `ai-core`, com uma regra explícita: RAM do modelo/KV cache/inferência
-nunca é candidata a reclaim agressivo; logs/cache/processos
-auxiliares/agentes inativos sim.
+Duas peças, ver `ai-core/src/memory.rs`:
+
+1. **DAMON_RECLAIM ajustado por perfil de hardware** — `MEMORY APPLY`
+   escreve `enabled`/`min_age`/`quota_ms`/`quota_sz` em
+   `/sys/module/damon_reclaim/parameters` (parametrizável via
+   `IA_DAMON_SYSFS`) com heurísticas iniciais por perfil (TINY/LOW mais
+   agressivos, LARGE mais conservador — não medidas em hardware real).
+2. **Proteção via cgroup v2** — a regra "RAM do modelo/KV cache nunca é
+   candidata a reclaim agressivo" é implementada com `memory.low` no
+   cgroup do processo `llama-server` (PID lido de `/run/ia-server.pid`),
+   com piso calculado a partir do tamanho do arquivo `.gguf` ativo. Isso
+   foi escolhido em vez dos filtros de memcg do próprio DAMON (que
+   existem, mas exigem a hierarquia sysfs completa de
+   kdamonds/contexts/schemes — mais complexa e não haveria como validar
+   neste ambiente de desenvolvimento, que não tem DAMON nem cgroup v2
+   disponíveis).
+
+Não implementado ainda: ajuste *adaptativo* em tempo real com base em
+métricas observadas (hoje é só a aplicação de uma heurística estática
+por perfil, sob demanda via `MEMORY APPLY`) — candidato natural para a
+0.8 (scheduler/memória adaptativos), junto com telemetria.
 
 ## 0.7 — AI Scheduler
 

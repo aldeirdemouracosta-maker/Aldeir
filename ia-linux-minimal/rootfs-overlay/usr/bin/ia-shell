@@ -42,6 +42,9 @@ Comandos:
   agent task <papel> <texto>     enfileira uma tarefa para um agente
   agent status <id>              status/resultado de uma tarefa
   agent list                     lista todas as tarefas
+  memory status                  estado do DAMON_RECLAIM e proteção de cgroup
+  memory apply                   ajusta DAMON_RECLAIM e protege o llama-server ativo
+  memory protect <bytes>         define manualmente o piso de proteção
   hwdetect                      sonda de hardware standalone (não depende do ai-core)
   workspace                     abre um shell em /data/workspace
   shell                          abre um shell ash completo
@@ -92,6 +95,14 @@ while true; do
                 status) ia-agent status "${arg2}" ;;
                 list) ia-agent list ;;
                 *) echo "uso: agent roles | agent task <papel> <texto> | agent status <id> | agent list" ;;
+            esac
+            ;;
+        memory)
+            case "${arg1}" in
+                status) ia-memory status ;;
+                apply) ia-memory apply ;;
+                protect) ia-memory protect "${arg2}" ;;
+                *) echo "uso: memory status | memory apply | memory protect <bytes>" ;;
             esac
             ;;
         hwdetect) ia-hwdetect ;;
