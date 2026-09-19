@@ -10,9 +10,9 @@
 | 0.5.0-alpha6 | Multiagente | implementado |
 | 0.6.0-alpha7 | AI Memory (DAMON_RECLAIM + cgroup v2) | implementado |
 | 0.7.0-alpha8 | AI Scheduler (cgroup v2 cpu.weight — sched_ext adiado) | implementado |
-| **0.8.0-alpha9** | **Scheduler adaptativo (telemetria real + regra determinística)** | **implementado nesta árvore** |
-| 0.9 | Imagem instalável (ISO/IMG para SSD/pendrive) | planejado |
-| 1.0 | Release reproduzível | planejado |
+| 0.8.0-alpha9 | Scheduler adaptativo (telemetria real + regra determinística) | implementado |
+| **0.9.0-alpha10** | **Instalador + release reprodutível (validação em hardware real: aberta)** | **implementado nesta árvore** |
+| 1.0 | Release reproduzível — primeira imagem realmente compilada e testada | planejado |
 
 ## 0.5 — Multiagente (implementado)
 
@@ -98,9 +98,42 @@ perfil da 0.7, mas ainda não um scheduler que aprende de fato (ajustando
 parâmetros a partir de recompensa observada). Isso continua sendo
 trabalho futuro, na mesma linha do scheduler `sched_ext` adiado na 0.7.
 
-## 0.9 / 1.0 — Distribuição
+## 0.9 — Instalador + release reprodutível (implementado, parcialmente)
 
-Imagem bootável para SSD/pendrive com instalador guiado, modo
-`RECOVERY` validado em hardware real (não apenas especificado), e
-release reproduzível a partir do código-fonte (`make legal-info` incluído
-no processo de release — ver `docs/licenses.md`).
+Dois scripts novos, ver `scripts/`:
+
+1. **`install-to-device.sh`** — grava `disk.img` num SSD/pendrive com
+   salvaguardas: recusa destino que não seja dispositivo de bloco,
+   recusa imagem maior que o destino, recusa gravar sobre o disco onde
+   a raiz do host está montada, e exige confirmação digitada (sem
+   atalho `--yes`). A checagem "é o disco do host" teve um bug real
+   corrigido durante o teste manual — `lsblk -no PKNAME` fica vazio
+   quando a raiz está montada direto num disco inteiro sem partição
+   (o caso deste próprio sandbox), o que teria deixado passar
+   silenciosamente o cenário mais perigoso. Testado contra `/dev/vda`
+   (recusa) e `/dev/loop0` com confirmação errada (aborta antes do
+   `dd`) — nenhuma escrita real em nenhum teste.
+2. **`make-release.sh`** — roda os 4 gates de qualidade usados
+   manualmente em cada etapa (`cargo test`/`clippy`/`fmt --check`,
+   `shellcheck`), e quando a árvore Buildroot está presente, roda `make
+   legal-info` e gera checksums SHA-256 das imagens. Testado de ponta a
+   ponta neste ambiente: os 4 gates passam e o script degrada
+   graciosamente (aviso claro, não falha) sem Buildroot.
+
+**O que fica explicitamente em aberto**: validar o modo `RECOVERY` em
+hardware real. Isso não é algo que este ambiente de desenvolvimento
+consegue fazer — não há máquina física disponível aqui, e simular essa
+validação seria desonesto (mesmo espírito das decisões de escopo da
+0.6/0.7). As entradas de boot `RECOVERY` já existem desde a 0.1.1
+(`buildroot/board/ia-linux/grub.cfg`); o que falta é alguém realmente
+gravar a imagem, dar boot num PC de verdade, e confirmar que cada
+entrada do menu funciona como descrito.
+
+## 1.0 — Release reproduzível de verdade
+
+Primeira execução completa do pipeline (`fetch-buildroot.sh` →
+`configure.sh` → `compile.sh` → `make-release.sh`) contra a árvore
+Buildroot real, produzindo uma imagem que de fato dá boot — em QEMU no
+mínimo, idealmente também em hardware físico. Até lá, esta série 0.x é
+uma árvore de código completa, testada no que dá para testar sem
+Buildroot/kernel real, mas ainda não uma imagem que alguém rodou.

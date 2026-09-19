@@ -97,8 +97,46 @@ kernel; em desenvolvimento, apontam para diretórios temporários.
 
 1. `./build.sh bios` (ou `uefi`).
 2. `disk.img` aparece em `.build/buildroot-2026.08/output/images/`.
-3. Grave em um SSD/pendrive: `sudo dd if=disk.img of=/dev/sdX bs=4M status=progress conv=fsync`
+3. Grave em um SSD/pendrive com o instalador (recomendado — ver nota
+   abaixo sobre suas salvaguardas):
+   ```sh
+   sudo ./scripts/install-to-device.sh \
+       .build/buildroot-2026.08/output/images/disk.img /dev/sdX
+   ```
+   Ou manualmente: `sudo dd if=disk.img of=/dev/sdX bs=4M status=progress conv=fsync`
    (confira o dispositivo de destino com cuidado — `dd` sobrescreve sem
-   confirmação).
+   confirmação; é exatamente esse risco que `install-to-device.sh`
+   reduz, sem eliminar).
 4. Copie modelos `.gguf` para a partição DATA (rótulo `IA_DATA`) antes ou
    depois do primeiro boot — ver `models/README.md`.
+
+`scripts/install-to-device.sh` (etapa 0.9) recusa gravar se o destino
+não for um dispositivo de bloco de verdade, se a imagem for maior que o
+destino, ou se o destino parecer ser o disco onde a raiz do host está
+montada — e exige digitar o caminho do dispositivo de novo como
+confirmação. É um script real, testado neste ambiente (incluindo um bug
+de verdade encontrado e corrigido — ver `CHANGELOG.md`), mas as
+salvaguardas são best-effort: confira o dispositivo de destino sempre,
+mesmo usando o script.
+
+**O que este ambiente de desenvolvimento não pode validar**: se o modo
+`RECOVERY` (menu de boot definido desde a 0.1.1, ver
+`buildroot/board/ia-linux/grub.cfg`) realmente funciona num PC físico.
+Isso exige hardware real e fica como passo manual explícito para quem
+gravar a imagem de verdade — ver `docs/roadmap.md`.
+
+## Release reprodutível
+
+```sh
+./scripts/make-release.sh            # versão lida de ai-core/Cargo.toml
+./scripts/make-release.sh 1.2.3      # ou versão explícita
+```
+
+Roda os mesmos 4 gates de qualidade usados manualmente em cada etapa
+deste projeto (`cargo test`, `cargo clippy -- -D warnings`, `cargo fmt
+--check`, `shellcheck` em todos os scripts) e, quando
+`.build/buildroot-<versão>/` existe, roda `make legal-info` (ver
+`docs/licenses.md`) e gera `SHA256SUMS` das imagens em `.release/`.
+Sem a árvore Buildroot (como neste ambiente de desenvolvimento), os
+gates ainda rodam e passam — o script avisa e pula a parte que depende
+do Buildroot, em vez de falhar.

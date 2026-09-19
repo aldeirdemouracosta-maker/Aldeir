@@ -1,6 +1,6 @@
 [package]
 name = "ai-core"
-version = "0.8.0"
+version = "0.9.0"
 edition = "2021"
 description = "IA Linux Minimal — daemon central de hardware, modelos, backend e agentes"
 license = "Apache-2.0"

@@ -1,5 +1,43 @@
 # Changelog — IA Linux Minimal
 
+## 0.9.0-alpha10 — Instalador + release reprodutível
+
+- Novo `scripts/install-to-device.sh`: grava `disk.img` num SSD/pendrive
+  com salvaguardas — recusa se o destino não for um dispositivo de
+  bloco de verdade, recusa se a imagem for maior que o destino, exige
+  digitar de novo o caminho exato do dispositivo como confirmação (sem
+  atalho `--yes`), e recusa gravar sobre o disco onde a raiz do host
+  está montada.
+  - **Bug real encontrado e corrigido durante o teste manual**: a
+    heurística de "não é o disco do host" usava só `lsblk -no PKNAME`,
+    que retorna vazio quando a raiz está montada direto num disco
+    inteiro sem partição (exatamente o caso deste próprio sandbox de
+    desenvolvimento — `/dev/vda` montado direto em `/`). Sem correção,
+    o script teria deixado passar exatamente o caso mais perigoso.
+    Corrigido com um fallback para o nome base do próprio dispositivo
+    quando `PKNAME` vem vazio, e reconfirmado testando contra `/dev/vda`
+    (recusa corretamente) e `/dev/loop0` (passa a checagem, mas aborta
+    antes do `dd` porque a confirmação não bateu — nenhuma escrita real
+    foi feita em nenhum teste).
+- Novo `scripts/make-release.sh`: roda os 4 gates de qualidade usados
+  manualmente em cada etapa deste projeto (`cargo test`, `cargo clippy
+  -- -D warnings`, `cargo fmt --check`, `shellcheck` em todos os
+  scripts), lê a versão de `ai-core/Cargo.toml`, e — quando a árvore
+  Buildroot está presente — roda `make legal-info` e gera checksums
+  SHA-256 das imagens produzidas. Testado de ponta a ponta neste
+  ambiente (sem Buildroot): os 4 gates passam e o script degrada
+  graciosamente com um aviso claro em vez de falhar.
+- Nota honesta de escopo: **"validar o modo RECOVERY em hardware real"**
+  (parte do que a 0.9 originalmente previa) **não é algo que este
+  ambiente de desenvolvimento consegue fazer** — não há uma máquina
+  física disponível aqui. Isso continua sendo um passo manual explícito
+  para quem for gravar a imagem numa máquina real — ver
+  `docs/roadmap.md`.
+- `ai-core` não mudou nesta etapa (nenhum código Rust novo — 0.9 é sobre
+  empacotamento/distribuição); versão sincronizada para 0.9.0 mesmo
+  assim, mantendo o número de versão único em todo o projeto. 102 testes
+  continuam passando.
+
 ## 0.8.0-alpha9 — Scheduler adaptativo (telemetria real, regra determinística)
 
 - Novo módulo `ai-core/src/telemetry.rs`: lê `/proc/loadavg` e
