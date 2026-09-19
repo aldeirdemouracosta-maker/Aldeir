@@ -8,8 +8,8 @@
 | 0.3.0-alpha4 | Vulkan/RADV | especificado |
 | 0.4.0-alpha5 | AI Core (Rust) — daemon + IPC | implementado |
 | 0.5.0-alpha6 | Multiagente | implementado |
-| **0.6.0-alpha7** | **AI Memory (DAMON_RECLAIM + cgroup v2)** | **implementado nesta árvore** |
-| 0.7 | AI Scheduler (sched_ext + eBPF/Rust) | planejado |
+| 0.6.0-alpha7 | AI Memory (DAMON_RECLAIM + cgroup v2) | implementado |
+| **0.7.0-alpha8** | **AI Scheduler (cgroup v2 cpu.weight — sched_ext adiado)** | **implementado nesta árvore** |
 | 0.8 | Scheduler adaptativo (telemetria + aprendizado) | planejado |
 | 0.9 | Imagem instalável (ISO/IMG para SSD/pendrive) | planejado |
 | 1.0 | Release reproduzível | planejado |
@@ -55,16 +55,25 @@ métricas observadas (hoje é só a aplicação de uma heurística estática
 por perfil, sob demanda via `MEMORY APPLY`) — candidato natural para a
 0.8 (scheduler/memória adaptativos), junto com telemetria.
 
-## 0.7 — AI Scheduler
+## 0.7 — AI Scheduler (implementado, escopo reduzido)
 
-Scheduler experimental via `sched_ext` (BPF, carregado/removido
-dinamicamente, com fallback automático para o scheduler padrão do Linux
-em caso de falha — ver `kernel/patches/README.md`). Reaproveita
+O plano original era um scheduler experimental via `sched_ext` (BPF,
+carregado/removido dinamicamente, com fallback automático para o
+scheduler padrão do Linux em caso de falha), reaproveitando
 conceitualmente o modelo de estados/recompensas do AI-Linux acadêmico
-(dissertação de Nathan Loretan, 2018), implementado sobre infraestrutura
-de kernel moderna em vez de um patch a `kernel/sched/`.
-`kernel/config/sched-ext.fragment` já prepara a opção de kernel
-necessária.
+(dissertação de Nathan Loretan, 2018). Ao chegar nesta etapa, o mesmo
+ambiente de desenvolvimento que não tem DAMON/cgroup v2 (0.6) também não
+tem `bpftool` nem `/sys/kernel/sched_ext` — não havia como compilar,
+carregar ou testar um scheduler BPF de verdade. Ver a decisão completa
+em `kernel/patches/README.md`.
+
+Entregue em vez disso: `SCHED APPLY` ajusta `cpu.weight` (controlador
+`cpu` de cgroup v2) do cgroup do modelo/llama-server por perfil de
+hardware — TINY/LOW ganham prioridade maior, LARGE fica mais próximo do
+padrão. Mesmo cgroup que `memory.rs` (0.6) já protege com `memory.low` —
+ver `ai-core/src/scheduler.rs`. `kernel/config/sched-ext.fragment`
+continua preparado (desligado por padrão) para quando um scheduler
+`sched_ext` de verdade puder ser desenvolvido contra um kernel real.
 
 ## 0.8 — Scheduler adaptativo
 

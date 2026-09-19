@@ -1,5 +1,36 @@
 # Changelog — IA Linux Minimal
 
+## 0.7.0-alpha8 — AI Scheduler (escopo reduzido: cgroup v2 cpu.weight)
+
+- Novo módulo `ai-core/src/scheduler.rs`: prioriza CPU para o
+  processo do modelo/llama-server via o controlador `cpu` de cgroup v2
+  (`cpu.weight`, 1-10000, padrão 100), no **mesmo cgroup** que
+  `memory.rs` já protege com `memory.low` (0.6). Peso escalado por
+  perfil de hardware — TINY 800, LOW 600, MEDIUM 400, LARGE 200.
+- Novo comando IPC `SCHED` (`STATUS`, `APPLY`) e utilitário
+  `ia-scheduler`, mais o comando `scheduler` em `ia-shell`.
+- `ia-server start` agora chama `ia-memory apply` **e**
+  `ia-scheduler apply` (ambos melhor esforço, nunca derrubam o início
+  do servidor).
+- `STATUS` ganha a linha `scheduler_peso`.
+- **Decisão de escopo, documentada em detalhe em
+  `kernel/patches/README.md`**: o plano original da 0.7 era um
+  scheduler `sched_ext`/eBPF completo (programa BPF + agente Rust,
+  carregado/removido dinamicamente). Ao chegar nesta etapa, verificamos
+  que este ambiente de desenvolvimento tem `clang`, mas não tem
+  `bpftool`, não tem `/sys/kernel/sched_ext` nem cgroup v2 — não havia
+  como compilar, carregar ou testar um scheduler BPF de verdade aqui.
+  Em vez de fingir essa validação, reduzimos a etapa ao controlador
+  `cpu` de cgroup v2 (mecanismo padrão do kernel, testável com
+  diretórios simulando cgroupfs), mesmo raciocínio já aplicado à AI
+  Memory (0.6: DAMON memcg filters → `memory.low`). Um scheduler
+  `sched_ext` de verdade continua sendo trabalho futuro explícito, não
+  descartado — `kernel/config/sched-ext.fragment` já prepara a opção de
+  kernel necessária.
+- `kernel/config/ia_linux_x86_64.config` ganha `CONFIG_FAIR_GROUP_SCHED`
+  (necessário para `cpu.weight` de cgroup v2 funcionar).
+- 73 testes unitários (eram 65 na 0.6).
+
 ## 0.6.0-alpha7 — AI Memory
 
 - Novo módulo `ai-core/src/memory.rs` com duas responsabilidades

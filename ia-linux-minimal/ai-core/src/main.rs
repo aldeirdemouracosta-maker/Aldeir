@@ -13,6 +13,7 @@ mod json;
 mod llama_client;
 mod memory;
 mod model;
+mod scheduler;
 
 use std::env;
 use std::path::PathBuf;
@@ -148,6 +149,7 @@ fn dispatch(line: &str, state: &State) -> Vec<String> {
         "BACKEND" => backend_dispatch(&rest, state),
         "AGENT" => agent_dispatch(&rest, state),
         "MEMORY" => memory_dispatch(&rest, state),
+        "SCHED" => sched_dispatch(&rest, state),
         "" => vec!["ERRO comando vazio".to_string()],
         other => vec![format!("ERRO comando desconhecido: {other}")],
     }
@@ -189,6 +191,12 @@ fn status_lines(state: &State) -> Vec<String> {
         format!(
             "memoria_protegida={}",
             memory::read_protection_status(&state.cgroup_root).is_some()
+        ),
+        format!(
+            "scheduler_peso={}",
+            scheduler::read_weight(&state.cgroup_root)
+                .map(|w| w.to_string())
+                .unwrap_or_else(|| "nao_aplicado".to_string())
         ),
     ]
 }
@@ -432,6 +440,25 @@ fn memory_protect_running_server(state: &State, floor_bytes: u64) -> Vec<String>
     }
 }
 
+fn sched_dispatch(rest: &[&str], state: &State) -> Vec<String> {
+    match rest.first() {
+        Some(&"STATUS") | None => match scheduler::read_weight(&state.cgroup_root) {
+            Some(w) => vec![format!("cpu.weight={w}")],
+            None => vec!["cpu.weight: ainda nao aplicado (SCHED APPLY)".to_string()],
+        },
+        Some(&"APPLY") => {
+            match scheduler::apply_weight(&state.cgroup_root, state.hardware.profile()) {
+                Ok(w) => vec![format!(
+                    "cpu.weight aplicado: {w} (perfil={})",
+                    state.hardware.profile().label()
+                )],
+                Err(e) => vec![format!("ERRO {e}")],
+            }
+        }
+        Some(other) => vec![format!("ERRO subcomando SCHED desconhecido: {other}")],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -516,6 +543,9 @@ mod tests {
             .iter()
             .any(|l| l.contains("memoria_damon=indisponivel")));
         assert!(resp.iter().any(|l| l.contains("memoria_protegida=false")));
+        assert!(resp
+            .iter()
+            .any(|l| l.contains("scheduler_peso=nao_aplicado")));
         fs::remove_dir_all(&state.data_dir).unwrap();
     }
 
@@ -646,6 +676,49 @@ mod tests {
 
         let (low, _) = memory::read_protection_status(&state.cgroup_root).unwrap();
         assert_eq!(low, 2048);
+
+        fs::remove_dir_all(&state.data_dir).unwrap();
+    }
+
+    #[test]
+    fn sched_status_before_apply_reports_not_applied() {
+        let state = test_state("schedstatusnone");
+        let resp = dispatch("SCHED STATUS", &state);
+        assert_eq!(resp.len(), 1);
+        assert!(resp[0].contains("nao aplicado"));
+        fs::remove_dir_all(&state.data_dir).unwrap();
+    }
+
+    #[test]
+    fn sched_apply_then_status_reflects_profile_weight() {
+        let state = test_state("schedapply");
+        // test_state usa perfil MEDIUM (16 GiB) — ver hardware nos campos abaixo
+        let resp = dispatch("SCHED APPLY", &state);
+        assert!(resp[0].contains("cpu.weight aplicado: 400"));
+        assert!(resp[0].contains("perfil=MEDIUM"));
+
+        let status_resp = dispatch("SCHED STATUS", &state);
+        assert_eq!(status_resp, vec!["cpu.weight=400".to_string()]);
+
+        fs::remove_dir_all(&state.data_dir).unwrap();
+    }
+
+    #[test]
+    fn sched_apply_shares_cgroup_with_memory_protection() {
+        let state = test_state("schedsharescgroup");
+        fs::write(
+            state.run_dir.join("ia-server.pid"),
+            process::id().to_string(),
+        )
+        .unwrap();
+
+        dispatch("SCHED APPLY", &state);
+        dispatch("MEMORY PROTECT 4096", &state);
+
+        assert_eq!(scheduler::read_weight(&state.cgroup_root), Some(400));
+        let (low, procs) = memory::read_protection_status(&state.cgroup_root).unwrap();
+        assert_eq!(low, 4096);
+        assert_eq!(procs, vec![process::id()]);
 
         fs::remove_dir_all(&state.data_dir).unwrap();
     }

@@ -1,0 +1,41 @@
+#!/bin/sh
+# ia-scheduler — interface de linha de comando para o AI Scheduler
+# (etapa 0.7): prioridade de CPU do modelo/llama-server via cgroup v2
+# (cpu.weight), no mesmo cgroup que ia-memory protege com memory.low.
+# Cliente fino: toda a lógica vive em ai-core/src/scheduler.rs.
+#
+# Nota de escopo: isto NÃO é um scheduler sched_ext/eBPF — ver
+# docs/architecture.md e kernel/patches/README.md para por que essa
+# etapa foi reduzida a cpu.weight (mesmo mecanismo do kernel usado por
+# 'nice'/cgroups, sem exigir toolchain de BPF nem kernel com
+# sched_ext ativo).
+set -e
+# shellcheck source=../lib/ia-linux/common.sh
+. /usr/lib/ia-linux/common.sh
+
+usage() {
+    cat <<EOF
+uso: ia-scheduler <comando>
+
+comandos:
+  status    peso de CPU (cpu.weight) atualmente aplicado ao cgroup do modelo
+  apply     aplica o peso do perfil de hardware atual (TINY/LOW mais alto,
+            LARGE mais próximo do padrão)
+
+'apply' é chamado automaticamente por 'ia-server start' — normalmente
+você só precisa rodar isto manualmente para inspecionar o estado.
+EOF
+}
+
+case "${1:-}" in
+    status)
+        ia_core SCHED STATUS
+        ;;
+    apply)
+        ia_core SCHED APPLY
+        ;;
+    *)
+        usage
+        exit 1
+        ;;
+esac

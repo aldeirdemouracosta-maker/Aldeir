@@ -40,7 +40,7 @@ Esta árvore foi escrita e testada **sem** acesso a `buildroot.org` (o
 sandbox onde o projeto foi montado não tem esse acesso de rede). Por
 isso:
 
-- `ai-core` foi compilado, testado (`cargo test`, 65 testes) e verificado
+- `ai-core` foi compilado, testado (`cargo test`, 73 testes) e verificado
   com `cargo clippy -- -D warnings` diretamente — isso não depende do
   Buildroot.
 - Todos os scripts shell (`rootfs-overlay/`, `scripts/`, `buildroot/board/`)
@@ -59,12 +59,17 @@ isso:
   diretórios temporários simulando a mesma estrutura de arquivos simples
   do kernel (ver `IA_DAMON_SYSFS`/`IA_CGROUP_ROOT` abaixo), não contra o
   kernel real.
+- Tem `clang`, mas não tem `bpftool` nem `/sys/kernel/sched_ext` — por
+  isso a AI Scheduler (0.7, `ai-core/src/scheduler.rs`) usa o
+  controlador `cpu` de cgroup v2 (`cpu.weight`) em vez de um scheduler
+  `sched_ext`/eBPF de verdade, pela mesma razão de validação. Ver
+  `kernel/patches/README.md` para a decisão completa.
 
 ## Desenvolvendo apenas o `ai-core` (sem Buildroot/QEMU)
 
 ```sh
 cd ai-core
-cargo test              # 65 testes unitários (a maioria sem dependências externas; alguns usam sockets TCP/Unix locais)
+cargo test              # 73 testes unitários (a maioria sem dependências externas; alguns usam sockets TCP/Unix locais)
 cargo clippy -- -D warnings
 cargo run                # roda como servidor; Ctrl+C para parar
 IA_DATA_DIR=/tmp/data IA_CORE_SOCKET=/tmp/ai-core.sock cargo run &

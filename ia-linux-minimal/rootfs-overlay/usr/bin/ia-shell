@@ -45,6 +45,8 @@ Comandos:
   memory status                  estado do DAMON_RECLAIM e proteção de cgroup
   memory apply                   ajusta DAMON_RECLAIM e protege o llama-server ativo
   memory protect <bytes>         define manualmente o piso de proteção
+  scheduler status               peso de CPU (cpu.weight) do cgroup do modelo
+  scheduler apply                aplica o peso do perfil de hardware atual
   hwdetect                      sonda de hardware standalone (não depende do ai-core)
   workspace                     abre um shell em /data/workspace
   shell                          abre um shell ash completo
@@ -103,6 +105,13 @@ while true; do
                 apply) ia-memory apply ;;
                 protect) ia-memory protect "${arg2}" ;;
                 *) echo "uso: memory status | memory apply | memory protect <bytes>" ;;
+            esac
+            ;;
+        scheduler)
+            case "${arg1}" in
+                status) ia-scheduler status ;;
+                apply) ia-scheduler apply ;;
+                *) echo "uso: scheduler status | scheduler apply" ;;
             esac
             ;;
         hwdetect) ia-hwdetect ;;

@@ -42,9 +42,11 @@ start() {
     echo "ia-server iniciado em 127.0.0.1:8080 (PID $!, backend=${RESOLVED})"
 
     # Melhor esforço: ajusta DAMON_RECLAIM e protege este processo via
-    # cgroup (ver ia-core/src/memory.rs). Nunca deve derrubar o início do
-    # servidor — roda depois que o PID já foi escrito e reportado.
+    # cgroup (ver ia-core/src/memory.rs), e dá prioridade de CPU ao mesmo
+    # cgroup (ver ai-core/src/scheduler.rs). Nunca deve derrubar o início
+    # do servidor — roda depois que o PID já foi escrito e reportado.
     ia-memory apply || true
+    ia-scheduler apply || true
 }
 
 status() {

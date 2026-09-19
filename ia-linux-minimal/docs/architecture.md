@@ -5,19 +5,22 @@
 │                    IA SHELL                        │  rootfs-overlay/usr/bin/ia-shell
 │              prompt interativo "IA>"                │  (cliente fino, BusyBox ash)
 ├──────────────────────────────────────────────────┤
-│ ia-model │ ia-chat │ ia-benchmark │ ia-server │ ia-gpu │ ia-agent │ ia-memory │  cliente fino
+│ ia-model│ia-chat│ia-benchmark│ia-server│ia-gpu│ia-agent│ia-memory│ia-scheduler│  cliente fino
 ├──────────────────────────────────────────────────┤
 │                    AI-CORE (Rust)                   │  ai-core/
 │  hardware.rs │ model.rs │ backend.rs │ config.rs    │  socket Unix
 │  agent.rs (AgentManager, fila) │ memory.rs           │  /run/ai-core.sock
-│  json.rs │ llama_client.rs │ ipc.rs                  │
+│  scheduler.rs │ json.rs │ llama_client.rs │ ipc.rs   │
 ├──────────────────────────────────────────────────┤
 │         llama.cpp / llama-server (CPU / Vulkan)      │  pacote Buildroot upstream
 ├──────────────────────────────────────────────────┤
-│   AI Resource Manager — cgroups v2 memory.low        │  kernel/config: CONFIG_MEMCG,
-│   DAMON_RECLAIM ajustado por perfil (ai-core)        │  CONFIG_DAMON_RECLAIM (0.6)
+│   AI Resource Manager — cgroups v2 memory.low +      │  kernel/config: CONFIG_MEMCG,
+│   cpu.weight; DAMON_RECLAIM por perfil (ai-core)     │  CONFIG_FAIR_GROUP_SCHED,
+│   (mesmo cgroup para memória e CPU do modelo)        │  CONFIG_DAMON_RECLAIM (0.6/0.7)
 ├──────────────────────────────────────────────────┤
-│      AI Scheduler — sched_ext + eBPF (0.7, futuro)   │  kernel/config/sched-ext.fragment
+│  sched_ext + eBPF de verdade — adiado (ver 0.7 nos   │  kernel/config/sched-ext.fragment
+│  docs; requer bpftool/kernel real, não disponíveis   │  (preparado, desligado)
+│  neste ambiente de desenvolvimento)                  │
 ├──────────────────────────────────────────────────┤
 │                Linux 6.18.52 LTS                     │  kernel/config/
 ├──────────────────────────────────────────────────┤
@@ -51,7 +54,8 @@ Protocolo (texto, uma linha por comando, resposta terminada por uma
 linha `.`): `PING`, `VERSION`, `STATUS`, `HW`, `MODEL LIST|ACTIVE|SELECT
 <n>|RECOMMEND`, `BACKEND GET|SET <auto|cpu|vulkan>`, `AGENT
 ROLES|TASK <papel> <texto>|STATUS <id>|LIST`, `MEMORY
-STATUS|APPLY|PROTECT <bytes>`. Ver `ai-core/src/ipc.rs`.
+STATUS|APPLY|PROTECT <bytes>`, `SCHED STATUS|APPLY`. Ver
+`ai-core/src/ipc.rs`.
 
 ## Seleção de backend (CPU/Vulkan) — AUTO
 
@@ -172,6 +176,44 @@ feita com diretórios temporários simulando a mesma estrutura de
 arquivos simples do kernel (65 testes unitários), mais um smoke test
 manual ponta a ponta. Ver `ai-core/src/memory.rs` para a justificativa
 completa e `docs/build.md` para o que foi e não foi validado.
+
+## AI Scheduler: cpu.weight no mesmo cgroup da AI Memory (sched_ext adiado)
+
+```
+SCHED APPLY
+     │
+     └──► cgroup: memory::protected_cgroup_dir(cgroup_root) — o MESMO
+          diretório que MEMORY APPLY já usa para memory.low — recebe
+          cpu.weight escalado por Profile:
+              TINY  → 800   (8× o padrão de 100)
+              LOW   → 600
+              MEDIUM→ 400
+              LARGE → 200   (mais perto do padrão — sobra CPU)
+```
+
+O plano original desta etapa era um scheduler `sched_ext`/eBPF completo
+— carregado/removido dinamicamente, com fallback automático para o
+scheduler padrão do Linux, reaproveitando o modelo de
+estados/recompensas da dissertação do AI-Linux (ver
+`kernel/patches/README.md`). Ao chegar aqui, confirmamos que este
+ambiente de desenvolvimento tem `clang`, mas não tem `bpftool`, não tem
+`/sys/kernel/sched_ext` e não tem cgroup v2 — não haveria como
+compilar, carregar nem testar um scheduler BPF de verdade. Mesma
+decisão já tomada para a AI Memory (0.6): em vez de fingir essa
+validação, a 0.7 entrega `cpu.weight` de cgroup v2 — mecanismo padrão
+do kernel, simples, testável com diretórios simulando cgroupfs (ver
+`ai-core/src/scheduler.rs`, com testes cobrindo inclusive o
+compartilhamento do mesmo diretório de cgroup entre `memory.rs` e
+`scheduler.rs`).
+
+`cpu.weight` e `memory.low` convivem no mesmo cgroup porque protegem o
+mesmo processo pelo mesmo motivo: o `llama-server` executando o modelo
+ativo merece prioridade tanto de RAM (não ser vítima de reclaim
+agressivo) quanto de CPU (não perder fatias de tempo de processamento
+para processos auxiliares) sob contenção. Um scheduler `sched_ext` de
+verdade — com decisões por tarefa/agente, não só um peso estático por
+cgroup — continua sendo trabalho futuro explícito, não descartado; ver
+a decisão completa em `kernel/patches/README.md`.
 
 ## Acesso remoto (opcional)
 
