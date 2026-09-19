@@ -55,17 +55,23 @@ fi
 # / neste próprio ambiente de desenvolvimento), PKNAME vem vazio e a
 # checagem original não pegava esse caso — por isso o fallback abaixo
 # usa o nome base da própria origem quando PKNAME está vazio.
-ROOT_SOURCE="$(findmnt -n -o SOURCE / 2>/dev/null || true)"
-if [ -n "${ROOT_SOURCE}" ] && command -v lsblk >/dev/null 2>&1; then
-    ROOT_DEVICE_BASE="$(lsblk -no PKNAME "${ROOT_SOURCE}" 2>/dev/null || true)"
-    if [ -z "${ROOT_DEVICE_BASE}" ]; then
-        ROOT_DEVICE_BASE="$(basename "${ROOT_SOURCE}")"
+if command -v findmnt >/dev/null 2>&1 && command -v lsblk >/dev/null 2>&1; then
+    ROOT_SOURCE="$(findmnt -n -o SOURCE / 2>/dev/null || true)"
+    if [ -n "${ROOT_SOURCE}" ]; then
+        ROOT_DEVICE_BASE="$(lsblk -no PKNAME "${ROOT_SOURCE}" 2>/dev/null || true)"
+        if [ -z "${ROOT_DEVICE_BASE}" ]; then
+            ROOT_DEVICE_BASE="$(basename "${ROOT_SOURCE}")"
+        fi
+        TARGET_BASE="$(basename "${DEVICE}")"
+        if [ -n "${ROOT_DEVICE_BASE}" ] && [ "${TARGET_BASE}" = "${ROOT_DEVICE_BASE}" ]; then
+            echo "erro: '${DEVICE}' parece ser o disco onde este sistema (host) está instalado — recusando" >&2
+            exit 1
+        fi
+    else
+        echo "aviso: não foi possível determinar o disco raiz do host (findmnt sem saída) — a checagem de segurança 'não é o disco do host' NÃO rodou para esta gravação" >&2
     fi
-    TARGET_BASE="$(basename "${DEVICE}")"
-    if [ -n "${ROOT_DEVICE_BASE}" ] && [ "${TARGET_BASE}" = "${ROOT_DEVICE_BASE}" ]; then
-        echo "erro: '${DEVICE}' parece ser o disco onde este sistema (host) está instalado — recusando" >&2
-        exit 1
-    fi
+else
+    echo "aviso: findmnt e/ou lsblk não encontrados — a checagem de segurança 'não é o disco do host' NÃO rodou para esta gravação" >&2
 fi
 
 IMG_SIZE="$(stat -c %s "${IMG}" 2>/dev/null || stat -f %z "${IMG}" 2>/dev/null || echo 0)"

@@ -7,6 +7,10 @@
   https://buildroot.org/downloads/manual/manual.html#requirement).
 - `genimage` (para gerar `disk.img` particionado nos alvos `bios`/`uefi`
   — ver `buildroot/board/ia-linux/post-image.sh`).
+- `dosfstools` (`mkdosfs`) e `mtools` (`mcopy`) — usados por `genimage`
+  para montar a partição `efi.vfat` no alvo `uefi`. Faltavam desta
+  lista até serem descobertos rodando `post-image.sh` de ponta a ponta
+  de verdade (ver `CHANGELOG.md`, seção de correções de bugs).
 - `qemu-system-x86_64` (para testar o alvo `qemu`).
 - Acesso à internet para baixar o Buildroot e os pacotes que ele por sua
   vez baixa (kernel, llama.cpp, Mesa etc.).
@@ -52,8 +56,22 @@ isso:
   build, e espere ajustar 1-2 nomes de opção via `make menuconfig` se
   algo tiver mudado entre versões.
 - A compilação completa (download do kernel/llama.cpp/Mesa pelo
-  Buildroot, cross-compilação, geração de `disk.img`) **não foi
-  executada** neste ambiente.
+  Buildroot, cross-compilação) **não foi executada** neste ambiente —
+  mas a montagem do disco final (`buildroot/board/ia-linux/post-image.sh`
+  + `genimage-bios.cfg`/`genimage-uefi.cfg`) **foi**, com `genimage`
+  instalado e um `system.ext4`/`bzImage`/`bootx64.efi` de mentira no
+  lugar dos artefatos reais do Buildroot. Isso pegou 3 bugs reais que
+  `bash -n`/`shellcheck` nunca pegariam (ver `CHANGELOG.md`): o
+  `grub.cfg` tinha um placeholder de PARTUUID que nada substituía, e os
+  dois `genimage-*.cfg` esperavam arquivos (`system.ext4`, `efi.vfat`)
+  que nenhum passo criava com esses nomes exatos. Depois da correção,
+  `disk.img` foi gerado com sucesso nos dois alvos, e a UEFI foi
+  verificada byte a byte (parsing manual de MBR/GPT + `mtools`): o
+  `BOOTX64.EFI` está no caminho de fallback correto da especificação
+  UEFI, e o `system.ext4` embutido tem exatamente o UUID que `grub.cfg`
+  busca. O que ainda não foi testado é o Buildroot produzindo esses
+  artefatos de verdade (kernel, GRUB, rootfs reais) — só a integração
+  genimage em torno deles.
 - Este ambiente também não tem `/sys/module/damon_reclaim` nem cgroup v2
   montados — a AI Memory (0.6, `ai-core/src/memory.rs`) foi validada com
   diretórios temporários simulando a mesma estrutura de arquivos simples

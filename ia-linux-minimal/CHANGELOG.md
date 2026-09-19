@@ -1,5 +1,73 @@
 # Changelog — IA Linux Minimal
 
+## Correções pós-0.9 — bugs reais de boot físico encontrados por revisão + teste de verdade
+
+Depois do fechamento da série 0.1–0.9, uma revisão de código dedicada
+(`/code-review` em toda a árvore) e testes manuais de ponta a ponta do
+pipeline `post-image.sh` + `genimage` (não executados antes — ver
+"Encerramento da série 0.x" abaixo) encontraram e corrigiram **3 bugs
+reais que teriam impedido o boot físico** e 1 falha de segurança
+silenciosa, nenhum deles pego por `shellcheck`/`bash -n`/`cargo test`:
+
+1. **`buildroot/board/ia-linux/grub.cfg` tinha um placeholder nunca
+   substituído.** `search --fs-uuid --set=root __SYSTEM_PARTUUID__` e
+   `root=PARTUUID=__SYSTEM_PARTUUID__` continham o texto literal
+   `__SYSTEM_PARTUUID__` — nenhum script em nenhum lugar da árvore
+   jamais substituía isso por um valor real. Pior: mesmo substituído,
+   `--fs-uuid` busca por UUID de **sistema de arquivos**, não por
+   PARTUUID — são dois espaços de UUID diferentes que nunca colidem.
+   O GRUB teria caído no prompt de resgate em todo boot físico.
+   **Corrigido**: `grub.cfg` agora usa um UUID de sistema de arquivos
+   fixo (`11111111-1111-4111-8111-111111111111`, escolhido por nós,
+   não gerado aleatoriamente), e `post-image.sh` grava esse mesmo UUID
+   no `system.ext4` via `tune2fs -U` antes de montar o disco — sem
+   precisar de nenhum passo de template.
+2. **`genimage-bios.cfg`/`genimage-uefi.cfg` esperavam um arquivo
+   `system.ext4` que nada criava com esse nome.** O Buildroot
+   (`BR2_TARGET_ROOTFS_EXT2`) produz `rootfs.ext2`/`rootfs.ext4`, não
+   `system.ext4` — `genimage` teria falhado por arquivo não encontrado
+   assim que alguém tentasse compilar de verdade. **Corrigido**:
+   `post-image.sh` agora procura por `rootfs.ext*` em `$BINARIES_DIR`
+   (sem depender de adivinhar o nome exato, que varia entre versões do
+   Buildroot — ver nota de honestidade em `docs/build.md`) e copia para
+   `system.ext4` antes de aplicar o UUID fixo.
+3. **`genimage-uefi.cfg` esperava um `efi.vfat` que nenhum passo do
+   pipeline jamais construía.** Não existia nem um bloco `image
+   efi.vfat { vfat {...} }` no próprio `.cfg`, nem um passo que
+   montasse o conteúdo da partição EFI em algum lugar. **Corrigido**:
+   `post-image.sh` localiza o binário EFI do GRUB
+   (`bootx64.efi`, produzido por `BR2_TARGET_GRUB2_X86_64_EFI` +
+   `BR2_TARGET_GRUB2_BUILTIN_CONFIG`) e o copia para
+   `$BINARIES_DIR/EFI/BOOT/BOOTX64.EFI` — o caminho de fallback padrão
+   da especificação UEFI, reconhecido por qualquer firmware sem
+   precisar de entrada prévia na NVRAM — e `genimage-uefi.cfg` ganhou
+   o bloco `image efi.vfat` que faltava.
+4. **`scripts/install-to-device.sh` pulava a checagem "não é o disco
+   do host" em silêncio** quando `findmnt`/`lsblk` estavam ausentes ou
+   falhavam, sem avisar o operador — quem lesse só a saída do script
+   não teria como saber que essa proteção específica não rodou.
+   **Corrigido**: agora imprime um aviso explícito nesse caso, em vez
+   de simplesmente seguir em frente como se a checagem tivesse passado.
+
+**Validação de verdade, não só leitura de código**: os bugs 1-3 foram
+confirmados reproduzindo o pipeline completo neste ambiente —
+`genimage`, `dosfstools` (`mkdosfs`) e `mtools` (`mcopy`) foram
+instalados (essas duas últimas eram dependências de host que também
+faltavam na documentação — corrigido em `docs/build.md`), e
+`post-image.sh` foi rodado de ponta a ponta com um `rootfs.ext2` e um
+`bootx64.efi` de mentira no lugar dos artefatos reais do Buildroot.
+Depois da correção, o `disk.img` gerado foi inspecionado byte a byte
+(parsing manual de tabela de partição MBR/GPT em Python + `mtools`):
+o UUID do `system.ext4` embutido bate exatamente com o que `grub.cfg`
+busca, e `EFI/BOOT/BOOTX64.EFI` está no lugar certo dentro da partição
+EFI. O bug 4 foi confirmado simulando `findmnt` ausente/falhando e
+comparando a saída antes/depois da correção.
+
+O que continua **não** validado (e não seria honesto alegar que foi):
+o Buildroot de fato compilando o kernel/GRUB/rootfs reais — só a
+integração `genimage` em torno desses artefatos foi exercitada aqui,
+com substitutos. Ver `docs/build.md` para o estado atualizado.
+
 ## Encerramento da série 0.x (0.1–0.9)
 
 Esta é a marca de fechamento desta fase de desenvolvimento. Resumo do

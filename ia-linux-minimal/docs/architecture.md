@@ -98,10 +98,17 @@ BIOS                              UEFI
 SYSTEM é montada normalmente leitura-escrita nesta versão (candidata a
 `EROFS` somente-leitura numa versão futura — `CONFIG_EROFS_FS` já
 habilitado em `kernel/config/ia_linux_x86_64.config`). RECOVERY é
-montada somente leitura quando presente. Boot usa `PARTUUID`, não
-`/dev/sdaN` — a ordem de detecção de discos físicos não é garantida.
-DATA nunca é apagada por uma atualização de SYSTEM — separação
-intencional entre sistema operacional e dados do usuário (modelos GGUF,
+montada somente leitura quando presente. Boot usa o UUID do sistema de
+arquivos da partição SYSTEM (`root=UUID=...` no `grub.cfg`, fixo e
+gravado no ext4 por `post-image.sh` via `tune2fs -U` antes de montar o
+disco final — não um PARTUUID nem `/dev/sdaN`, cuja ordem de detecção
+em boot físico não é garantida). Usar um UUID fixo, gerado por nós
+mesmos, evita depender de um passo de template em tempo de build — ver
+o comentário em `buildroot/board/ia-linux/grub.cfg` para o histórico de
+por que a versão anterior (um placeholder nunca substituído) não
+funcionava. DATA nunca é apagada por uma atualização de SYSTEM —
+separação intencional entre sistema operacional e dados do usuário
+(modelos GGUF,
 sessões, workspace).
 
 ## Multiagente: fila única, um worker, um modelo carregado
