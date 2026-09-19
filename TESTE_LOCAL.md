@@ -133,6 +133,34 @@ modelo escreve texto comum em vez de uma chamada estruturada).
 
 Deixe rodando num terminal separado.
 
+### Alternativa leve: Qwen2.5-Coder-3B
+
+O orquestrador fala com qualquer modelo via API compatível com OpenAI
+— trocar de modelo **não exige nenhuma mudança de código**, só apontar
+o `llama-server` pra outro GGUF. Se quiser um modelo mais leve (menos
+carga na GPU, mais rápido, mais seguro dado o histórico de travamento
+desta máquina), `Qwen2.5-Coder-3B` é a recomendação: mesma família do
+`Qwen2.5-Coder-7B` já usado aqui (mesmo tokenizer, mesmo chat
+template, mesmo comportamento de tool-calling já testado nesta
+sessão — sem "manhas" novas pra descobrir), ~2GB de RAM em Q4_K_M,
+65% no HumanEval, Apache-2.0.
+
+```bash
+# baixar (ajuste o repositório GGUF exato conforme disponibilidade no Hugging Face)
+./llama.cpp/build/bin/llama-server \
+  -hf Qwen/Qwen2.5-Coder-3B-Instruct-GGUF \
+  --port 8080 --host 127.0.0.1 --jinja \
+  -ngl 20 --ctx-size 4096
+```
+
+Outros candidatos avaliados (ver conversa/README para comparação
+completa): `Phi-4-mini` (MIT, melhor nota de código da leva — 74%
+HumanEval — mas família diferente, exige validar tool-calling do
+zero) e `MiniCPM5-2B` (Apache-2.0, surpreendentemente forte pro
+tamanho, mas menos testado com llama.cpp/tool-calling — antes de
+trazer pra máquina local, vale validar numa GPU alugada por hora
+(RunPod/Vast.ai) ou Colab gratuito).
+
 ## 6. Confirmar que o `motor_ia` detecta o motor
 
 Em outro terminal, dentro do repositório `Aldeir`:
