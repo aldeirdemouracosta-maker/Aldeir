@@ -17,7 +17,8 @@ IA>
 | 0.1.1-alpha2 | hardware físico | GRUB BIOS/UEFI, partições SYSTEM/RECOVERY/DATA, drivers AMD/Intel |
 | 0.2.0-alpha3 | inferência CPU | llama.cpp (CPU), gerenciador de modelos GGUF, perfis de hardware |
 | 0.3.0-alpha4 | Vulkan/RADV | Mesa RADV, llama.cpp Vulkan, fallback automático CPU |
-| **0.4.0-alpha5** | **AI Core** | **daemon Rust (`ai-core`), IPC via socket Unix, ia-shell fala com o daemon** |
+| 0.4.0-alpha5 | AI Core | daemon Rust (`ai-core`), IPC via socket Unix, ia-shell fala com o daemon |
+| **0.5.0-alpha6** | **Multiagente** | **fila de tarefas (`AgentManager`), cliente HTTP para llama-server, `ia-agent`** |
 
 Esta árvore foi reconstruída dentro do repositório `aldeir` (pasta
 `ia-linux-minimal/`), consolidando as decisões de arquitetura definidas nas
@@ -68,7 +69,7 @@ Ver `docs/build.md` para o passo a passo completo, incluindo instalação
 física (`bios`/`uefi`) e o que já foi validado versus o que ainda precisa
 ser confirmado no seu host (este ambiente de desenvolvimento não teve
 acesso a `buildroot.org`). Resumo: `ai-core` foi compilado, testado
-(24 testes) e passou em `cargo clippy -- -D warnings`; todos os scripts
+(47 testes) e passou em `cargo clippy -- -D warnings`; todos os scripts
 shell passaram em `shellcheck`; as opções Buildroot seguem a convenção de
 nomes 2026.08 mas não foram confirmadas símbolo-a-símbolo — rode
 `scripts/validate-buildroot-configs.sh` antes do primeiro build.

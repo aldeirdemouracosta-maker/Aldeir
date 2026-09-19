@@ -9,24 +9,33 @@ mod backend;
 mod config;
 mod hardware;
 mod ipc;
+mod json;
+mod llama_client;
 mod model;
 
 use std::env;
 use std::path::PathBuf;
 use std::process;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
+use agent::AgentManager;
 use backend::{BackendMode, ResolvedBackend};
 use hardware::HardwareInfo;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const DEFAULT_SOCKET: &str = "/run/ia-core.sock";
 const DEFAULT_DATA_DIR: &str = "/data";
+// Mesmo endereço padrão que `ia-server start` usa para o llama-server
+// (ver rootfs-overlay/usr/bin/ia-server) — ai-core não inicia o
+// llama-server sozinho, apenas fala com ele quando uma tarefa é
+// submetida (ver agent.rs).
+const DEFAULT_LLAMA_ADDR: &str = "127.0.0.1:8080";
 
 pub struct State {
     data_dir: PathBuf,
     hardware: HardwareInfo,
     backend_mode: Mutex<BackendMode>,
+    agent_manager: Arc<AgentManager>,
 }
 
 fn main() {
@@ -76,6 +85,7 @@ fn run_server() {
 
     let hw = hardware::detect();
     let backend_mode = config::load_backend_mode(&data_dir);
+    let llama_addr = env::var("IA_LLAMA_ADDR").unwrap_or_else(|_| DEFAULT_LLAMA_ADDR.to_string());
 
     eprintln!(
         "ai-core {VERSION}: CPU='{}' threads={} RAM={:.1}GiB perfil={} GPU={}",
@@ -89,10 +99,13 @@ fn run_server() {
             .unwrap_or("nenhuma")
     );
 
-    let state = std::sync::Arc::new(State {
+    let agent_manager = AgentManager::spawn(llama_addr);
+
+    let state = Arc::new(State {
         data_dir,
         hardware: hw,
         backend_mode: Mutex::new(backend_mode),
+        agent_manager,
     });
 
     if let Err(e) = ipc::serve(&socket_path, state, dispatch) {
@@ -114,6 +127,7 @@ fn dispatch(line: &str, state: &State) -> Vec<String> {
         "HW" => hw_lines(state),
         "MODEL" => model_dispatch(&rest, state),
         "BACKEND" => backend_dispatch(&rest, state),
+        "AGENT" => agent_dispatch(&rest, state),
         "" => vec!["ERRO comando vazio".to_string()],
         other => vec![format!("ERRO comando desconhecido: {other}")],
     }
@@ -143,7 +157,7 @@ fn status_lines(state: &State) -> Vec<String> {
         format!("backend_resolvido={resolved}"),
         format!("modelos_disponiveis={model_count}"),
         format!("modelo_ativo={active}"),
-        agent::status_line(),
+        agent::status_line(&state.agent_manager),
     ]
 }
 
@@ -246,6 +260,62 @@ fn backend_dispatch(rest: &[&str], state: &State) -> Vec<String> {
     }
 }
 
+fn agent_dispatch(rest: &[&str], state: &State) -> Vec<String> {
+    match rest.first() {
+        Some(&"ROLES") => agent::PLANNED_ROLES
+            .iter()
+            .enumerate()
+            .map(|(i, r)| format!("{}) {}", i + 1, r.label()))
+            .collect(),
+        Some(&"TASK") => {
+            let role = match rest.get(1).and_then(|s| agent::AgentRole::parse(s)) {
+                Some(r) => r,
+                None => return vec!["ERRO uso: AGENT TASK <papel> <texto da tarefa>".to_string()],
+            };
+            let prompt = rest[2..].join(" ");
+            if prompt.is_empty() {
+                return vec!["ERRO uso: AGENT TASK <papel> <texto da tarefa>".to_string()];
+            }
+            let id = state.agent_manager.submit(role, prompt);
+            vec![format!("tarefa {id} enfileirada (papel={role})")]
+        }
+        Some(&"STATUS") => match rest.get(1).and_then(|s| s.parse::<u64>().ok()) {
+            Some(id) => match state.agent_manager.status(id) {
+                Some(task) => {
+                    let mut lines = vec![format!(
+                        "id={} papel={} status={}",
+                        task.id, task.role, task.status
+                    )];
+                    if let Some(result) = task.result {
+                        lines.push(result);
+                    }
+                    lines
+                }
+                None => vec![format!("ERRO tarefa não encontrada: {id}")],
+            },
+            None => vec!["ERRO uso: AGENT STATUS <id>".to_string()],
+        },
+        Some(&"LIST") | None => {
+            let tasks = state.agent_manager.list();
+            if tasks.is_empty() {
+                vec!["nenhuma tarefa enfileirada ainda".to_string()]
+            } else {
+                tasks
+                    .iter()
+                    .map(|t| {
+                        let preview: String = t.prompt.chars().take(40).collect();
+                        format!(
+                            "{}) papel={} status={} tarefa=\"{preview}\"",
+                            t.id, t.role, t.status
+                        )
+                    })
+                    .collect()
+            }
+        }
+        Some(other) => vec![format!("ERRO subcomando AGENT desconhecido: {other}")],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -267,6 +337,11 @@ mod tests {
                 gpu: None,
             },
             backend_mode: Mutex::new(BackendMode::Auto),
+            // porta sem servidor nenhum escutando — suficiente para os
+            // testes de dispatch, que só verificam enfileiramento/status,
+            // não o conteúdo de uma resposta real do llama-server (isso é
+            // coberto em agent.rs com um servidor de mentira).
+            agent_manager: AgentManager::spawn("127.0.0.1:1".to_string()),
         }
     }
 
@@ -308,10 +383,66 @@ mod tests {
     }
 
     #[test]
-    fn status_ends_with_agent_placeholder_line() {
+    fn status_ends_with_agent_summary_line() {
         let state = test_state("status");
         let resp = dispatch("STATUS", &state);
         assert!(resp.last().unwrap().contains("multiagente"));
+        fs::remove_dir_all(&state.data_dir).unwrap();
+    }
+
+    #[test]
+    fn agent_roles_lists_all_planned_roles() {
+        let state = test_state("agentroles");
+        let resp = dispatch("AGENT ROLES", &state);
+        assert_eq!(resp.len(), agent::PLANNED_ROLES.len());
+        assert!(resp[0].contains("planejador"));
+        fs::remove_dir_all(&state.data_dir).unwrap();
+    }
+
+    #[test]
+    fn agent_task_enqueues_and_status_reports_it() {
+        let state = test_state("agenttask");
+        let resp = dispatch("AGENT TASK programador escreva um teste", &state);
+        assert_eq!(resp.len(), 1);
+        assert!(resp[0].starts_with("tarefa "));
+        assert!(resp[0].contains("papel=programador"));
+
+        let id_str = resp[0]
+            .trim_start_matches("tarefa ")
+            .split_whitespace()
+            .next()
+            .unwrap();
+
+        let status_resp = dispatch(&format!("AGENT STATUS {id_str}"), &state);
+        assert!(status_resp[0].contains(&format!("id={id_str}")));
+        assert!(status_resp[0].contains("papel=programador"));
+
+        fs::remove_dir_all(&state.data_dir).unwrap();
+    }
+
+    #[test]
+    fn agent_task_with_unknown_role_is_an_error() {
+        let state = test_state("agentbadrole");
+        let resp = dispatch("AGENT TASK inexistente faça algo", &state);
+        assert_eq!(resp.len(), 1);
+        assert!(resp[0].starts_with("ERRO"));
+        fs::remove_dir_all(&state.data_dir).unwrap();
+    }
+
+    #[test]
+    fn agent_status_for_unknown_id_is_an_error() {
+        let state = test_state("agentstatusmissing");
+        let resp = dispatch("AGENT STATUS 99999", &state);
+        assert_eq!(resp.len(), 1);
+        assert!(resp[0].starts_with("ERRO"));
+        fs::remove_dir_all(&state.data_dir).unwrap();
+    }
+
+    #[test]
+    fn agent_list_empty_reports_no_tasks() {
+        let state = test_state("agentlistempty");
+        let resp = dispatch("AGENT LIST", &state);
+        assert_eq!(resp, vec!["nenhuma tarefa enfileirada ainda".to_string()]);
         fs::remove_dir_all(&state.data_dir).unwrap();
     }
 }

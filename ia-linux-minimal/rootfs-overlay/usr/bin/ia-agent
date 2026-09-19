@@ -1,0 +1,46 @@
+#!/bin/sh
+# ia-agent — interface de linha de comando para o gerenciador multiagente
+# do ai-core (etapa 0.5). Cliente fino: toda a lógica (fila, worker único
+# falando com llama-server) vive em ai-core/src/agent.rs.
+set -e
+# shellcheck source=../lib/ia-linux/common.sh
+. /usr/lib/ia-linux/common.sh
+
+usage() {
+    cat <<EOF
+uso: ia-agent <comando>
+
+comandos:
+  roles              lista os papéis de agente disponíveis
+  task <papel> <texto...>   enfileira uma tarefa para o papel indicado
+  status <id>         mostra status/resultado de uma tarefa
+  list                lista todas as tarefas (mais recente por último)
+
+Requer 'ia-server start' rodando (ai-core fala com o llama-server em
+127.0.0.1:8080 — ou IA_LLAMA_ADDR, se definida ao iniciar ai-core).
+EOF
+}
+
+case "${1:-}" in
+    roles)
+        ia_core AGENT ROLES
+        ;;
+    task)
+        [ -n "${2:-}" ] || { usage; exit 1; }
+        role="$2"
+        shift 2
+        [ -n "${1:-}" ] || { usage; exit 1; }
+        ia_core AGENT TASK "${role}" "$*"
+        ;;
+    status)
+        [ -n "${2:-}" ] || { usage; exit 1; }
+        ia_core AGENT STATUS "$2"
+        ;;
+    list)
+        ia_core AGENT LIST
+        ;;
+    *)
+        usage
+        exit 1
+        ;;
+esac

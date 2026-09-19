@@ -1,5 +1,30 @@
 # Changelog — IA Linux Minimal
 
+## 0.5.0-alpha6 — Multiagente
+
+- `ai-core` ganha `AgentManager` (`ai-core/src/agent.rs`): fila de
+  tarefas + um único worker thread, processando sequencialmente contra
+  `llama-server` — vários papéis (planejador, programador, pesquisador,
+  crítico, executor) compartilham o mesmo modelo carregado, em vez de um
+  modelo por agente.
+- Novos módulos `json.rs` (utilitários JSON mínimos, escritos à mão para
+  não adicionar dependências externas) e `llama_client.rs` (cliente HTTP
+  mínimo sobre `std::net::TcpStream` para `POST /completion` do
+  llama-server).
+- Novo comando IPC `AGENT` (`ROLES`, `TASK <papel> <texto>`,
+  `STATUS <id>`, `LIST`) e utilitário `ia-agent` (mais o comando `agent`
+  em `ia-shell`).
+- `STATUS` deixa de reportar "multiagente: não implementado" e passa a
+  reportar a fila real (tarefas em fila/executando/concluídas/com erro).
+- Bug encontrado e corrigido durante o smoke test manual: o parser JSON
+  exigia `"campo":"valor"` sem espaço após `:`; um servidor de teste
+  escrito com `json.dumps` do Python (que insere um espaço por padrão)
+  quebrava a extração. Corrigido para tolerar espaço em branco entre `:`
+  e a string, como o JSON padrão permite — ver `ai-core/src/json.rs`.
+- 47 testes unitários (eram 24 na 0.4), incluindo testes de ponta a
+  ponta do `AgentManager` contra um `llama-server` de mentira (socket
+  TCP local).
+
 ## 0.4.0-alpha5 — AI Core (Rust)
 
 - Novo daemon `ai-core` em Rust, substituindo os scripts shell como

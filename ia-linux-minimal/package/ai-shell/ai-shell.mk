@@ -14,7 +14,7 @@
 #
 ################################################################################
 
-AI_SHELL_VERSION = 0.4.0
+AI_SHELL_VERSION = 0.5.0
 AI_SHELL_SITE = $(BR2_EXTERNAL_IA_LINUX_PATH)/package/ai-shell/src
 AI_SHELL_SITE_METHOD = local
 AI_SHELL_LICENSE = Apache-2.0

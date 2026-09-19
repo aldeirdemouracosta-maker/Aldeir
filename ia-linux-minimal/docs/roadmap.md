@@ -6,21 +6,30 @@
 | 0.1.1-alpha2 | hardware físico (BIOS/UEFI, partições) | especificado |
 | 0.2.0-alpha3 | inferência CPU (llama.cpp) | especificado |
 | 0.3.0-alpha4 | Vulkan/RADV | especificado |
-| **0.4.0-alpha5** | **AI Core (Rust) — daemon + IPC** | **implementado nesta árvore** |
-| 0.5 | Multiagente | planejado |
+| 0.4.0-alpha5 | AI Core (Rust) — daemon + IPC | implementado |
+| **0.5.0-alpha6** | **Multiagente** | **implementado nesta árvore** |
 | 0.6 | AI Memory (DAMON adaptativo) | planejado |
 | 0.7 | AI Scheduler (sched_ext + eBPF/Rust) | planejado |
 | 0.8 | Scheduler adaptativo (telemetria + aprendizado) | planejado |
 | 0.9 | Imagem instalável (ISO/IMG para SSD/pendrive) | planejado |
 | 1.0 | Release reproduzível | planejado |
 
-## 0.5 — Multiagente
+## 0.5 — Multiagente (implementado)
 
 Vários agentes (planejador, programador, pesquisador, crítico, executor
-— ver `ai-core/src/agent.rs::PLANNED_ROLES`) compartilhando um único
+— ver `ai-core/src/agent.rs::PLANNED_ROLES`) compartilham um único
 modelo carregado via `llama-server`, em vez de um modelo por agente.
-`ai-core` ganha um módulo de filas/prioridades; `agent.rs` deixa de ser
-placeholder.
+`AgentManager` mantém uma fila de tarefas e um único worker thread que as
+processa sequencialmente (não em paralelo — decisão deliberada para
+hardware modesto, onde vários agentes disputando o mesmo modelo ao mesmo
+tempo só disputariam RAM/CPU sem ganho real). Ver `AGENT` no protocolo
+IPC (`ROLES`, `TASK <papel> <texto>`, `STATUS <id>`, `LIST`) e o cliente
+`ia-agent`.
+
+Ainda não implementado (candidato a uma etapa futura, não necessariamente
+0.6): prioridades entre tarefas (hoje é FIFO puro) e agentes que chamam
+outros agentes (ex.: um "crítico" revisando a saída de um "programador"
+automaticamente).
 
 ## 0.6 — AI Memory
 

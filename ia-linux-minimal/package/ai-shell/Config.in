@@ -6,7 +6,7 @@ config BR2_PACKAGE_AI_SHELL
 	help
 	  Console interativo (prompt "IA>") e utilitários de linha de
 	  comando (ia-model, ia-chat, ia-benchmark, ia-server, ia-gpu,
-	  ia-hwdetect) do IA Linux Minimal.
+	  ia-agent, ia-hwdetect) do IA Linux Minimal.
 
 	  Os scripts em si são instalados via BR2_ROOTFS_OVERLAY
 	  (rootfs-overlay/usr/bin, rootfs-overlay/etc) — este pacote não

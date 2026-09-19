@@ -5,13 +5,14 @@
 │                    IA SHELL                        │  rootfs-overlay/usr/bin/ia-shell
 │              prompt interativo "IA>"                │  (cliente fino, BusyBox ash)
 ├──────────────────────────────────────────────────┤
-│  ia-model │ ia-chat │ ia-benchmark │ ia-server │ ia-gpu │  cliente fino cada um
+│  ia-model │ ia-chat │ ia-benchmark │ ia-server │ ia-gpu │ ia-agent │  cliente fino cada um
 ├──────────────────────────────────────────────────┤
 │                    AI-CORE (Rust)                   │  ai-core/
 │  hardware.rs │ model.rs │ backend.rs │ config.rs    │  socket Unix
-│  agent.rs (placeholder 0.5) │ ipc.rs                 │  /run/ai-core.sock
+│  agent.rs (AgentManager, fila) │ json.rs │           │  /run/ai-core.sock
+│  llama_client.rs │ ipc.rs                            │
 ├──────────────────────────────────────────────────┤
-│               llama.cpp (CPU / Vulkan)               │  pacote Buildroot upstream
+│         llama.cpp / llama-server (CPU / Vulkan)      │  pacote Buildroot upstream
 ├──────────────────────────────────────────────────┤
 │         AI Resource Manager (cgroups v2, zram)       │  kernel/config (habilitado,
 │         DAMON / DAMON_RECLAIM (preparado, 0.6)       │  não gerenciado por agente ainda)
@@ -27,8 +28,9 @@
 ## Por que o "cérebro" fica em user-space
 
 O kernel nunca hospeda decisões de IA diretamente. `ai-core` roda em anel
-3; se um agente (futuro, etapa 0.5) cometer um erro, `ai-core` reinicia —
-supervisionado por `respawn` no `inittab` (ver
+3; se o processo inteiro travar (não apenas uma tarefa de agente — ver
+seção seguinte), `ai-core` reinicia — supervisionado por `respawn` no
+`inittab` (ver
 `rootfs-overlay/etc/inittab`) — sem derrubar o sistema. Essa é a razão
 pela qual este projeto não porta literalmente o patch de kernel do
 AI-Linux acadêmico (dissertação de mestrado de Nathan Loretan, MSc
@@ -47,8 +49,8 @@ não é garantido em toda configuração do BusyBox — ver
 
 Protocolo (texto, uma linha por comando, resposta terminada por uma
 linha `.`): `PING`, `VERSION`, `STATUS`, `HW`, `MODEL LIST|ACTIVE|SELECT
-<n>|RECOMMEND`, `BACKEND GET|SET <auto|cpu|vulkan>`. Ver
-`ai-core/src/ipc.rs`.
+<n>|RECOMMEND`, `BACKEND GET|SET <auto|cpu|vulkan>`, `AGENT
+ROLES|TASK <papel> <texto>|STATUS <id>|LIST`. Ver `ai-core/src/ipc.rs`.
 
 ## Seleção de backend (CPU/Vulkan) — AUTO
 
@@ -96,20 +98,38 @@ DATA nunca é apagada por uma atualização de SYSTEM — separação
 intencional entre sistema operacional e dados do usuário (modelos GGUF,
 sessões, workspace).
 
-## Modelos e agentes compartilham um único modelo carregado
+## Multiagente: fila única, um worker, um modelo carregado
 
 ```
-              ┌── (0.5, futuro) agente planejador
-              ├── (0.5, futuro) agente programador
-llama.cpp ────┼── (0.5, futuro) agente pesquisador
-(1 modelo)    ├── (0.5, futuro) agente crítico
-              └── (0.5, futuro) agente executor
+                    ┌── tarefa (planejador)
+                    ├── tarefa (programador)
+AgentManager ───────┼── tarefa (pesquisador)     fila FIFO, 1 worker thread
+(ai-core/src/       ├── tarefa (crítico)         processa sequencialmente
+ agent.rs)          └── tarefa (executor)
+                              │
+                              ▼
+                     llama_client::complete()
+                              │
+                              ▼
+                POST /completion — llama-server
+                     (127.0.0.1:8080, 1 modelo)
 ```
 
-Nesta versão (0.4) `ai-core` gerencia hardware, modelos e backend, mas
-ainda **não** implementa múltiplos agentes — `agent.rs` é um placeholder
-que documenta a interface planejada e faz `STATUS` reportar
-honestamente "não implementado" em vez de simular a funcionalidade.
+`AGENT TASK <papel> <texto>` enfileira e retorna um id imediatamente
+(nunca bloqueia); `AGENT STATUS <id>` consulta o resultado depois
+(`queued`/`running`/`done`/`error`). Um único worker thread processa a
+fila em ordem de chegada (FIFO, sem prioridades ainda) — decisão
+deliberada: em hardware modesto, várias tarefas disputando o mesmo
+modelo ao mesmo tempo não trariam ganho real, só disputa por RAM/CPU. Se
+`llama-server` não estiver rodando (`ia-server start`), a tarefa termina
+com `status=error` e a mensagem de conexão — `ai-core` nunca tenta subir
+o `llama-server` sozinho.
+
+`json.rs`/`llama_client.rs` são escritos à mão sobre `std::net::TcpStream`
+(sem crates externos, para manter a cross-compilação via Buildroot
+simples) — ver os comentários desses módulos para as limitações
+conhecidas do parser JSON (não é um parser genérico, só o suficiente
+para o campo `content` de nível superior que o `llama.cpp` retorna).
 
 ## Acesso remoto (opcional)
 

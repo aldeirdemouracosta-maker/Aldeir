@@ -40,7 +40,7 @@ Esta árvore foi escrita e testada **sem** acesso a `buildroot.org` (o
 sandbox onde o projeto foi montado não tem esse acesso de rede). Por
 isso:
 
-- `ai-core` foi compilado, testado (`cargo test`, 24 testes) e verificado
+- `ai-core` foi compilado, testado (`cargo test`, 47 testes) e verificado
   com `cargo clippy -- -D warnings` diretamente — isso não depende do
   Buildroot.
 - Todos os scripts shell (`rootfs-overlay/`, `scripts/`, `buildroot/board/`)
@@ -59,7 +59,7 @@ isso:
 
 ```sh
 cd ai-core
-cargo test              # 24 testes unitários, sem dependências externas
+cargo test              # 47 testes unitários (a maioria sem dependências externas; alguns usam sockets TCP/Unix locais)
 cargo clippy -- -D warnings
 cargo run                # roda como servidor; Ctrl+C para parar
 IA_DATA_DIR=/tmp/data IA_CORE_SOCKET=/tmp/ai-core.sock cargo run &
