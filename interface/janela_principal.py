@@ -12,8 +12,10 @@ Uso:
     python3 -m interface.janela_principal
 """
 
+import json
 import sys
 import tempfile
+import time
 from dataclasses import asdict
 from pathlib import Path
 from typing import Optional
@@ -301,6 +303,35 @@ class JanelaPrincipal(QMainWindow):
         self.dock_progresso.setWidget(self.area_log)
         self.addDockWidget(Qt.BottomDockWidgetArea, self.dock_progresso)
 
+        # "Código" mostra o conteúdo de cada escrever_arquivo formatado
+        # (quebras de linha reais, sem escape de JSON) — a mesma informação
+        # já aparece no Progresso, só que ilegível numa linha só de JSON.
+        self.area_codigo = QPlainTextEdit()
+        self.area_codigo.setReadOnly(True)
+        self.area_codigo.setStyleSheet(f"font-family: {FONTE_MONO};")
+        self.dock_codigo = QDockWidget("Código", self)
+        self.dock_codigo.setObjectName("dock_codigo")
+        self.dock_codigo.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
+        self.dock_codigo.setWidget(self.area_codigo)
+        self.addDockWidget(Qt.RightDockWidgetArea, self.dock_codigo)
+        self.tabifyDockWidget(self.dock_diagnostico, self.dock_codigo)
+
+        # "Relatórios" acumula erros/falhas entre execuções (não é limpo a
+        # cada "Executar" como o Progresso) — histórico pra achar rápido
+        # qual arquivo/comando causou um erro, sem procurar no log inteiro.
+        self.area_relatorios = QPlainTextEdit()
+        self.area_relatorios.setReadOnly(True)
+        self.area_relatorios.setStyleSheet(f"font-family: {FONTE_MONO};")
+        self.area_relatorios.setMaximumBlockCount(2000)
+        self.dock_relatorios = QDockWidget("Relatórios", self)
+        self.dock_relatorios.setObjectName("dock_relatorios")
+        self.dock_relatorios.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
+        self.dock_relatorios.setWidget(self.area_relatorios)
+        self.addDockWidget(Qt.BottomDockWidgetArea, self.dock_relatorios)
+        self.tabifyDockWidget(self.dock_progresso, self.dock_relatorios)
+
+        self._ultima_ferramenta_chamada: Optional[str] = None
+
     # ---- layout dos painéis (dock widgets) -----------------------------------
 
     def _restaurar_layout(self) -> None:
@@ -567,6 +598,7 @@ class JanelaPrincipal(QMainWindow):
         self.botao_executar.setEnabled(False)
         self.botao_parar.setEnabled(True)
         self.area_log.clear()
+        self._ultima_ferramenta_chamada = None
         if self._ultimo_diagnostico is None:
             self.area_log.appendPlainText(
                 "⚠ Sem diagnóstico — o modelo vai chutar a estrutura do projeto. "
@@ -586,6 +618,8 @@ class JanelaPrincipal(QMainWindow):
         trabalhador.moveToThread(thread)
         thread.started.connect(trabalhador.rodar)
         trabalhador.evento.connect(self.area_log.appendPlainText)
+        trabalhador.evento.connect(self._atualizar_painel_codigo)
+        trabalhador.evento.connect(self._atualizar_relatorio_erros)
         trabalhador.concluido.connect(self._execucao_concluida)
         trabalhador.erro.connect(self._execucao_com_erro)
         trabalhador.interrompido.connect(self._execucao_interrompida)
@@ -618,10 +652,52 @@ class JanelaPrincipal(QMainWindow):
     def _execucao_com_erro(self, mensagem: str) -> None:
         self.area_log.appendPlainText(f"\nErro: {mensagem}")
         self.rotulo_status.setText("Falha na execução — ver log acima.")
+        self._registrar_relatorio(f"[execução] {mensagem}")
 
     def _execucao_interrompida(self) -> None:
         self.area_log.appendPlainText("\nExecução interrompida pelo usuário.")
         self.rotulo_status.setText("Interrompida.")
+        self._registrar_relatorio("[execução] interrompida pelo usuário")
+
+    # ---- painel de código e relatório de erros --------------------------------
+
+    def _registrar_relatorio(self, mensagem: str) -> None:
+        self.area_relatorios.appendPlainText(f"[{time.strftime('%H:%M:%S')}] {mensagem}")
+
+    def _atualizar_painel_codigo(self, linha: str) -> None:
+        prefixo = "escrever_arquivo("
+        if not (linha.startswith(prefixo) and linha.endswith(")")):
+            return
+        try:
+            argumentos = json.loads(linha[len(prefixo):-1])
+        except json.JSONDecodeError:
+            return
+        caminho = argumentos.get("caminho", "")
+        self.area_codigo.setPlainText(argumentos.get("conteudo", ""))
+        self.dock_codigo.setWindowTitle(f"Código — {caminho}" if caminho else "Código")
+
+    def _atualizar_relatorio_erros(self, linha: str) -> None:
+        if linha.startswith("erro: "):
+            self._registrar_relatorio(f"[{self._ultima_ferramenta_chamada or '?'}] {linha}")
+            return
+
+        if linha.startswith("  → "):
+            try:
+                payload = json.loads(linha[len("  → "):])
+            except json.JSONDecodeError:
+                return
+            if isinstance(payload, dict) and payload.get("codigo_saida") not in (0, None):
+                stderr = (payload.get("stderr") or "").strip()[:300]
+                self._registrar_relatorio(
+                    f"[{self._ultima_ferramenta_chamada or '?'}] código de saída "
+                    f"{payload['codigo_saida']}: {stderr}"
+                )
+            return
+
+        for nome_ferramenta in ("ler_arquivo", "escrever_arquivo", "executar_comando", "buscar_codigo", "finalizar"):
+            if linha.startswith(nome_ferramenta + "("):
+                self._ultima_ferramenta_chamada = nome_ferramenta
+                return
 
 
 def main() -> None:

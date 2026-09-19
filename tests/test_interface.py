@@ -101,6 +101,91 @@ def test_executar_orquestrador_escreve_arquivo_e_mostra_log(qtbot, projeto: Path
     assert janela.rotulo_status.text() == "Concluído com sucesso."
     assert (projeto / "app.py").read_text() == "def soma(a, b):\n    return a + b\n"
 
+    # painel de "Código" mostra o conteúdo formatado (quebra de linha
+    # real, não escapada como no log JSON)
+    assert janela.area_codigo.toPlainText() == "def soma(a, b):\n    return a + b\n"
+    assert "app.py" in janela.dock_codigo.windowTitle()
+
+
+def test_atualizar_painel_codigo_ignora_linhas_que_nao_sao_escrever_arquivo(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._atualizar_painel_codigo("Chamando o modelo (tentativa 1/20)...")
+
+    assert janela.area_codigo.toPlainText() == ""
+
+
+def test_relatorio_registra_erro_da_ferramenta_com_contexto(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._atualizar_relatorio_erros('escrever_arquivo({"caminho": "app.py", "conteudo": "x"})')
+    janela._atualizar_relatorio_erros("erro: Arquivo ou diretório inexistente")
+
+    relatorio = janela.area_relatorios.toPlainText()
+    assert "escrever_arquivo" in relatorio
+    assert "erro: Arquivo ou diretório inexistente" in relatorio
+
+
+def test_relatorio_registra_comando_com_codigo_de_saida_diferente_de_zero(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._atualizar_relatorio_erros('executar_comando({"comando": ["pytest"]})')
+    janela._atualizar_relatorio_erros(
+        '  → {"codigo_saida": 1, "expirou": false, "stdout": "", "stderr": "1 failed"}'
+    )
+
+    relatorio = janela.area_relatorios.toPlainText()
+    assert "executar_comando" in relatorio
+    assert "código de saída 1" in relatorio
+    assert "1 failed" in relatorio
+
+
+def test_relatorio_ignora_comando_com_codigo_de_saida_zero(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._atualizar_relatorio_erros('executar_comando({"comando": ["pytest"]})')
+    janela._atualizar_relatorio_erros('  → {"codigo_saida": 0, "expirou": false, "stdout": "ok", "stderr": ""}')
+
+    assert janela.area_relatorios.toPlainText() == ""
+
+
+def test_relatorio_nao_e_limpo_ao_executar_de_novo(qtbot, projeto: Path, servidor_llm_mock):
+    base_url = servidor_llm_mock([_msg_tool_call("1", "finalizar", {"resumo": "ok", "sucesso": True})])
+    orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": base_url}
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela._registrar_relatorio("[teste] entrada antiga")
+
+    janela.campo_pasta.setText(str(projeto))
+    janela.campo_instrucao.setPlainText("faça algo")
+    janela.botao_executar.click()
+    qtbot.waitUntil(lambda: janela.botao_executar.isEnabled(), timeout=5000)
+
+    assert "entrada antiga" in janela.area_relatorios.toPlainText()
+
+
+def test_execucao_com_erro_registra_no_relatorio(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._execucao_com_erro("MotorIndisponivelError: nenhum motor")
+
+    assert "MotorIndisponivelError" in janela.area_relatorios.toPlainText()
+
+
+def test_execucao_interrompida_registra_no_relatorio(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._execucao_interrompida()
+
+    assert "interrompida" in janela.area_relatorios.toPlainText()
+
 
 def test_executar_sem_diagnostico_mostra_aviso_mas_nao_bloqueia(qtbot, projeto: Path, servidor_llm_mock):
     base_url = servidor_llm_mock([_msg_tool_call("1", "finalizar", {"resumo": "ok", "sucesso": True})])

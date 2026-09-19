@@ -6,10 +6,10 @@ Janela única, minimalista, que reaproveita `analisador_projeto` e
 ```
 ┌──────────────────────────────────────────────────────┬─────────────┐
 │ Pasta do projeto [___] [Procurar…] [Abrir ZIP…]       │ Diagnóstico │
-│                  [Gerar mockup simples…]              │ (dockável,  │
-│ Elementos do mockup simples (opcional)                │  arrastável)│
-│ ┌────────────────────────────────────────────────────┐│             │
-│ [Analisar projeto] [Usar pasta extraída mesmo assim]  │             │
+│                  [Gerar mockup simples…]              │ ou Código   │
+│ Elementos do mockup simples (opcional)                │ (abas,      │
+│ ┌────────────────────────────────────────────────────┐│  dockável,  │
+│ [Analisar projeto] [Usar pasta extraída mesmo assim]  │  arrastável)│
 │ [Descrever mockup…]  (status da descrição)            │             │
 │                                                        │             │
 │ Instrução      [Exemplos de instrução… ▾]             │             │
@@ -19,15 +19,29 @@ Janela única, minimalista, que reaproveita `analisador_projeto` e
 │ [Executar] [Parar] [Configurar busca semântica…]      │             │
 │ (status)                                              │             │
 ├────────────────────────────────────────────────────────────────────┤
-│ Progresso (dockável, arrastável)                                    │
-│ (log ao vivo do orquestrador / da importação de ZIP / do mockup)    │
+│ Progresso ou Relatórios (abas, dockável, arrastável)                │
+│ (log ao vivo / histórico de erros por execução)                    │
 └──────────────────────────────────────────────────────────────────��─┘
 ```
 
-"Diagnóstico" e "Progresso" são painéis Qt dockáveis (`QDockWidget`) —
-arraste pela barra de título deles para reposicionar, empilhar,
-flutuar como janela solta, ou fechar. O arranjo que o usuário montar
-fica salvo (`QSettings`) e volta na próxima abertura.
+"Diagnóstico", "Progresso", "Código" e "Relatórios" são painéis Qt
+dockáveis (`QDockWidget`) — nascem em abas (`tabifyDockWidget`),
+arraste pela barra de título pra reposicionar, empilhar, flutuar como
+janela solta, ou fechar. O arranjo que o usuário montar fica salvo
+(`QSettings`) e volta na próxima abertura.
+
+**"Código"** mostra o conteúdo de cada `escrever_arquivo` formatado de
+verdade (quebra de linha real, com o nome do arquivo no título do
+painel) — a mesma informação já aparece em "Progresso", só que ali vem
+como uma linha só de JSON com `\n` escapado, difícil de ler.
+
+**"Relatórios"** acumula erros entre execuções — ao contrário de
+"Progresso" (limpo a cada "Executar"), esse painel **não é limpo**:
+registra, com hora e a última ferramenta chamada, toda falha de
+`executar_comando` (código de saída != 0, com um trecho do `stderr`),
+todo `erro: ...` de `ler_arquivo`/`escrever_arquivo`/`buscar_codigo`, e
+toda exceção/interrupção da execução — histórico rápido de "o que deu
+errado e onde", sem precisar reler o log inteiro de cada rodada.
 
 ## Por que roda em thread separada
 
