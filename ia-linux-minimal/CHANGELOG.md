@@ -1,5 +1,49 @@
 # Changelog — IA Linux Minimal
 
+## Encerramento da série 0.x (0.1–0.9)
+
+Esta é a marca de fechamento desta fase de desenvolvimento. Resumo do
+que existe nesta árvore, honestamente:
+
+**Implementado e testado neste ambiente:**
+- `ai-core` (Rust): hardware, modelos, backend CPU/Vulkan, multiagente,
+  memória (DAMON_RECLAIM + cgroup v2), scheduler (cgroup v2 cpu.weight)
+  e scheduler adaptativo (telemetria real de `/proc`) — 102 testes
+  unitários, `clippy -D warnings` limpo, `cargo fmt` aplicado.
+- Todos os scripts shell (`ia-shell` e os `ia-*`, `scripts/*.sh`,
+  `buildroot/board/*`) — `shellcheck -S warning` limpo, `bash -n` limpo.
+- Um instalador com salvaguardas reais (`install-to-device.sh`, com um
+  bug de segurança de verdade encontrado e corrigido durante o teste) e
+  um gate de release reprodutível (`make-release.sh`), ambos exercitados
+  de ponta a ponta neste ambiente.
+- Três smoke tests manuais ponta a ponta contra o daemon real rodando
+  (multiagente, memória+scheduler compartilhando cgroup, scheduler
+  adaptativo com telemetria real + tokens/s de um `llama-server` de
+  mentira).
+
+**Não implementado e explicitamente não fingido como implementado:**
+- A compilação completa do Buildroot nunca rodou aqui (sem acesso a
+  `buildroot.org` neste sandbox) — as opções `BR2_*` seguem a convenção
+  de nomes da versão 2026.08 mas não foram confirmadas símbolo-a-símbolo
+  contra a árvore real.
+- `damon_reclaim` e cgroup v2 não existem neste ambiente — validados com
+  diretórios temporários simulando a mesma estrutura de arquivos, não
+  contra o kernel real.
+- `bpftool`/`sched_ext` não existem neste ambiente — por isso a etapa
+  0.7 entregou `cpu.weight` de cgroup v2 em vez de um scheduler BPF de
+  verdade (decisão documentada, não escondida).
+- Nenhuma imagem foi de fato gravada num disco nem testada em hardware
+  físico. O modo `RECOVERY` existe desde a 0.1.1 mas nunca foi
+  verificado num boot real.
+
+**1.0 fica bloqueada** em rodar o pipeline completo
+(`fetch-buildroot.sh` → `configure.sh` → `compile.sh` →
+`make-release.sh`) contra a árvore Buildroot real — algo que exige
+acesso à internet que este ambiente não tem. Até lá, esta é uma árvore
+de código completa e testada em tudo que dava para testar sem
+Buildroot/kernel real, não uma imagem que alguém rodou. Ver
+`docs/roadmap.md` para os detalhes de cada etapa.
+
 ## 0.9.0-alpha10 — Instalador + release reprodutível
 
 - Novo `scripts/install-to-device.sh`: grava `disk.img` num SSD/pendrive

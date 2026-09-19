@@ -22,11 +22,16 @@ IA>
 | 0.6.0-alpha7 | AI Memory | DAMON_RECLAIM por perfil + proteção via cgroup v2 (`memory.low`), `ia-memory` |
 | 0.7.0-alpha8 | AI Scheduler | prioridade de CPU via cgroup v2 (`cpu.weight`), `ia-scheduler` — sched_ext real fica para depois, ver `kernel/patches/README.md` |
 | 0.8.0-alpha9 | Scheduler adaptativo | telemetria real (`/proc`) + tokens/s ajustando `cpu.weight` por uma regra determinística — não é ML, ver `ai-core/src/telemetry.rs` |
-| **0.9.0-alpha10** | **Instalador + release** | **`install-to-device.sh` (com salvaguardas) e `make-release.sh` (gates + legal-info + checksums) — validação em hardware real fica para quem gravar de verdade, ver `docs/roadmap.md`** |
+| 0.9.0-alpha10 | Instalador + release | `install-to-device.sh` (com salvaguardas) e `make-release.sh` (gates + legal-info + checksums) — validação em hardware real fica para quem gravar de verdade, ver `docs/roadmap.md` |
+| 1.0 | *bloqueada* | requer rodar o pipeline completo contra a árvore Buildroot real — sem acesso à internet neste ambiente, ver `CHANGELOG.md` |
 
-Esta árvore foi reconstruída dentro do repositório `aldeir` (pasta
-`ia-linux-minimal/`), consolidando as decisões de arquitetura definidas nas
-sessões anteriores do projeto.
+**Fechamento desta fase de desenvolvimento**: a série 0.1–0.9 está
+completa — código, testes e documentação. É uma árvore de código
+testada em tudo que dava para testar sem Buildroot/kernel real neste
+ambiente (ver "Encerramento da série 0.x" em `CHANGELOG.md` para o
+resumo honesto do que foi e não foi validado), não ainda uma imagem que
+alguém rodou. A 1.0 exige o build completo contra a árvore Buildroot
+real, fora do alcance deste sandbox.
 
 ## Filosofia
 
