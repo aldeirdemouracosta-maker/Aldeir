@@ -161,6 +161,34 @@ tamanho, mas menos testado com llama.cpp/tool-calling — antes de
 trazer pra máquina local, vale validar numa GPU alugada por hora
 (RunPod/Vast.ai) ou Colab gratuito).
 
+### Alternativa para tool-calling mais confiável: Granite-4.2-3B
+
+O orquestrador tem uma "mania" documentada: vários modelos pequenos
+não respeitam `tool_choice=required` e devolvem texto comum em vez de
+uma chamada de ferramenta estruturada — por isso existe o parser de
+fallback `extrair_chamada_de_texto` em `orquestrador.py`. O
+`Granite-4.2-3B` (IBM, Apache-2.0, GGUF disponível em 3B/8B/30B) é
+anunciado com tool-calling "reasoning-augmented" como foco principal
+do treino — candidato a reduzir a dependência desse fallback, mas
+ainda não validado nesta máquina; troca é só apontar o `llama-server`
+pro GGUF dele, mesma flag `--jinja` obrigatória:
+
+```bash
+./llama.cpp/build/bin/llama-server \
+  -hf ibm-granite/granite-4.2-3b-GGUF \
+  --port 8080 --host 127.0.0.1 --jinja \
+  -ngl 20 --ctx-size 4096
+```
+
+Candidatos vistos e **não adotados** dessa leva, por motivo concreto:
+`LFM2.5-2.6B` (Liquid AI) tem GGUF pronto, mas a licença ("LFM Open
+License"/LFM1.0) tem restrição de faturamento pra empresas maiores —
+foge do padrão Apache-2.0/MIT usado no resto do projeto; "Qwen3.5-2B"
+e "Qwen3.5-4B" não foram confirmados — as fontes verificadas só
+mostram variantes do Qwen3.5 bem maiores (27B pra cima), então esses
+dois tamanhos específicos precisam de confirmação direta na fonte
+antes de considerar.
+
 ## 6. Confirmar que o `motor_ia` detecta o motor
 
 Em outro terminal, dentro do repositório `Aldeir`:
@@ -266,6 +294,20 @@ pré-quantizados prontos para `-hf` está em
 `~/llama.cpp/docs/multimodal.md` — Qwen2.5-VL-7B-Instruct-GGUF é o que
 validamos, mas Gemma 3, SmolVLM e InternVL também estão na lista se
 quiser comparar.
+
+### Alternativa leve: MiniCPM-V-4.6
+
+`Qwen2.5-VL-7B` é o motivo de precisar desligar o servidor de código
+antes de "Descrever mockup…" — os dois não cabem juntos em 8GB de
+VRAM. `MiniCPM-V-4.6` (OpenBMB, ~1,3B — SigLIP2-400M + base
+Qwen3.5-0,8B) é bem mais leve (~2GB em GGUF), o que abre a
+possibilidade real de rodar visão e código ao mesmo tempo — ainda não
+validado nesta máquina, então trate a precisão da descrição como algo
+a confirmar antes de confiar nela como o Qwen2.5-VL-7B já validado:
+
+```bash
+nohup ./build/bin/llama-server -hf openbmb/MiniCPM-V-4.6-gguf --port 8082 -ngl 20 --ctx-size 4096 > /tmp/llama-vision.log 2>&1 &
+```
 
 Pré-requisito: o `llama.cpp` precisa ter sido compilado com suporte a
 HTTPS para o `-hf` baixar modelos do Hugging Face — se aparecer
