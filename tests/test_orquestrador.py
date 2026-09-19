@@ -131,7 +131,8 @@ def test_contexto_extra_e_prependido_a_mensagem_do_usuario(projeto: Path):
         servidor.shutdown()
 
     mensagem_usuario = capturado["mensagens"][1]["content"]
-    assert mensagem_usuario.startswith("Diagnóstico: 3 funções incompletas")
+    assert "Diagnóstico: 3 funções incompletas" in mensagem_usuario
+    assert mensagem_usuario.endswith("conserte o bug")
     assert mensagem_usuario.endswith("conserte o bug")
 
 
@@ -356,6 +357,54 @@ def test_cli_contexto_arquivo_e_diagnostico_se_somam(projeto: Path, servidor_llm
     mensagem_usuario = capturado["mensagens"][1]["content"]
     assert "Mockup: botão 'Salvar' no rodapé" in mensagem_usuario
     assert mensagem_usuario.endswith("implemente a tela do mockup")
+
+
+def test_contexto_extra_e_instrucao_vem_com_rotulos_separados(projeto: Path):
+    # Sem marcação nenhuma, um modelo pequeno pode simplesmente repetir
+    # o contexto de volta como se fosse a resposta em vez de agir sobre
+    # a instrução — visto na prática com uma descrição de mockup longa.
+    import socket
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    capturado = {}
+    resposta_finalizar = _msg_tool_call("1", "finalizar", {"resumo": "ok", "sucesso": True})
+
+    class _HandlerCaptura(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_POST(self):
+            tamanho = int(self.headers.get("Content-Length", 0))
+            corpo = json.loads(self.rfile.read(tamanho))
+            capturado["mensagens"] = corpo["messages"]
+            saida = json.dumps({"choices": [{"message": resposta_finalizar}]}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(saida)))
+            self.end_headers()
+            self.wfile.write(saida)
+
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    porta = s.getsockname()[1]
+    s.close()
+    servidor = HTTPServer(("127.0.0.1", porta), _HandlerCaptura)
+    threading.Thread(target=servidor.serve_forever, daemon=True).start()
+    try:
+        orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": f"http://127.0.0.1:{porta}/v1"}
+        orq.Orquestrador(projeto).rodar(
+            "faça a tarefa", contexto_extra="Descrição de mockup: botão Entrar no topo."
+        )
+    finally:
+        servidor.shutdown()
+
+    mensagem_usuario = capturado["mensagens"][1]["content"]
+    assert mensagem_usuario.startswith("Contexto de referência")
+    assert "NÃO é a tarefa" in mensagem_usuario
+    assert "Descrição de mockup: botão Entrar no topo." in mensagem_usuario
+    assert "Tarefa a executar agora:\nfaça a tarefa" in mensagem_usuario
+    assert mensagem_usuario.endswith("faça a tarefa")
 
 
 def test_deve_parar_true_antes_da_primeira_chamada_nao_completa_o_loop(projeto: Path, servidor_llm_mock):

@@ -357,7 +357,20 @@ class Orquestrador:
             raise MotorIndisponivelError(motor["mensagem"])
         avisar(f"Motor: {motor['escolhido']} ({motor['base_url']})")
 
-        mensagem_usuario = instrucao if not contexto_extra else f"{contexto_extra}\n\n{instrucao}"
+        # Rótulos explícitos, não só concatenação: visto na prática, um
+        # modelo pequeno recebendo diagnóstico/descrição de mockup como
+        # bloco de texto sem marcação nenhuma pode simplesmente repetir
+        # esse contexto de volta como se fosse a resposta, em vez de
+        # tratá-lo como referência e agir sobre a instrução de verdade.
+        mensagem_usuario = (
+            instrucao
+            if not contexto_extra
+            else (
+                f"Contexto de referência (informação de apoio — NÃO é a tarefa a fazer):\n"
+                f"{contexto_extra}\n\n"
+                f"Tarefa a executar agora:\n{instrucao}"
+            )
+        )
         mensagens = [
             {"role": "system", "content": PROMPT_SISTEMA},
             {"role": "user", "content": mensagem_usuario},
