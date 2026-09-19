@@ -116,11 +116,20 @@ def interpretar_mockup(
     prompt: str = PROMPT_PADRAO,
     timeout_subida: float = 90,
     timeout_geracao: int = 180,
+    n_gpu_layers: int = 20,
+    ctx_size: int = 4096,
 ) -> str:
     """Sobe um llama-server com modelo de visao so para esta chamada,
     interpreta a imagem, desliga o servidor, e devolve a descricao —
     pensado para ser usado por uma unica ferramenta do orquestrador,
-    nao para ficar residente."""
+    nao para ficar residente.
+
+    `n_gpu_layers`/`ctx_size` tem padrao conservador de proposito — sem
+    limite (offload total), o llama-server pode empurrar a GPU no
+    maximo sob carga sustentada. Visto na prática: uma RX 580 travando
+    o driver Vulkan/sistema inteiro durante uma chamada real. Ajuste
+    pra cima com cautela, monitorando temperatura (ver `CoreCtrl`/
+    `nvtop`), nunca sem limite nenhum."""
     if not (caminho_binario_llama_server.is_file() and os.access(caminho_binario_llama_server, os.X_OK)):
         raise ServidorVisaoIndisponivelError(
             f"binario do llama-server nao encontrado ou sem permissao de execucao: {caminho_binario_llama_server}"
@@ -141,6 +150,8 @@ def interpretar_mockup(
             "--port", str(porta),
             "--host", "127.0.0.1",
             "--jinja",
+            "-ngl", str(n_gpu_layers),
+            "--ctx-size", str(ctx_size),
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
@@ -175,6 +186,11 @@ def main() -> None:
     parser.add_argument("--prompt", type=str, default=PROMPT_PADRAO)
     parser.add_argument("--timeout-subida", type=float, default=90)
     parser.add_argument("--timeout-geracao", type=int, default=180)
+    parser.add_argument(
+        "--ngl", type=int, default=20, dest="n_gpu_layers",
+        help="camadas offloaded na GPU (padrão conservador — evite offload total sem monitorar temperatura)",
+    )
+    parser.add_argument("--ctx-size", type=int, default=4096)
     args = parser.parse_args()
 
     descricao = interpretar_mockup(
@@ -186,6 +202,8 @@ def main() -> None:
         prompt=args.prompt,
         timeout_subida=args.timeout_subida,
         timeout_geracao=args.timeout_geracao,
+        n_gpu_layers=args.n_gpu_layers,
+        ctx_size=args.ctx_size,
     )
     print(descricao)
 

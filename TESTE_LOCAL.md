@@ -112,8 +112,20 @@ mkdir -p ~/modelos
   -m ~/modelos/SEU_MODELO.gguf \
   --port 8080 \
   --host 127.0.0.1 \
-  --jinja
+  --jinja \
+  -ngl 20 \
+  --ctx-size 4096
 ```
+
+`-ngl`/`--ctx-size` **não são opcionais em GPUs mais antigas/sem
+monitoramento de temperatura confiável** — sem limite de camadas
+offloaded, o `llama-server` pode empurrar a GPU no máximo sob carga
+sustentada. Visto na prática: uma RX 580 travando o driver
+Vulkan e corrompendo o sistema numa sessão real. Comece conservador
+(`-ngl 20`), suba aos poucos só monitorando temperatura (`CoreCtrl`,
+`nvtop`), nunca sem limite nenhum. `visao_mockup` e `busca_codigo`
+(que sobem seus próprios `llama-server` internamente) já usam esse
+mesmo padrão conservador por default.
 
 `--jinja` é obrigatório — ativa o processamento de chat template
 necessário para o tool calling do orquestrador funcionar (sem isso o
@@ -245,7 +257,7 @@ comando):
 
 ```bash
 cd ~/llama.cpp
-nohup ./build/bin/llama-server -hf ggml-org/Qwen2.5-VL-7B-Instruct-GGUF --port 8082 > /tmp/llama-vision.log 2>&1 &
+nohup ./build/bin/llama-server -hf ggml-org/Qwen2.5-VL-7B-Instruct-GGUF --port 8082 -ngl 20 --ctx-size 4096 > /tmp/llama-vision.log 2>&1 &
 sleep 3
 curl -s http://127.0.0.1:8082/v1/models   # confirma que subiu antes de seguir
 ```
@@ -278,7 +290,7 @@ juntos):
 
 ```bash
 pkill -f llama-server
-./build/bin/llama-server -m ~/modelos/SEU_MODELO_DE_CODIGO.gguf --port 8080 --jinja
+./build/bin/llama-server -m ~/modelos/SEU_MODELO_DE_CODIGO.gguf --port 8080 --jinja -ngl 20 --ctx-size 4096
 ```
 
 **Rode o orquestrador com a descrição do mockup como contexto** — a

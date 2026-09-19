@@ -111,3 +111,79 @@ def test_interpretar_mockup_falha_alto_quando_imagem_nao_existe(tmp_path: Path):
 
     with pytest.raises(ServidorVisaoIndisponivelError, match="imagem"):
         interpretar_mockup(binario, modelo, mmproj, tmp_path / "nao_existe.png")
+
+
+def test_interpretar_mockup_passa_ngl_e_ctx_size_padrao_conservadores(tmp_path: Path, imagem_fake: Path, monkeypatch):
+    import visao_mockup.interpretar_mockup as modulo
+
+    binario = tmp_path / "llama-server"
+    binario.write_text("#!/bin/sh\nexit 0\n")
+    binario.chmod(0o755)
+    modelo = tmp_path / "modelo.gguf"
+    modelo.write_bytes(b"fake")
+    mmproj = tmp_path / "mmproj.gguf"
+    mmproj.write_bytes(b"fake")
+
+    comandos_capturados = []
+
+    class _ProcessoFalso:
+        stderr = None
+
+        def terminate(self):
+            pass
+
+        def wait(self, timeout=None):
+            pass
+
+    def _popen_falso(comando, **kwargs):
+        comandos_capturados.append(comando)
+        return _ProcessoFalso()
+
+    monkeypatch.setattr(modulo.subprocess, "Popen", _popen_falso)
+    monkeypatch.setattr(modulo, "_aguardar_pronto", lambda base_url, timeout: None)
+    monkeypatch.setattr(modulo, "interpretar_imagem", lambda *a, **k: "descrição")
+
+    modulo.interpretar_mockup(binario, modelo, mmproj, imagem_fake)
+
+    comando = comandos_capturados[0]
+    assert "-ngl" in comando
+    assert comando[comando.index("-ngl") + 1] == "20"
+    assert "--ctx-size" in comando
+    assert comando[comando.index("--ctx-size") + 1] == "4096"
+
+
+def test_interpretar_mockup_aceita_ngl_e_ctx_size_customizados(tmp_path: Path, imagem_fake: Path, monkeypatch):
+    import visao_mockup.interpretar_mockup as modulo
+
+    binario = tmp_path / "llama-server"
+    binario.write_text("#!/bin/sh\nexit 0\n")
+    binario.chmod(0o755)
+    modelo = tmp_path / "modelo.gguf"
+    modelo.write_bytes(b"fake")
+    mmproj = tmp_path / "mmproj.gguf"
+    mmproj.write_bytes(b"fake")
+
+    comandos_capturados = []
+
+    class _ProcessoFalso:
+        stderr = None
+
+        def terminate(self):
+            pass
+
+        def wait(self, timeout=None):
+            pass
+
+    def _popen_falso(comando, **kwargs):
+        comandos_capturados.append(comando)
+        return _ProcessoFalso()
+
+    monkeypatch.setattr(modulo.subprocess, "Popen", _popen_falso)
+    monkeypatch.setattr(modulo, "_aguardar_pronto", lambda base_url, timeout: None)
+    monkeypatch.setattr(modulo, "interpretar_imagem", lambda *a, **k: "descrição")
+
+    modulo.interpretar_mockup(binario, modelo, mmproj, imagem_fake, n_gpu_layers=99, ctx_size=8192)
+
+    comando = comandos_capturados[0]
+    assert comando[comando.index("-ngl") + 1] == "99"
+    assert comando[comando.index("--ctx-size") + 1] == "8192"

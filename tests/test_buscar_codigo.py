@@ -292,6 +292,68 @@ def test_indexar_projeto_reprocessa_so_arquivo_modificado(tmp_path: Path, servid
     assert arquivos_indexados == {"a.py", "b.py"}
 
 
+def test_buscar_codigo_usa_ngl_zero_por_padrao(tmp_path: Path, servidor_embeddings_mock, monkeypatch):
+    import busca_codigo.buscar_codigo as modulo
+
+    binario = tmp_path / "llama-server-falso"
+    binario.write_text("#!/bin/sh\nexit 0\n")
+    binario.chmod(0o755)
+    modelo = tmp_path / "modelo.gguf"
+    modelo.write_bytes(b"fake")
+    projeto = tmp_path / "projeto"
+    projeto.mkdir()
+    (projeto / "a.py").write_text("def a():\n    pass\n")
+
+    base_url = servidor_embeddings_mock()
+    porta = int(base_url.rsplit(":", 1)[1].split("/")[0])
+
+    comandos_capturados = []
+
+    def _popen_falso(comando, **kwargs):
+        comandos_capturados.append(comando)
+        return _ProcessoFalso()
+
+    monkeypatch.setattr(modulo.subprocess, "Popen", _popen_falso)
+    monkeypatch.setattr(modulo, "_aguardar_pronto", lambda base_url, timeout: None)
+
+    modulo.buscar_codigo(binario, modelo, projeto, "algo", porta=porta)
+
+    comando = comandos_capturados[0]
+    assert comando[comando.index("-ngl") + 1] == "0"
+    assert comando[comando.index("--ctx-size") + 1] == "2048"
+
+
+def test_buscar_codigo_aceita_ngl_customizado(tmp_path: Path, servidor_embeddings_mock, monkeypatch):
+    import busca_codigo.buscar_codigo as modulo
+
+    binario = tmp_path / "llama-server-falso"
+    binario.write_text("#!/bin/sh\nexit 0\n")
+    binario.chmod(0o755)
+    modelo = tmp_path / "modelo.gguf"
+    modelo.write_bytes(b"fake")
+    projeto = tmp_path / "projeto"
+    projeto.mkdir()
+    (projeto / "a.py").write_text("def a():\n    pass\n")
+
+    base_url = servidor_embeddings_mock()
+    porta = int(base_url.rsplit(":", 1)[1].split("/")[0])
+
+    comandos_capturados = []
+
+    def _popen_falso(comando, **kwargs):
+        comandos_capturados.append(comando)
+        return _ProcessoFalso()
+
+    monkeypatch.setattr(modulo.subprocess, "Popen", _popen_falso)
+    monkeypatch.setattr(modulo, "_aguardar_pronto", lambda base_url, timeout: None)
+
+    modulo.buscar_codigo(binario, modelo, projeto, "algo", porta=porta, n_gpu_layers=10, ctx_size=4096)
+
+    comando = comandos_capturados[0]
+    assert comando[comando.index("-ngl") + 1] == "10"
+    assert comando[comando.index("--ctx-size") + 1] == "4096"
+
+
 def test_buscar_codigo_ordena_por_similaridade(tmp_path: Path, servidor_embeddings_mock, monkeypatch):
     import busca_codigo.buscar_codigo as modulo
 

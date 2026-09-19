@@ -330,6 +330,8 @@ def buscar_codigo(
     top_k: int = 5,
     timeout_subida: float = 30,
     peso_bm25: float = 0.4,
+    n_gpu_layers: int = 0,
+    ctx_size: int = 2048,
 ) -> List[dict]:
     """Sobe um llama-server com o modelo de embeddings so para esta
     chamada, (re)indexa o projeto sob demanda, busca os pedacos mais
@@ -338,7 +340,12 @@ def buscar_codigo(
     combinacao (0 = so semantica, 1 = so palavra-chave; 0.4 por padrao
     porque semantica sozinha as vezes erra nome exato de funcao/variavel).
     Desliga o servidor no final, devolve os resultados ordenados,
-    mais relevante primeiro."""
+    mais relevante primeiro.
+
+    `n_gpu_layers=0` por padrao — o CodeRankEmbed e pequeno o bastante
+    pra rodar so em CPU sem ficar lento, e isso soma zero carga extra na
+    GPU (que ja esta ocupada com o modelo de codigo/visao). Só suba pra
+    GPU se tiver testado que a placa aguenta a carga combinada."""
     if not (caminho_binario_llama_server.is_file() and os.access(caminho_binario_llama_server, os.X_OK)):
         raise ServidorBuscaIndisponivelError(
             f"binario do llama-server nao encontrado ou sem permissao de execucao: {caminho_binario_llama_server}"
@@ -356,6 +363,8 @@ def buscar_codigo(
             "--embeddings",
             "--port", str(porta),
             "--host", "127.0.0.1",
+            "-ngl", str(n_gpu_layers),
+            "--ctx-size", str(ctx_size),
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
@@ -417,6 +426,11 @@ def main() -> None:
     parser.add_argument(
         "--peso-bm25", type=float, default=0.4, help="0 = só semântica, 1 = só palavra-chave (padrão 0.4)"
     )
+    parser.add_argument(
+        "--ngl", type=int, default=0, dest="n_gpu_layers",
+        help="camadas offloaded na GPU (padrão 0 = só CPU — o modelo de embeddings é pequeno o bastante)",
+    )
+    parser.add_argument("--ctx-size", type=int, default=2048)
     args = parser.parse_args()
 
     resultados = buscar_codigo(
@@ -428,6 +442,8 @@ def main() -> None:
         top_k=args.top_k,
         timeout_subida=args.timeout_subida,
         peso_bm25=args.peso_bm25,
+        n_gpu_layers=args.n_gpu_layers,
+        ctx_size=args.ctx_size,
     )
     for resultado in resultados:
         print(f"{resultado['arquivo']}:{resultado['linha_inicio']}-{resultado['linha_fim']} "

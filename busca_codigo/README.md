@@ -27,6 +27,14 @@ Desliga o servidor de embeddings no final — mesmo padrão de "agente
 reduzido, sobe sob demanda" usado em
 `visao_mockup/interpretar_mockup.py`.
 
+**Roda em CPU por padrão** (`n_gpu_layers=0`) — o CodeRankEmbed é
+pequeno o bastante pra não precisar de GPU, e isso soma **zero carga
+extra** na GPU que já está ocupada com o modelo de código/visão. Visto
+na prática: GPU sem limite de camadas offloaded travando o driver sob
+carga sustentada — evitamos repetir isso aqui de propósito. Só mude
+`n_gpu_layers` se tiver testado que a placa aguenta a carga combinada,
+monitorando temperatura (`CoreCtrl`, `nvtop`).
+
 ## Divisão em pedaços (chunking)
 
 Arquivos **Python** são cortados por função/classe de nível superior
