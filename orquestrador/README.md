@@ -36,6 +36,13 @@ repetindo até o modelo chamar `finalizar` ou estourar
   (`montar_ferramentas`) se `caminho_binario_busca`/`caminho_modelo_busca`
   forem passados ao `Orquestrador` — sem isso configurado, a ferramenta
   simplesmente não existe pro modelo, em vez de existir e sempre falhar.
+- `delegar_tarefa(instrucao, contexto)` — **opcional**, mesmo padrão de
+  `buscar_codigo` (só existe se `caminho_binario_microagente`/
+  `caminho_modelo_microagente` forem passados). Delega uma sub-tarefa
+  pequena e autocontida a um modelo dedicado, menor e mais rápido (ex.:
+  Qwen2.5-Coder-0.5B) — sem acesso a ferramentas, sem histórico da
+  conversa, só a instrução e um contexto opcional. Ver
+  `microagentes/README.md`.
 - `finalizar(resumo, sucesso)` — encerra o loop.
 
 `ler_arquivo`/`escrever_arquivo` usam a mesma defesa contra path

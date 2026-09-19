@@ -17,6 +17,7 @@ Janela única, minimalista, que reaproveita `analisador_projeto` e
 │ │                                                      ││             │
 │ └────────────────────────────────────────────────────┘│             │
 │ [Executar] [Parar] [Configurar busca semântica…]      │             │
+│ [Configurar microagente…]                             │             │
 │ [Verificar configuração da GPU]                       │             │
 │ [Encerrar todos os llama-server]                      │             │
 │ (status)                                              │             │
@@ -95,6 +96,14 @@ cada clique, não reaproveita um caminho salvo (evita repetir o bug do
 caminho de visão que travava). Opcional: sem configurar, "Executar"
 funciona normalmente, só sem a ferramenta `buscar_codigo` disponível
 pro agente.
+
+O botão **"Configurar microagente…"** aponta o executável `llama-server`
+e o GGUF de um modelo pequeno (ex.: `Qwen2.5-Coder-0.5B`, ver
+`microagentes/README.md`) — mesmo padrão do "Configurar busca
+semântica…": sempre pede os dois de novo a cada clique. Opcional: sem
+configurar, "Executar" funciona normalmente, só sem a ferramenta
+`delegar_tarefa` disponível pro agente principal delegar sub-tarefas
+pequenas a um modelo mais leve.
 
 O botão **"Verificar configuração da GPU"** lista (via
 `motor_ia.listar_processos_llama_server`, lendo `/proc` — Linux) todo

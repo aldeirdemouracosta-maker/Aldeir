@@ -483,6 +483,79 @@ def test_montar_ferramentas_sempre_inclui_listar_arquivos():
     assert "listar_arquivos" in nomes
 
 
+def test_montar_ferramentas_sem_delegacao_nao_inclui_delegar_tarefa():
+    nomes = {f["function"]["name"] for f in orq.montar_ferramentas(busca_disponivel=False)}
+    assert "delegar_tarefa" not in nomes
+
+
+def test_montar_ferramentas_com_delegacao_inclui_delegar_tarefa():
+    nomes = {
+        f["function"]["name"]
+        for f in orq.montar_ferramentas(busca_disponivel=False, delegacao_disponivel=True)
+    }
+    assert "delegar_tarefa" in nomes
+
+
+def test_executar_ferramenta_delegar_tarefa_sem_configuracao_retorna_erro(projeto: Path):
+    resultado = orq.executar_ferramenta(
+        projeto, orq.ConfiguracaoSandbox(), "delegar_tarefa", {"instrucao": "faça X"}
+    )
+    assert resultado.startswith("erro:")
+    assert "não configurado" in resultado
+
+
+def test_executar_ferramenta_delegar_tarefa_chama_modulo_com_argumentos_certos(
+    projeto: Path, monkeypatch, tmp_path: Path
+):
+    capturado = {}
+
+    def _delegar_falso(binario, modelo, instrucao, contexto=None):
+        capturado.update(binario=binario, modelo=modelo, instrucao=instrucao, contexto=contexto)
+        return "def f(): pass"
+
+    import microagentes.delegar_tarefa as modulo_microagente
+
+    monkeypatch.setattr(modulo_microagente, "delegar_tarefa", _delegar_falso)
+
+    resultado = orq.executar_ferramenta(
+        projeto,
+        orq.ConfiguracaoSandbox(),
+        "delegar_tarefa",
+        {"instrucao": "escreva uma função vazia", "contexto": "arquivo x.py"},
+        caminho_binario_microagente=tmp_path / "llama-server",
+        caminho_modelo_microagente=tmp_path / "qwen-0.5b.gguf",
+    )
+
+    assert capturado["instrucao"] == "escreva uma função vazia"
+    assert capturado["contexto"] == "arquivo x.py"
+    assert resultado == "def f(): pass"
+
+
+def test_loop_completo_delega_tarefa_e_finaliza(projeto: Path, servidor_llm_mock, monkeypatch, tmp_path: Path):
+    base_url = servidor_llm_mock(
+        [
+            _msg_tool_call("1", "delegar_tarefa", {"instrucao": "escreva uma função vazia"}),
+            _msg_tool_call("2", "finalizar", {"resumo": "delegado", "sucesso": True}),
+        ]
+    )
+    orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": base_url}
+
+    import microagentes.delegar_tarefa as modulo_microagente
+
+    monkeypatch.setattr(modulo_microagente, "delegar_tarefa", lambda *a, **k: "def f(): pass")
+
+    # caminhos não precisam existir de verdade aqui: executar_ferramenta só
+    # checa se ambos foram passados (bool(...)) antes de chamar o módulo
+    # mockado acima.
+    resultado = orq.Orquestrador(
+        projeto,
+        caminho_binario_microagente=tmp_path / "llama-server",
+        caminho_modelo_microagente=tmp_path / "qwen-0.5b.gguf",
+    ).rodar("delegue a sub-tarefa")
+
+    assert resultado == {"resumo": "delegado", "sucesso": True}
+
+
 def test_executar_ferramenta_buscar_codigo_sem_configuracao_retorna_erro(projeto: Path):
     resultado = orq.executar_ferramenta(
         projeto, orq.ConfiguracaoSandbox(), "buscar_codigo", {"pergunta": "onde fica X"}

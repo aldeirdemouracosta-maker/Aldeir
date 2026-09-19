@@ -172,14 +172,43 @@ FERRAMENTA_BUSCAR_CODIGO = {
     },
 }
 
+FERRAMENTA_DELEGAR_TAREFA = {
+    "type": "function",
+    "function": {
+        "name": "delegar_tarefa",
+        "description": (
+            "Delega uma sub-tarefa pequena e bem definida (gerar uma função "
+            "isolada, resumir um trecho, explicar uma mensagem de erro) para "
+            "um modelo menor e mais rápido, dedicado só a isso — sem acesso "
+            "a ferramentas. Use pra tarefas simples e autocontidas em vez de "
+            "fazer você mesmo; pra tarefas que exigem ler/escrever arquivos "
+            "ou rodar comandos, use as ferramentas normais, não esta."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "instrucao": {"type": "string", "description": "A sub-tarefa em linguagem natural"},
+                "contexto": {
+                    "type": "string",
+                    "description": "Contexto opcional (ex.: trecho de código relevante à sub-tarefa)",
+                },
+            },
+            "required": ["instrucao"],
+        },
+    },
+}
 
-def montar_ferramentas(busca_disponivel: bool) -> list:
-    """FERRAMENTAS + buscar_codigo, se um modelo de embeddings estiver
-    configurado — não faz sentido anunciar ao modelo uma ferramenta que
-    vai sempre falhar por falta de configuração."""
-    if not busca_disponivel:
-        return FERRAMENTAS
-    return FERRAMENTAS + [FERRAMENTA_BUSCAR_CODIGO]
+
+def montar_ferramentas(busca_disponivel: bool, delegacao_disponivel: bool = False) -> list:
+    """FERRAMENTAS + buscar_codigo/delegar_tarefa, cada um só se o
+    respectivo modelo estiver configurado — não faz sentido anunciar ao
+    modelo uma ferramenta que vai sempre falhar por falta de configuração."""
+    ferramentas = list(FERRAMENTAS)
+    if busca_disponivel:
+        ferramentas.append(FERRAMENTA_BUSCAR_CODIGO)
+    if delegacao_disponivel:
+        ferramentas.append(FERRAMENTA_DELEGAR_TAREFA)
+    return ferramentas
 
 
 class MotorIndisponivelError(Exception):
@@ -339,6 +368,8 @@ def executar_ferramenta(
     argumentos: dict,
     caminho_binario_busca: Optional[Path] = None,
     caminho_modelo_busca: Optional[Path] = None,
+    caminho_binario_microagente: Optional[Path] = None,
+    caminho_modelo_microagente: Optional[Path] = None,
 ) -> str:
     if nome == "ler_arquivo":
         try:
@@ -401,6 +432,22 @@ def executar_ferramenta(
             return f"erro: {erro}"
         return json.dumps(resultados, ensure_ascii=False)
 
+    if nome == "delegar_tarefa":
+        if not (caminho_binario_microagente and caminho_modelo_microagente):
+            return "erro: microagente não configurado nesta execução"
+        from microagentes.delegar_tarefa import ServidorMicroagenteIndisponivelError, delegar_tarefa
+
+        try:
+            resposta = delegar_tarefa(
+                caminho_binario_microagente,
+                caminho_modelo_microagente,
+                argumentos["instrucao"],
+                contexto=argumentos.get("contexto"),
+            )
+        except ServidorMicroagenteIndisponivelError as erro:
+            return f"erro: {erro}"
+        return resposta
+
     return f"erro: ferramenta desconhecida {nome!r}"
 
 
@@ -414,6 +461,8 @@ class Orquestrador:
         max_tokens_resposta: int = 512,
         caminho_binario_busca: Optional[Path] = None,
         caminho_modelo_busca: Optional[Path] = None,
+        caminho_binario_microagente: Optional[Path] = None,
+        caminho_modelo_microagente: Optional[Path] = None,
     ):
         self.raiz_projeto = raiz_projeto
         self.config_sandbox = config_sandbox or ConfiguracaoSandbox()
@@ -428,6 +477,11 @@ class Orquestrador:
         # busca_codigo/README.md.
         self.caminho_binario_busca = caminho_binario_busca
         self.caminho_modelo_busca = caminho_modelo_busca
+        # Opcional: só oferece a ferramenta delegar_tarefa se um modelo
+        # pequeno de microagente (ex.: Qwen2.5-Coder-0.5B) estiver
+        # configurado — ver microagentes/README.md.
+        self.caminho_binario_microagente = caminho_binario_microagente
+        self.caminho_modelo_microagente = caminho_modelo_microagente
 
     def rodar(
         self,
@@ -475,7 +529,8 @@ class Orquestrador:
             {"role": "user", "content": mensagem_usuario},
         ]
         ferramentas_disponiveis = montar_ferramentas(
-            bool(self.caminho_binario_busca and self.caminho_modelo_busca)
+            bool(self.caminho_binario_busca and self.caminho_modelo_busca),
+            delegacao_disponivel=bool(self.caminho_binario_microagente and self.caminho_modelo_microagente),
         )
 
         for iteracao in range(self.max_iteracoes):
@@ -518,6 +573,8 @@ class Orquestrador:
                     argumentos,
                     caminho_binario_busca=self.caminho_binario_busca,
                     caminho_modelo_busca=self.caminho_modelo_busca,
+                    caminho_binario_microagente=self.caminho_binario_microagente,
+                    caminho_modelo_microagente=self.caminho_modelo_microagente,
                 )
                 avisar(f"  → {resultado[:200]}")
                 mensagens.append(
@@ -578,6 +635,18 @@ def main() -> None:
         default=None,
         help="GGUF do modelo de embeddings (ex.: CodeRankEmbed) — ver busca_codigo/README.md",
     )
+    parser.add_argument(
+        "--microagente-binario",
+        type=Path,
+        default=None,
+        help="executável llama-server pra servir o modelo do microagente (ativa a ferramenta delegar_tarefa)",
+    )
+    parser.add_argument(
+        "--microagente-modelo",
+        type=Path,
+        default=None,
+        help="GGUF de um modelo pequeno pra sub-tarefas (ex.: Qwen2.5-Coder-0.5B) — ver microagentes/README.md",
+    )
     args = parser.parse_args()
 
     partes_contexto = []
@@ -598,6 +667,8 @@ def main() -> None:
         max_tokens_resposta=args.max_tokens_resposta,
         caminho_binario_busca=args.busca_binario,
         caminho_modelo_busca=args.busca_modelo,
+        caminho_binario_microagente=args.microagente_binario,
+        caminho_modelo_microagente=args.microagente_modelo,
     )
     try:
         resultado = orquestrador.rodar(args.instrucao, contexto_extra=contexto_extra)

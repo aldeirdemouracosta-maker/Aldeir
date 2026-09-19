@@ -392,6 +392,53 @@ mostra o final do stderr do `llama-server` — normalmente falta de
 outro modelo carregado (confira `nvidia-smi`/`radeontop` e desligue o
 modelo de código antes de testar este).
 
+## 12. Delegar sub-tarefas a um microagente
+
+`microagentes/delegar_tarefa.py` sobe um modelo pequeno (0,3B–1B) sob
+demanda pra resolver sub-tarefas isoladas (gerar uma função pequena,
+resumir um trecho, explicar um erro) sem envolver o modelo principal —
+mesmo padrão sequencial de `busca_codigo`/`visao_mockup`, nunca dois
+modelos ao mesmo tempo na GPU:
+
+```bash
+python3 -m microagentes.delegar_tarefa \
+  --binario ./llama.cpp/build/bin/llama-server \
+  --modelo ~/modelos/qwen2.5-coder-0.5b-instruct.gguf \
+  --instrucao "escreva uma função que valida um CPF"
+```
+
+**Modelo recomendado**: `Qwen2.5-Coder-0.5B-Instruct` (Apache-2.0,
+GGUF oficial) — mesma família do `Qwen2.5-Coder-3B/7B` já usados no
+projeto:
+
+```bash
+./llama.cpp/build/bin/llama-server \
+  -hf Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF \
+  --port 8083 --host 127.0.0.1 --jinja \
+  -ngl 20 --ctx-size 4096
+```
+
+Outros candidatos avaliados pra esse papel (microagentes 0,3B–1B):
+`ERNIE-4.5-0.3B` (Baidu, Apache-2.0, GGUF confirmado, suporte nativo
+no llama.cpp pra variante densa — extremamente pequeno) e `MiniCPM5-1B`
+(OpenBMB, mesma geração do MiniCPM5-2B já avaliado como coordenador,
+com skill oficial de deploy llama.cpp + tool-calling documentado —
+mais pesado que o Qwen 0.5B, mas mais testado pra esse uso).
+
+**Filtro arquitetural importante**: nem todo modelo pequeno "GGUF
+existe" serve aqui. Modelos T5 (encoder-decoder, ex.: FRED-T5,
+Occiglot5) não têm chat template/tool-calling no `llama-server` mesmo
+convertidos pra GGUF — servem pra tradução/geração de texto solto, não
+pra seguir uma instrução delegada. Modelos base sem fine-tune de chat
+(ex.: Mamba 130M) têm o mesmo problema — sem instruct tuning, não
+seguem `PROMPT_SISTEMA_PADRAO`. Confirme "Instruct"/"Chat" no nome do
+checkpoint e chat template documentado antes de adotar um candidato
+novo pra esse papel.
+
+Na interface, "Configurar microagente…" aponta o binário e o modelo —
+opcional, sem isso a ferramenta `delegar_tarefa` simplesmente não
+aparece pro agente principal.
+
 ## Achados testando contra um modelo real (Xeon + RX 580, Qwen2.5-Coder-7B)
 
 Estes já foram encontrados e corrigidos nesta sessão — deixados aqui

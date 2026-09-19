@@ -125,6 +125,8 @@ class TrabalhadorOrquestrador(QObject):
         contexto_extra: Optional[str],
         caminho_binario_busca: Optional[Path] = None,
         caminho_modelo_busca: Optional[Path] = None,
+        caminho_binario_microagente: Optional[Path] = None,
+        caminho_modelo_microagente: Optional[Path] = None,
     ):
         super().__init__()
         self.diretorio = diretorio
@@ -132,6 +134,8 @@ class TrabalhadorOrquestrador(QObject):
         self.contexto_extra = contexto_extra
         self.caminho_binario_busca = caminho_binario_busca
         self.caminho_modelo_busca = caminho_modelo_busca
+        self.caminho_binario_microagente = caminho_binario_microagente
+        self.caminho_modelo_microagente = caminho_modelo_microagente
         self._parar_solicitado = False
 
     def solicitar_parada(self) -> None:
@@ -147,6 +151,8 @@ class TrabalhadorOrquestrador(QObject):
                 self.diretorio,
                 caminho_binario_busca=self.caminho_binario_busca,
                 caminho_modelo_busca=self.caminho_modelo_busca,
+                caminho_binario_microagente=self.caminho_binario_microagente,
+                caminho_modelo_microagente=self.caminho_modelo_microagente,
             )
             resultado = orquestrador.rodar(
                 self.instrucao,
@@ -276,6 +282,14 @@ class JanelaPrincipal(QMainWindow):
             "configurado, o Executar funciona normalmente, só sem essa ferramenta."
         )
         self.botao_configurar_busca.clicked.connect(self._configurar_busca_semantica)
+        self.botao_configurar_microagente = QPushButton("Configurar microagente…")
+        self.botao_configurar_microagente.setToolTip(
+            "Aponta o llama-server e um modelo pequeno (ex.: Qwen2.5-Coder-0.5B) — "
+            "opcional, habilita a ferramenta delegar_tarefa pro agente principal "
+            "delegar sub-tarefas simples. Sem isso configurado, o Executar funciona "
+            "normalmente, só sem essa ferramenta."
+        )
+        self.botao_configurar_microagente.clicked.connect(self._configurar_microagente)
         self.botao_verificar_gpu = QPushButton("Verificar configuração da GPU")
         self.botao_verificar_gpu.setToolTip(
             "Lista processos llama-server rodando agora e avisa se algum foi "
@@ -294,6 +308,7 @@ class JanelaPrincipal(QMainWindow):
         linha_executar.addWidget(self.botao_executar)
         linha_executar.addWidget(self.botao_parar)
         linha_executar.addWidget(self.botao_configurar_busca)
+        linha_executar.addWidget(self.botao_configurar_microagente)
         linha_executar.addWidget(self.botao_verificar_gpu)
         linha_executar.addWidget(self.botao_encerrar_gpu)
         layout.addLayout(linha_executar)
@@ -594,6 +609,25 @@ class JanelaPrincipal(QMainWindow):
             "Busca semântica configurada — a ferramenta buscar_codigo fica disponível no próximo \"Executar\"."
         )
 
+    def _configurar_microagente(self) -> None:
+        # Mesmo padrão de _configurar_busca_semantica: sempre pede de novo,
+        # não reaproveita caminho salvo.
+        binario, _ = QFileDialog.getOpenFileName(
+            self, "Escolher o executável llama-server (para o microagente)", "", "Todos os arquivos (*)"
+        )
+        if not binario:
+            return
+        modelo, _ = QFileDialog.getOpenFileName(
+            self, "Escolher o modelo do microagente (GGUF, ex.: Qwen2.5-Coder-0.5B)", "", "Modelos GGUF (*.gguf)"
+        )
+        if not modelo:
+            return
+        self._configuracoes.setValue("microagente/binario", binario)
+        self._configuracoes.setValue("microagente/modelo", modelo)
+        self.rotulo_status.setText(
+            "Microagente configurado — a ferramenta delegar_tarefa fica disponível no próximo \"Executar\"."
+        )
+
     def _aplicar_exemplo_instrucao(self, indice: int) -> None:
         if indice <= 0:
             return
@@ -634,9 +668,24 @@ class JanelaPrincipal(QMainWindow):
         caminho_binario_busca = Path(binario_busca) if binario_busca and Path(binario_busca).is_file() else None
         caminho_modelo_busca = Path(modelo_busca) if modelo_busca and Path(modelo_busca).is_file() else None
 
+        binario_microagente = self._configuracoes.value("microagente/binario", "")
+        modelo_microagente = self._configuracoes.value("microagente/modelo", "")
+        caminho_binario_microagente = (
+            Path(binario_microagente) if binario_microagente and Path(binario_microagente).is_file() else None
+        )
+        caminho_modelo_microagente = (
+            Path(modelo_microagente) if modelo_microagente and Path(modelo_microagente).is_file() else None
+        )
+
         thread = QThread(self)
         trabalhador = TrabalhadorOrquestrador(
-            diretorio, instrucao, contexto_extra, caminho_binario_busca, caminho_modelo_busca
+            diretorio,
+            instrucao,
+            contexto_extra,
+            caminho_binario_busca,
+            caminho_modelo_busca,
+            caminho_binario_microagente,
+            caminho_modelo_microagente,
         )
         trabalhador.moveToThread(thread)
         thread.started.connect(trabalhador.rodar)
@@ -771,7 +820,8 @@ class JanelaPrincipal(QMainWindow):
             return
 
         for nome_ferramenta in (
-            "ler_arquivo", "escrever_arquivo", "listar_arquivos", "executar_comando", "buscar_codigo", "finalizar",
+            "ler_arquivo", "escrever_arquivo", "listar_arquivos", "executar_comando",
+            "buscar_codigo", "delegar_tarefa", "finalizar",
         ):
             if linha.startswith(nome_ferramenta + "("):
                 self._ultima_ferramenta_chamada = nome_ferramenta
