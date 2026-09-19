@@ -102,6 +102,40 @@ def test_executar_orquestrador_escreve_arquivo_e_mostra_log(qtbot, projeto: Path
     assert (projeto / "app.py").read_text() == "def soma(a, b):\n    return a + b\n"
 
 
+def test_executar_sem_diagnostico_mostra_aviso_mas_nao_bloqueia(qtbot, projeto: Path, servidor_llm_mock):
+    base_url = servidor_llm_mock([_msg_tool_call("1", "finalizar", {"resumo": "ok", "sucesso": True})])
+    orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": base_url}
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela.campo_pasta.setText(str(projeto))
+    janela.campo_instrucao.setPlainText("faça algo")
+    assert janela._ultimo_diagnostico is None
+
+    janela.botao_executar.click()
+    qtbot.waitUntil(lambda: janela.botao_executar.isEnabled(), timeout=5000)
+
+    assert "Sem diagnóstico" in janela.area_log.toPlainText()
+    assert janela.rotulo_status.text() == "Concluído com sucesso."
+
+
+def test_executar_com_diagnostico_nao_mostra_aviso(qtbot, projeto: Path, servidor_llm_mock):
+    base_url = servidor_llm_mock([_msg_tool_call("1", "finalizar", {"resumo": "ok", "sucesso": True})])
+    orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": base_url}
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela.campo_pasta.setText(str(projeto))
+    janela.botao_analisar.click()
+    qtbot.waitUntil(lambda: janela.botao_analisar.isEnabled(), timeout=5000)
+
+    janela.campo_instrucao.setPlainText("faça algo")
+    janela.botao_executar.click()
+    qtbot.waitUntil(lambda: janela.botao_executar.isEnabled(), timeout=5000)
+
+    assert "Sem diagnóstico" not in janela.area_log.toPlainText()
+
+
 def test_executar_sem_instrucao_nao_dispara_nada(qtbot, projeto: Path):
     janela = JanelaPrincipal()
     qtbot.addWidget(janela)
@@ -407,7 +441,7 @@ def test_gerar_mockup_simples_cria_arquivo_e_atualiza_estado(qtbot):
     assert "Mockup simples gerado" in janela.area_log.toPlainText()
 
 
-def test_gerar_mockup_simples_usa_linhas_da_instrucao_como_elementos(qtbot, monkeypatch):
+def test_gerar_mockup_simples_usa_linhas_do_campo_de_elementos(qtbot, monkeypatch):
     capturado = {}
 
     def _gerar_falso(caminho, elementos=None, **kwargs):
@@ -420,11 +454,33 @@ def test_gerar_mockup_simples_usa_linhas_da_instrucao_como_elementos(qtbot, monk
 
     janela = JanelaPrincipal()
     qtbot.addWidget(janela)
-    janela.campo_instrucao.setPlainText("Campo usuário\nBotão Entrar")
+    janela.campo_elementos_mockup.setPlainText("Campo usuário\nBotão Entrar")
 
     janela.botao_gerar_mockup_simples.click()
 
     assert capturado["elementos"] == ["Campo usuário", "Botão Entrar"]
+
+
+def test_gerar_mockup_simples_nao_usa_texto_do_campo_instrucao(qtbot, monkeypatch):
+    # campo_instrucao e campo_elementos_mockup são propositalmente
+    # separados agora — texto na instrução não deve vazar pro mockup.
+    capturado = {}
+
+    def _gerar_falso(caminho, elementos=None, **kwargs):
+        capturado["elementos"] = elementos
+        caminho.parent.mkdir(parents=True, exist_ok=True)
+        caminho.write_bytes(b"")
+        return caminho
+
+    monkeypatch.setattr(jp, "gerar_mockup_simples", _gerar_falso)
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela.campo_instrucao.setPlainText("termine a implementação pendente")
+
+    janela.botao_gerar_mockup_simples.click()
+
+    assert capturado["elementos"] is None
 
 
 def test_trocar_pasta_do_projeto_esquece_diagnostico_e_mockup_da_pasta_anterior(qtbot):

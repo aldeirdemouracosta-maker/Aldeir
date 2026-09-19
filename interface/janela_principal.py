@@ -175,6 +175,12 @@ class JanelaPrincipal(QMainWindow):
         linha_pasta.addWidget(self.botao_gerar_mockup_simples)
         layout.addLayout(linha_pasta)
 
+        layout.addWidget(QLabel("Elementos do mockup simples (opcional — uma linha por elemento; vazio usa lista padrão)"))
+        self.campo_elementos_mockup = QPlainTextEdit()
+        self.campo_elementos_mockup.setPlaceholderText("ex.: Campo usuário\nBotão Entrar")
+        self.campo_elementos_mockup.setFixedHeight(50)
+        layout.addWidget(self.campo_elementos_mockup)
+
         linha_acoes_diag = QHBoxLayout()
         self.botao_analisar = QPushButton("Analisar projeto")
         self.botao_analisar.clicked.connect(self._analisar_projeto)
@@ -403,8 +409,8 @@ class JanelaPrincipal(QMainWindow):
     def _gerar_mockup_simples(self) -> None:
         diretorio = Path(tempfile.mkdtemp(prefix="fabrica_local_ia_mockup_"))
         caminho_imagem = diretorio / "mockup_simples.png"
-        instrucao = self.campo_instrucao.toPlainText().strip()
-        elementos = [linha.strip() for linha in instrucao.splitlines() if linha.strip()] or None
+        texto_elementos = self.campo_elementos_mockup.toPlainText().strip()
+        elementos = [linha.strip() for linha in texto_elementos.splitlines() if linha.strip()] or None
 
         gerar_mockup_simples(caminho_imagem, elementos=elementos)
 
@@ -493,6 +499,11 @@ class JanelaPrincipal(QMainWindow):
         self.botao_executar.setEnabled(False)
         self.botao_parar.setEnabled(True)
         self.area_log.clear()
+        if self._ultimo_diagnostico is None:
+            self.area_log.appendPlainText(
+                "⚠ Sem diagnóstico — o modelo vai chutar a estrutura do projeto. "
+                "Considere clicar em \"Analisar projeto\" antes de \"Executar\" da próxima vez.\n"
+            )
         self.rotulo_status.setText("Executando…")
 
         thread = QThread(self)

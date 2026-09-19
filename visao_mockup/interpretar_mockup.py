@@ -27,7 +27,6 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Optional
 
 from motor_ia.selecionar_motor import endpoint_responde
 

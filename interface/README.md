@@ -7,14 +7,16 @@ Janela única, minimalista, que reaproveita `analisador_projeto` e
 ┌──────────────────────────────────────────────────────┬─────────────┐
 │ Pasta do projeto [___] [Procurar…] [Abrir ZIP…]       │ Diagnóstico │
 │                  [Gerar mockup simples…]              │ (dockável,  │
-│ [Analisar projeto] [Usar pasta extraída mesmo assim]  │  arrastável)│
+│ Elementos do mockup simples (opcional)                │  arrastável)│
+│ ┌────────────────────────────────────────────────────┐│             │
+│ [Analisar projeto] [Usar pasta extraída mesmo assim]  │             │
 │ [Descrever mockup…]  (status da descrição)            │             │
 │                                                        │             │
 │ Instrução                                             │             │
 │ ┌────────────────────────────────────────────────────┐│             │
 │ │                                                      ││             │
 │ └────────────────────────────────────────────────────┘│             │
-│ [Executar]                                            │             │
+│ [Executar] [Parar]                                    │             │
 │ (status)                                              │             │
 ├────────────────────────────────────────────────────────────────────┤
 │ Progresso (dockável, arrastável)                                    │
@@ -49,6 +51,11 @@ Fluxo: escolher a pasta do projeto (ou importar um `.zip`, ver abaixo)
 contexto) → escrever a instrução → "Executar". O botão fica
 desabilitado durante a execução; o painel de progresso mostra cada
 chamada de ferramenta e o resultado.
+
+Clicar em "Executar" sem ter rodado "Analisar projeto" antes não é
+bloqueado, mas mostra um aviso no painel de progresso — sem diagnóstico
+como contexto, o modelo tende a chutar a estrutura do projeto (visto na
+prática: um resumo citando arquivos que não existiam na pasta certa).
 
 O botão **"Parar"** (ao lado de "Executar", habilitado só durante uma
 execução) pede pro orquestrador parar antes da próxima chamada ao
@@ -91,11 +98,14 @@ projeto atual.
 botões, listas) desenhados com `QPainter`, sem nenhum modelo de IA e sem
 custo de GPU/VRAM, instantâneo. Serve como ponto de partida rascunhado
 quando ainda não existe nenhuma imagem de mockup de verdade: se o campo
-"Instrução" já tiver texto, cada linha vira o rótulo de um elemento; caso
-contrário usa uma lista padrão. O PNG gerado fica num diretório
-temporário, e "Descrever mockup…" já abre o diálogo de escolha de imagem
-nessa mesma pasta — fecha o ciclo gerar → descrever → usar como contexto
-no "Executar".
+"Elementos do mockup simples" (separado da "Instrução" — um serve pra
+descrever o wireframe, o outro é a instrução em linguagem natural pro
+orquestrador; eram o mesmo campo antes e misturavam os dois propósitos)
+tiver texto, cada linha vira o rótulo de um elemento; caso contrário usa
+uma lista padrão. O PNG gerado fica num diretório temporário, e
+"Descrever mockup…" já abre o diálogo de escolha de imagem nessa mesma
+pasta — fecha o ciclo gerar → descrever → usar como contexto no
+"Executar".
 
 Ao lado do PNG, também é salvo um JSON (mesmo nome, extensão `.json`,
 via `caminho_layout_json`) com a posição/tamanho exatos de cada

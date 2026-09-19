@@ -36,7 +36,19 @@ PROMPT_SISTEMA = """Você é um agente de programação operando sobre um projet
 local. Use as ferramentas disponíveis para ler arquivos antes de
 editá-los, faça mudanças mínimas e objetivas, rode comandos para
 validar o que fizer, e chame `finalizar` com um resumo assim que a
-instrução estiver cumprida ou se não for possível cumpri-la."""
+instrução estiver cumprida ou se não for possível cumpri-la.
+
+Duas limitações do ambiente que já são esperadas, não bugs a contornar:
+- `executar_comando` não tem rede e não mantém estado entre chamadas —
+  cada comando roda isolado do zero, então `pip install`, `curl`,
+  `git clone` sempre vão falhar, e ativar um venv numa chamada não
+  continua valendo na próxima. Não insista tentando de novo: assuma que
+  as dependências já estão instaladas e rode o comando final direto
+  (ex.: `pytest`, não `source venv/bin/activate && pytest`).
+- `escrever_arquivo` sobrescreve o arquivo inteiro. Leia o conteúdo
+  atual com `ler_arquivo` antes de editar, e nunca reescreva um arquivo
+  inteiro só para corrigir um trecho pequeno — isso apaga tudo que não
+  fazia parte do problema."""
 
 FERRAMENTAS = [
     {
@@ -57,7 +69,12 @@ FERRAMENTAS = [
         "type": "function",
         "function": {
             "name": "escrever_arquivo",
-            "description": "Cria ou sobrescreve um arquivo de texto dentro do projeto.",
+            "description": (
+                "Cria ou sobrescreve um arquivo de texto dentro do projeto. "
+                "ATENÇÃO: sobrescreve o arquivo inteiro — leia com ler_arquivo antes "
+                "de editar um arquivo existente, e inclua todo o conteúdo que deve "
+                "continuar, não só o trecho alterado."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -72,7 +89,12 @@ FERRAMENTAS = [
         "type": "function",
         "function": {
             "name": "executar_comando",
-            "description": "Roda um comando isolado (sandbox, sem rede) com a raiz do projeto como diretório de trabalho.",
+            "description": (
+                "Roda um comando isolado (sandbox, sem rede) com a raiz do projeto como "
+                "diretório de trabalho. Cada chamada é um processo novo: nada persiste "
+                "entre chamadas (variáveis de ambiente, `cd`, venv ativado). Sem rede: "
+                "não tente `pip install`, `curl` ou `git clone` — sempre vão falhar."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
