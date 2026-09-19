@@ -44,7 +44,11 @@ EXTENSAO_PARA_LINGUAGEM = {
     ".dart": "Dart",
 }
 
-PADRAO_TODO = re.compile(rb"#.*\b(TODO|FIXME|XXX)\b|//.*\b(TODO|FIXME|XXX)\b", re.IGNORECASE)
+# Sem re.IGNORECASE de propósito: TODO/FIXME/XXX são convenções sempre em
+# maiúsculas — case-insensitive faria "TODO" colidir com a palavra comum
+# "todo" (português para "every/all"), gerando falso positivo em qualquer
+# comentário como "nem todo motor obedece..." (visto na prática).
+PADRAO_TODO = re.compile(rb"#.*\b(TODO|FIXME|XXX)\b|//.*\b(TODO|FIXME|XXX)\b")
 
 LIMITE_LINHAS_MODULO_STUB = 3  # linhas de código (sem contar comentários/em branco)
 

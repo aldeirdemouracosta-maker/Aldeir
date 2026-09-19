@@ -65,6 +65,21 @@ def test_encontrar_todos(projeto_incompleto: Path):
     assert "TODO" in achados[0].detalhe
 
 
+def test_encontrar_todos_ignora_palavra_todo_em_portugues(tmp_path: Path):
+    # "todo" (português para "every/all") não pode ser confundido com o
+    # marcador de código TODO — visto na prática num comentário real do
+    # projeto ("nem todo motor obedece...").
+    (tmp_path / "app.py").write_text(
+        "# nem todo motor obedece a mesma prioridade\n"
+        "def selecionar():\n"
+        "    return True\n"
+    )
+
+    achados = encontrar_todos(tmp_path)
+
+    assert achados == []
+
+
 def test_encontrar_funcoes_incompletas_detecta_pass_raise_e_so_docstring(projeto_incompleto: Path):
     achados = encontrar_funcoes_incompletas_python(projeto_incompleto)
     nomes = {a.detalhe for a in achados}

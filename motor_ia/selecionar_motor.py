@@ -74,19 +74,23 @@ class MotorIA:
 
 def motores_conhecidos() -> list:
     """Ordem de prioridade quando mais de um estiver disponivel ao mesmo
-    tempo. LM Studio e Ollama sao opcoes futuras: hoje ficam de fora
+    tempo. llama.cpp (Vulkan) e o motor padrao do projeto (nao depende de
+    AVX2, unico eligivel no hardware de referencia) e por isso vem
+    primeiro. LM Studio e Ollama sao opcoes futuras: hoje ficam de fora
     automaticamente por falta de AVX2 ou por nao estarem rodando, e
-    entram sozinhas quando o hardware/instalacao permitir.
+    entram sozinhas quando o hardware/instalacao permitir — mas nunca
+    devem ser escolhidas no lugar do motor padrao so por estarem de pe
+    ao mesmo tempo.
     """
     return [
         MotorIA(
-            nome="LM Studio",
-            base_url="http://localhost:1234/v1",
-            requisito_hardware=tem_avx2,
+            nome="llama.cpp (Vulkan)",
+            base_url="http://localhost:8080/v1",
+            requisito_hardware=tem_vulkan,
             verificar_disponivel=lambda: endpoint_responde(
-                "http://localhost:1234/v1/models"
+                "http://localhost:8080/v1/models"
             ),
-            observacao="Exige AVX2 (Linux/Windows x64). Opcao futura pos-upgrade.",
+            observacao="Motor padrao atual: nao depende de AVX2, usa RADV/Mesa.",
         ),
         MotorIA(
             nome="Ollama",
@@ -98,13 +102,13 @@ def motores_conhecidos() -> list:
             observacao="Backend Vulkan ainda experimental (2026). Opcao futura/paralela.",
         ),
         MotorIA(
-            nome="llama.cpp (Vulkan)",
-            base_url="http://localhost:8080/v1",
-            requisito_hardware=tem_vulkan,
+            nome="LM Studio",
+            base_url="http://localhost:1234/v1",
+            requisito_hardware=tem_avx2,
             verificar_disponivel=lambda: endpoint_responde(
-                "http://localhost:8080/v1/models"
+                "http://localhost:1234/v1/models"
             ),
-            observacao="Motor padrao atual: nao depende de AVX2, usa RADV/Mesa.",
+            observacao="Exige AVX2 (Linux/Windows x64). Opcao futura pos-upgrade.",
         ),
     ]
 

@@ -2,7 +2,7 @@ import http.server
 import socket
 import threading
 
-from motor_ia.selecionar_motor import MotorIA, endpoint_responde, selecionar_motor
+from motor_ia.selecionar_motor import MotorIA, endpoint_responde, motores_conhecidos, selecionar_motor
 
 
 class _HandlerOk(http.server.BaseHTTPRequestHandler):
@@ -61,3 +61,11 @@ def test_selecionar_motor_nenhum_disponivel():
     resultado = selecionar_motor(motores)
     assert resultado["escolhido"] is None
     assert "mensagem" in resultado
+
+
+def test_motores_conhecidos_prioriza_llama_cpp_sobre_ollama_e_lm_studio():
+    # llama.cpp (Vulkan) e o motor padrao do projeto (nao depende de AVX2) —
+    # se Ollama ou LM Studio tambem estiverem de pe ao mesmo tempo, o padrao
+    # nao pode perder a prioridade so por vir depois na lista.
+    nomes = [motor.nome for motor in motores_conhecidos()]
+    assert nomes[0] == "llama.cpp (Vulkan)"
