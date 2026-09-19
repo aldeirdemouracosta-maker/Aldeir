@@ -61,7 +61,10 @@ class _ProcessoFalso:
         pass
 
 
-def test_delegar_tarefa_passa_ngl_e_ctx_size_padrao_conservadores(tmp_path: Path, monkeypatch):
+def test_delegar_tarefa_usa_cpu_por_padrao(tmp_path: Path, monkeypatch):
+    # n_gpu_layers=0 por padrao: o coordenador continua rodando na GPU em
+    # paralelo (delegar_tarefa nao desliga nada alem do que ele mesmo sobe),
+    # entao offload aqui por padrao somaria carga concorrente na GPU.
     import microagentes.delegar_tarefa as modulo
 
     binario = tmp_path / "llama-server"
@@ -84,7 +87,7 @@ def test_delegar_tarefa_passa_ngl_e_ctx_size_padrao_conservadores(tmp_path: Path
 
     assert resultado == "resposta"
     comando = comandos_capturados[0]
-    assert comando[comando.index("-ngl") + 1] == "20"
+    assert comando[comando.index("-ngl") + 1] == "0"
     assert comando[comando.index("--ctx-size") + 1] == "4096"
 
 
@@ -106,11 +109,12 @@ def test_delegar_tarefa_aceita_ngl_customizado(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(modulo.subprocess, "Popen", _popen_falso)
     monkeypatch.setattr(modulo, "_aguardar_pronto", lambda base_url, timeout: None)
     monkeypatch.setattr(modulo, "gerar_resposta", lambda *a, **k: "resposta")
+    monkeypatch.setattr(modulo, "temperatura_gpu_celsius", lambda: 40.0)
 
-    modulo.delegar_tarefa(binario, modelo, "instrução", n_gpu_layers=0, ctx_size=2048)
+    modulo.delegar_tarefa(binario, modelo, "instrução", n_gpu_layers=20, ctx_size=2048)
 
     comando = comandos_capturados[0]
-    assert comando[comando.index("-ngl") + 1] == "0"
+    assert comando[comando.index("-ngl") + 1] == "20"
     assert comando[comando.index("--ctx-size") + 1] == "2048"
 
 
@@ -131,7 +135,7 @@ def test_delegar_tarefa_recusa_com_gpu_quente(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(modulo.subprocess, "Popen", _popen_que_nao_deveria_ser_chamado)
 
     with pytest.raises(ServidorMicroagenteIndisponivelError, match="acima do limite seguro"):
-        delegar_tarefa(binario, modelo, "instrução")
+        delegar_tarefa(binario, modelo, "instrução", n_gpu_layers=20)
 
 
 def test_delegar_tarefa_ignora_temperatura_se_ngl_zero(tmp_path: Path, monkeypatch):

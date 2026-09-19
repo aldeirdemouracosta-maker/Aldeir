@@ -98,7 +98,7 @@ def delegar_tarefa(
     timeout_subida: float = 60,
     timeout_geracao: int = 120,
     max_tokens: int = 1024,
-    n_gpu_layers: int = 20,
+    n_gpu_layers: int = 0,
     ctx_size: int = 4096,
     limite_temperatura_celsius: Optional[float] = LIMITE_TEMPERATURA_GPU_CELSIUS,
 ) -> str:
@@ -106,13 +106,21 @@ def delegar_tarefa(
     manda a instrução (sem tool calling), devolve a resposta gerada,
     desliga o servidor no final.
 
-    `n_gpu_layers`/`ctx_size` têm o mesmo padrão conservador dos outros
-    agentes reduzidos do projeto — sem limite, o llama-server pode
-    empurrar a GPU no máximo sob carga sustentada (visto na prática
-    numa RX 580, ver TESTE_LOCAL.md). Também confere a temperatura da
-    GPU (sysfs) antes de subir o servidor e recusa se estiver acima de
-    `limite_temperatura_celsius`, mesma lógica de `buscar_codigo`/
-    `interpretar_mockup`."""
+    `n_gpu_layers=0` por padrão (CPU-only) — diferente de
+    `interpretar_mockup`/`buscar_codigo` com GPU ligada por padrão:
+    aqui o microagente roda **ao mesmo tempo** que o servidor do
+    coordenador (que continua de pé, o `delegar_tarefa` não desliga
+    nada além do que ele mesmo sobe), então offload na GPU aqui soma
+    carga concorrente, não sequencial. Um modelo de 0,3B–1B é leve o
+    bastante pra rodar em CPU sem ficar impraticável. Suba pra GPU
+    (`n_gpu_layers>0`) só depois de confirmar que o hardware está
+    estável sob carga de um único modelo — visto na prática: o
+    incidente que motivou toda essa checagem de temperatura aconteceu
+    com um único modelo na GPU, então dois ao mesmo tempo é carga
+    ainda maior. Mesmo assim, se `n_gpu_layers>0`, confere a
+    temperatura da GPU (sysfs) antes de subir o servidor e recusa se
+    estiver acima de `limite_temperatura_celsius`, mesma lógica de
+    `buscar_codigo`/`interpretar_mockup`. Ver TESTE_LOCAL.md."""
     if not (caminho_binario_llama_server.is_file() and os.access(caminho_binario_llama_server, os.X_OK)):
         raise ServidorMicroagenteIndisponivelError(
             f"binario do llama-server nao encontrado ou sem permissao de execucao: {caminho_binario_llama_server}"
@@ -175,8 +183,11 @@ def main() -> None:
     parser.add_argument("--timeout-geracao", type=int, default=120)
     parser.add_argument("--max-tokens", type=int, default=1024)
     parser.add_argument(
-        "--ngl", type=int, default=20, dest="n_gpu_layers",
-        help="camadas offloaded na GPU (padrão conservador — evite offload total sem monitorar temperatura)",
+        "--ngl", type=int, default=0, dest="n_gpu_layers",
+        help=(
+            "camadas offloaded na GPU (padrão 0 = CPU-only — o coordenador continua "
+            "rodando na GPU em paralelo, então offload aqui soma carga concorrente)"
+        ),
     )
     parser.add_argument("--ctx-size", type=int, default=4096)
     parser.add_argument(

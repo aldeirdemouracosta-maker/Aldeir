@@ -396,9 +396,18 @@ modelo de código antes de testar este).
 
 `microagentes/delegar_tarefa.py` sobe um modelo pequeno (0,3B–1B) sob
 demanda pra resolver sub-tarefas isoladas (gerar uma função pequena,
-resumir um trecho, explicar um erro) sem envolver o modelo principal —
-mesmo padrão sequencial de `busca_codigo`/`visao_mockup`, nunca dois
-modelos ao mesmo tempo na GPU:
+resumir um trecho, explicar um erro) sem envolver o modelo principal.
+
+Diferente de `busca_codigo`/`visao_mockup`, o servidor do coordenador
+**continua rodando** enquanto este sobe o dele — coordenador (~3-7B) +
+microagente (0,3-1B) juntos ficam bem abaixo de 8GB de VRAM, então
+cabem os dois ao mesmo tempo (diferente de código+visão, ambos ~7B,
+que não cabem juntos). Por isso o padrão aqui é **CPU-only**
+(`-ngl 0`) — rodar os dois na GPU ao mesmo tempo soma carga
+concorrente, e o incidente que motivou a checagem de temperatura
+aconteceu com um único modelo na GPU. Valide primeiro em CPU; só suba
+o microagente pra GPU depois de confirmar que o hardware está estável
+sob carga de um único modelo (o coordenador) de novo:
 
 ```bash
 python3 -m microagentes.delegar_tarefa \
@@ -409,13 +418,12 @@ python3 -m microagentes.delegar_tarefa \
 
 **Modelo recomendado**: `Qwen2.5-Coder-0.5B-Instruct` (Apache-2.0,
 GGUF oficial) — mesma família do `Qwen2.5-Coder-3B/7B` já usados no
-projeto:
+projeto. Roda em CPU por padrão (`--ngl` omitido = 0):
 
 ```bash
 ./llama.cpp/build/bin/llama-server \
   -hf Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF \
-  --port 8083 --host 127.0.0.1 --jinja \
-  -ngl 20 --ctx-size 4096
+  --port 8083 --host 127.0.0.1 --jinja --ctx-size 4096
 ```
 
 Outros candidatos avaliados pra esse papel (microagentes 0,3B–1B):

@@ -16,11 +16,21 @@ de 0,3B–1B resolve isso mais rápido — e mais leve em VRAM/CPU — do que
 rodar tudo no coordenador, que fica livre pra decidir o que fazer com
 o resultado (ex.: escrever num arquivo, seguir pra próxima etapa).
 
-Isso **não é** um "revezamento" com múltiplos servidores rodando ao
-mesmo tempo — nesta máquina (RX 580, 8GB VRAM) o modelo de código e o
-de visão já não cabem juntos, então microagente algum sobe em paralelo
-com outro modelo. `delegar_tarefa` sobe, responde, desliga — sequencial,
-como tudo o mais no projeto que usa a GPU sob demanda.
+Diferente de `busca_codigo`/`visao_mockup` (que assumem que só um
+modelo por vez cabe na GPU, como código e visão — ambos ~7B — não
+cabem juntos em 8GB), o servidor do coordenador **continua rodando**
+enquanto `delegar_tarefa` sobe o seu: um coordenador (~3-7B) e um
+microagente (0,3-1B) juntos ficam bem abaixo dos 8GB de VRAM, folga
+suficiente pra rodar os dois ao mesmo tempo. `delegar_tarefa` não
+desliga nada além do processo que ele mesmo sobe.
+
+**Por isso o padrão é CPU-only** (`n_gpu_layers=0`), diferente dos
+outros agentes reduzidos: rodar dois modelos na GPU ao mesmo tempo
+soma carga concorrente, não sequencial — e o incidente real que
+motivou a checagem de temperatura (ver `TESTE_LOCAL.md`) já aconteceu
+com um único modelo. Um modelo de 0,3-1B roda bem em CPU sem ficar
+impraticável; suba pra GPU (`n_gpu_layers>0`) só depois de confirmar
+que o hardware está estável sob carga de um único modelo primeiro.
 
 ## Ferramenta no orquestrador
 
@@ -39,12 +49,12 @@ de agente completo e se perdendo.
 
 ## Segurança de GPU
 
-Mesmo padrão conservador dos outros agentes reduzidos:
-`n_gpu_layers=20`/`ctx_size=4096` por padrão, e confere a temperatura
-da GPU (`motor_ia.temperatura_gpu_celsius`) antes de subir o servidor,
-recusando se estiver acima do limite seguro — ver
-`motor_ia/README.md` e `TESTE_LOCAL.md` para o incidente real que
-motivou isso.
+`n_gpu_layers=0` (CPU) por padrão, `ctx_size=4096`. Se `n_gpu_layers>0`
+for passado explicitamente, confere a temperatura da GPU
+(`motor_ia.temperatura_gpu_celsius`) antes de subir o servidor,
+recusando se estiver acima do limite seguro — mesma lógica de
+`buscar_codigo`/`interpretar_mockup`, ver `motor_ia/README.md` e
+`TESTE_LOCAL.md` para o incidente real que motivou isso.
 
 ## Escolha do modelo
 
