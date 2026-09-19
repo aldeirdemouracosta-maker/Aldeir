@@ -48,17 +48,25 @@ pub fn weight_for_profile(profile: Profile) -> u32 {
     }
 }
 
-/// Aplica o peso do perfil ao cgroup do modelo, criando-o se necessário
-/// (mesmo cgroup de `memory::protect_pid` — `cpu.weight` e `memory.low`
-/// convivem no mesmo diretório de cgroup v2).
+/// Aplica o peso do perfil ao cgroup do modelo. Atalho para
+/// `apply_weight_value(cgroup_root, weight_for_profile(profile))`.
 pub fn apply_weight(cgroup_root: &Path, profile: Profile) -> Result<u32, String> {
+    let weight = weight_for_profile(profile);
+    apply_weight_value(cgroup_root, weight)?;
+    Ok(weight)
+}
+
+/// Aplica um peso explícito ao cgroup do modelo, criando-o se necessário
+/// (mesmo cgroup de `memory::protect_pid` — `cpu.weight` e `memory.low`
+/// convivem no mesmo diretório de cgroup v2). Usado tanto por
+/// `apply_weight` (peso fixo do perfil, 0.7) quanto por `SCHED ADAPT`
+/// (peso ajustado por telemetria, 0.8 — ver `telemetry::adapt_weight`).
+pub fn apply_weight_value(cgroup_root: &Path, weight: u32) -> Result<(), String> {
     let dir = memory::protected_cgroup_dir(cgroup_root);
     fs::create_dir_all(&dir).map_err(|e| format!("falha ao criar {}: {e}", dir.display()))?;
-    let weight = weight_for_profile(profile);
     let path = dir.join("cpu.weight");
     fs::write(&path, weight.to_string())
-        .map_err(|e| format!("falha ao escrever {}: {e}", path.display()))?;
-    Ok(weight)
+        .map_err(|e| format!("falha ao escrever {}: {e}", path.display()))
 }
 
 /// `None` quando `cpu.weight` ainda não foi aplicado (cgroup inexistente

@@ -10,7 +10,8 @@
 │                    AI-CORE (Rust)                   │  ai-core/
 │  hardware.rs │ model.rs │ backend.rs │ config.rs    │  socket Unix
 │  agent.rs (AgentManager, fila) │ memory.rs           │  /run/ai-core.sock
-│  scheduler.rs │ json.rs │ llama_client.rs │ ipc.rs   │
+│  scheduler.rs │ telemetry.rs │ json.rs                │
+│  llama_client.rs │ ipc.rs                             │
 ├──────────────────────────────────────────────────┤
 │         llama.cpp / llama-server (CPU / Vulkan)      │  pacote Buildroot upstream
 ├──────────────────────────────────────────────────┤
@@ -54,7 +55,7 @@ Protocolo (texto, uma linha por comando, resposta terminada por uma
 linha `.`): `PING`, `VERSION`, `STATUS`, `HW`, `MODEL LIST|ACTIVE|SELECT
 <n>|RECOMMEND`, `BACKEND GET|SET <auto|cpu|vulkan>`, `AGENT
 ROLES|TASK <papel> <texto>|STATUS <id>|LIST`, `MEMORY
-STATUS|APPLY|PROTECT <bytes>`, `SCHED STATUS|APPLY`. Ver
+STATUS|APPLY|PROTECT <bytes>`, `SCHED STATUS|APPLY|ADAPT`. Ver
 `ai-core/src/ipc.rs`.
 
 ## Seleção de backend (CPU/Vulkan) — AUTO
@@ -214,6 +215,51 @@ para processos auxiliares) sob contenção. Um scheduler `sched_ext` de
 verdade — com decisões por tarefa/agente, não só um peso estático por
 cgroup — continua sendo trabalho futuro explícito, não descartado; ver
 a decisão completa em `kernel/patches/README.md`.
+
+## Scheduler adaptativo: telemetria real + regra determinística (não ML)
+
+```
+SCHED ADAPT
+     │
+     ├──► telemetry::collect() — /proc/loadavg, /proc/meminfo
+     │    (leitura REAL — sem caminho parametrizável, ao contrário de
+     │    memory.rs/scheduler.rs; /proc existe neste sandbox de verdade)
+     │
+     ├──► AgentManager::tokens_per_second_stats(3) — média das últimas
+     │    3 tarefas concluídas + melhor tokens/s desta sessão do daemon
+     │    (extraído de timings.predicted_per_second do llama-server —
+     │    ver llama_client::CompletionResult)
+     │
+     └──► telemetry::adapt_weight(...) — regra determinística:
+            throughput caiu + CPU contendida + memória OK → +50% (cap 2000)
+            throughput bom + CPU ociosa                   → volta ao peso base
+            caso contrário                                 → mantém peso atual
+          → scheduler::apply_weight_value() se o peso mudou
+```
+
+Diferente de `SCHED APPLY` (0.7, peso fixo por perfil), `SCHED ADAPT`
+reage ao que está realmente acontecendo no sistema. Mas é importante ser
+preciso sobre o que isso é e não é: **é uma regra se-então determinística,
+não aprendizado por reforço nem qualquer forma de ML**. O roadmap descreve
+esta etapa como "um passo em direção ao aprendizado, não apenas regras
+fixas" — é exatamente isso: telemetria real substituindo um valor
+estático, não um agente que aprende a partir de recompensa observada.
+
+Vale notar uma assimetria interessante com as etapas anteriores: a
+telemetria desta etapa (`/proc/loadavg`, `/proc/meminfo`) **foi validada
+contra o kernel real** deste ambiente de desenvolvimento — diferente do
+DAMON_RECLAIM (0.6) e do cgroup v2 (0.7), que precisaram de diretórios
+temporários simulando sysfs/cgroupfs porque não existem aqui. `/proc`
+sempre existeu neste sandbox (mesma base que `hardware.rs` já usa desde
+a 0.4); só o mecanismo de *efeito* (`cpu.weight` em cgroup v2) continua
+simulado nos testes, pela mesma razão da 0.7.
+
+Um smoke test manual confirmou o pipeline completo: telemetria real
+(`load1=0.25`, `mem_disponivel_pct=96.2`) combinada com tokens/s reais de
+um `llama-server` de mentira (50.0 → 8.0 → 7.5 tokens/s, média recente
+21.8, melhor 50.0 — ambos calculados corretamente pela regra) resultou
+em manter o peso, porque não havia contenção real de CPU neste
+ambiente — decisão correta segundo a regra.
 
 ## Acesso remoto (opcional)
 

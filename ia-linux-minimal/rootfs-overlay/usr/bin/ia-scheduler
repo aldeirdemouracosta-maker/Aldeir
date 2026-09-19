@@ -1,14 +1,16 @@
 #!/bin/sh
 # ia-scheduler — interface de linha de comando para o AI Scheduler
-# (etapa 0.7): prioridade de CPU do modelo/llama-server via cgroup v2
-# (cpu.weight), no mesmo cgroup que ia-memory protege com memory.low.
-# Cliente fino: toda a lógica vive em ai-core/src/scheduler.rs.
+# (etapas 0.7/0.8): prioridade de CPU do modelo/llama-server via cgroup
+# v2 (cpu.weight), no mesmo cgroup que ia-memory protege com memory.low.
+# Cliente fino: toda a lógica vive em ai-core/src/scheduler.rs e
+# ai-core/src/telemetry.rs.
 #
-# Nota de escopo: isto NÃO é um scheduler sched_ext/eBPF — ver
-# docs/architecture.md e kernel/patches/README.md para por que essa
-# etapa foi reduzida a cpu.weight (mesmo mecanismo do kernel usado por
-# 'nice'/cgroups, sem exigir toolchain de BPF nem kernel com
-# sched_ext ativo).
+# Nota de escopo: isto NÃO é um scheduler sched_ext/eBPF, nem 'adapt' é
+# aprendizado por reforço — ver docs/architecture.md e
+# kernel/patches/README.md para por que a 0.7 foi reduzida a cpu.weight
+# (sem exigir toolchain de BPF nem kernel com sched_ext ativo), e
+# ai-core/src/telemetry.rs para por que a 0.8 é uma regra determinística
+# se-então, não ML.
 set -e
 # shellcheck source=../lib/ia-linux/common.sh
 . /usr/lib/ia-linux/common.sh
@@ -21,9 +23,13 @@ comandos:
   status    peso de CPU (cpu.weight) atualmente aplicado ao cgroup do modelo
   apply     aplica o peso do perfil de hardware atual (TINY/LOW mais alto,
             LARGE mais próximo do padrão)
+  adapt     ajusta o peso a partir de telemetria real (carga de CPU,
+            memória disponível, tokens/s recentes de tarefas de agentes)
+            — regra se-então, não aprendizado; ver nota de escopo acima
 
-'apply' é chamado automaticamente por 'ia-server start' — normalmente
-você só precisa rodar isto manualmente para inspecionar o estado.
+'apply' é chamado automaticamente por 'ia-server start'. 'adapt' é
+manual — rode depois que algumas tarefas de agente ('ia-agent task')
+já tiverem terminado, para que haja histórico de tokens/s a comparar.
 EOF
 }
 
@@ -33,6 +39,9 @@ case "${1:-}" in
         ;;
     apply)
         ia_core SCHED APPLY
+        ;;
+    adapt)
+        ia_core SCHED ADAPT
         ;;
     *)
         usage

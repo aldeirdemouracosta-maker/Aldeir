@@ -95,6 +95,10 @@ pub struct Task {
     /// Resultado (quando `status == Done`) ou mensagem de erro (quando
     /// `status == Error`).
     pub result: Option<String>,
+    /// Tokens/s reportados pelo llama-server para esta tarefa (etapa
+    /// 0.8, telemetria real — ver `llama_client::CompletionResult`).
+    /// `None` em tarefas com erro ou quando o servidor não reportou.
+    pub tokens_per_second: Option<f64>,
 }
 
 /// Fila de tarefas + worker único, compartilhando um endereço de
@@ -131,6 +135,7 @@ impl AgentManager {
             prompt,
             status: TaskStatus::Queued,
             result: None,
+            tokens_per_second: None,
         };
         self.tasks.lock().unwrap().insert(id, task);
         self.order.lock().unwrap().push(id);
@@ -171,6 +176,42 @@ impl AgentManager {
         }
         (queued, running, done, error)
     }
+
+    /// Telemetria de throughput para `telemetry::adapt_weight` (etapa
+    /// 0.8): média das últimas `recent_n` tarefas `Done` com tokens/s
+    /// registrado (mais recentes primeiro) e o melhor valor já
+    /// observado entre TODAS as tarefas concluídas nesta sessão do
+    /// daemon (não persiste — reinicia quando `ai-core` reinicia).
+    /// `(None, None)` enquanto nenhuma tarefa com tokens/s tiver
+    /// concluído ainda.
+    pub fn tokens_per_second_stats(&self, recent_n: usize) -> (Option<f64>, Option<f64>) {
+        let order = self.order.lock().unwrap();
+        let tasks = self.tasks.lock().unwrap();
+
+        let mut samples_recent_first: Vec<f64> = order
+            .iter()
+            .rev()
+            .filter_map(|id| tasks.get(id))
+            .filter(|t| t.status == TaskStatus::Done)
+            .filter_map(|t| t.tokens_per_second)
+            .collect();
+
+        let best = samples_recent_first
+            .iter()
+            .copied()
+            .fold(None, |acc: Option<f64>, v| {
+                Some(acc.map_or(v, |a| a.max(v)))
+            });
+
+        samples_recent_first.truncate(recent_n);
+        let recent_avg = if samples_recent_first.is_empty() {
+            None
+        } else {
+            Some(samples_recent_first.iter().sum::<f64>() / samples_recent_first.len() as f64)
+        };
+
+        (recent_avg, best)
+    }
 }
 
 fn worker_loop(rx: mpsc::Receiver<u64>, manager: Arc<AgentManager>, llama_addr: String) {
@@ -191,9 +232,10 @@ fn worker_loop(rx: mpsc::Receiver<u64>, manager: Arc<AgentManager>, llama_addr: 
         let mut tasks = manager.tasks.lock().unwrap();
         if let Some(task) = tasks.get_mut(&id) {
             match outcome {
-                Ok(text) => {
+                Ok(completion) => {
                     task.status = TaskStatus::Done;
-                    task.result = Some(text);
+                    task.result = Some(completion.content);
+                    task.tokens_per_second = completion.tokens_per_second;
                 }
                 Err(e) => {
                     task.status = TaskStatus::Error;
@@ -243,6 +285,36 @@ mod tests {
         addr
     }
 
+    /// Como `spawn_mock_llama_server`, mas cada conexão consecutiva
+    /// recebe o próximo valor de `tokens_per_second` de `values` (em
+    /// ordem — o worker do `AgentManager` processa uma tarefa por vez,
+    /// então a ordem de conexão bate com a ordem de `submit`).
+    fn spawn_mock_llama_server_with_varying_tps(values: Vec<f64>) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap().to_string();
+
+        thread::spawn(move || {
+            let mut values = values.into_iter();
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { continue };
+                let mut reader = std::io::BufReader::new(stream.try_clone().unwrap());
+                let mut line = String::new();
+                let _ = reader.read_line(&mut line);
+                let tps = values.next().unwrap_or(0.0);
+                let body = format!(
+                    "{{\"content\":\"ok\",\"timings\":{{\"predicted_per_second\":{tps}}}}}"
+                );
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
+                    body.len()
+                );
+                let _ = stream.write_all(response.as_bytes());
+            }
+        });
+
+        addr
+    }
+
     fn wait_until<F: Fn() -> bool>(timeout: Duration, check: F) -> bool {
         let start = Instant::now();
         while start.elapsed() < timeout {
@@ -252,6 +324,16 @@ mod tests {
             thread::sleep(Duration::from_millis(10));
         }
         false
+    }
+
+    fn wait_for_completion(manager: &AgentManager, id: u64) {
+        let completed = wait_until(Duration::from_secs(5), || {
+            matches!(
+                manager.status(id).map(|t| t.status),
+                Some(TaskStatus::Done) | Some(TaskStatus::Error)
+            )
+        });
+        assert!(completed, "tarefa {id} não terminou a tempo");
     }
 
     #[test]
@@ -324,5 +406,54 @@ mod tests {
         for role in PLANNED_ROLES {
             assert!(line.contains(role.label()));
         }
+    }
+
+    #[test]
+    fn completed_task_records_tokens_per_second() {
+        let addr = spawn_mock_llama_server_with_varying_tps(vec![42.5]);
+        let manager = AgentManager::spawn(addr);
+
+        let id = manager.submit(AgentRole::Executor, "faca algo".to_string());
+        wait_for_completion(&manager, id);
+
+        let task = manager.status(id).unwrap();
+        assert_eq!(task.status, TaskStatus::Done);
+        assert_eq!(task.tokens_per_second, Some(42.5));
+    }
+
+    #[test]
+    fn tokens_per_second_stats_before_any_completion_is_none() {
+        let manager = AgentManager::spawn("127.0.0.1:1".to_string());
+        assert_eq!(manager.tokens_per_second_stats(3), (None, None));
+    }
+
+    #[test]
+    fn tokens_per_second_stats_tracks_recent_average_and_session_best() {
+        let addr = spawn_mock_llama_server_with_varying_tps(vec![10.0, 30.0, 20.0]);
+        let manager = AgentManager::spawn(addr);
+
+        let id1 = manager.submit(AgentRole::Executor, "a".to_string());
+        wait_for_completion(&manager, id1);
+        let id2 = manager.submit(AgentRole::Executor, "b".to_string());
+        wait_for_completion(&manager, id2);
+        let id3 = manager.submit(AgentRole::Executor, "c".to_string());
+        wait_for_completion(&manager, id3);
+
+        // últimas 2 tarefas (mais recentes primeiro): id3=20.0, id2=30.0 -> média 25.0
+        let (recent_avg, best) = manager.tokens_per_second_stats(2);
+        assert_eq!(recent_avg, Some(25.0));
+        // melhor entre TODAS as 3 (10.0, 30.0, 20.0), não só as 2 recentes
+        assert_eq!(best, Some(30.0));
+    }
+
+    #[test]
+    fn tokens_per_second_stats_ignores_failed_tasks() {
+        // servidor de mentira encerrado: toda tarefa termina em erro, sem tokens/s
+        let manager = AgentManager::spawn("127.0.0.1:1".to_string());
+        let id = manager.submit(AgentRole::Executor, "falha".to_string());
+        wait_for_completion(&manager, id);
+
+        assert_eq!(manager.status(id).unwrap().status, TaskStatus::Error);
+        assert_eq!(manager.tokens_per_second_stats(5), (None, None));
     }
 }

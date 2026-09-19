@@ -14,6 +14,7 @@ mod llama_client;
 mod memory;
 mod model;
 mod scheduler;
+mod telemetry;
 
 use std::env;
 use std::path::PathBuf;
@@ -455,8 +456,75 @@ fn sched_dispatch(rest: &[&str], state: &State) -> Vec<String> {
                 Err(e) => vec![format!("ERRO {e}")],
             }
         }
+        Some(&"ADAPT") => sched_adapt(state),
         Some(other) => vec![format!("ERRO subcomando SCHED desconhecido: {other}")],
     }
+}
+
+/// Ajusta `cpu.weight` a partir de telemetria real (`/proc/loadavg`,
+/// `/proc/meminfo`) e do histórico de tokens/s do `AgentManager` — regra
+/// determinística, não aprendizado (ver `telemetry.rs`). Diferente de
+/// `SCHED APPLY` (peso fixo do perfil), pode manter, subir ou relaxar o
+/// peso conforme o que foi observado desde a última chamada.
+fn sched_adapt(state: &State) -> Vec<String> {
+    let hw = &state.hardware;
+    let base_weight = scheduler::weight_for_profile(hw.profile());
+    let current_weight = scheduler::read_weight(&state.cgroup_root).unwrap_or(base_weight);
+
+    let t = telemetry::collect();
+    let load_per_core = t
+        .load1
+        .map(|l| telemetry::load_per_core(l, hw.cpu_threads))
+        .unwrap_or(0.0);
+    let mem_available_ratio = t
+        .mem_available_kb
+        .map(|avail| avail as f64 / hw.ram_total_kb as f64);
+    let (recent_tps, best_tps) = state.agent_manager.tokens_per_second_stats(3);
+
+    let new_weight = telemetry::adapt_weight(telemetry::AdaptInput {
+        base_weight,
+        current_weight,
+        load_per_core,
+        current_tokens_per_sec: recent_tps,
+        best_tokens_per_sec: best_tps,
+        mem_available_ratio,
+    });
+
+    let mut lines = vec![
+        format!(
+            "load1={:.2} load_por_nucleo={load_per_core:.2}",
+            t.load1.unwrap_or(0.0)
+        ),
+        format!(
+            "mem_disponivel_pct={}",
+            mem_available_ratio
+                .map(|r| format!("{:.1}", r * 100.0))
+                .unwrap_or_else(|| "desconhecido".to_string())
+        ),
+        format!(
+            "tokens_s_recente={} tokens_s_melhor={}",
+            recent_tps
+                .map(|v| format!("{v:.1}"))
+                .unwrap_or_else(|| "sem_dados".to_string()),
+            best_tps
+                .map(|v| format!("{v:.1}"))
+                .unwrap_or_else(|| "sem_dados".to_string())
+        ),
+        format!("peso_base={base_weight} peso_atual={current_weight} peso_novo={new_weight}"),
+    ];
+
+    if new_weight != current_weight {
+        match scheduler::apply_weight_value(&state.cgroup_root, new_weight) {
+            Ok(()) => lines.push(format!(
+                "cpu.weight ajustado: {current_weight} -> {new_weight}"
+            )),
+            Err(e) => lines.push(format!("ERRO {e}")),
+        }
+    } else {
+        lines.push("cpu.weight mantido (sem mudanca de decisao)".to_string());
+    }
+
+    lines
 }
 
 #[cfg(test)]
@@ -719,6 +787,52 @@ mod tests {
         let (low, procs) = memory::read_protection_status(&state.cgroup_root).unwrap();
         assert_eq!(low, 4096);
         assert_eq!(procs, vec![process::id()]);
+
+        fs::remove_dir_all(&state.data_dir).unwrap();
+    }
+
+    #[test]
+    fn sched_adapt_without_token_history_holds_base_weight_without_writing() {
+        let state = test_state("schedadaptnohistory");
+        // sem SCHED APPLY prévio (nada gravado ainda) e sem tarefas
+        // concluídas (sem dados de tokens/s): a regra decide manter
+        // current_weight.max(base_weight) = 400 = o que já "seria" o
+        // peso — decisão "mantido", sem escrever cpu.weight.
+        let resp = dispatch("SCHED ADAPT", &state);
+
+        assert!(resp.iter().any(|l| l.starts_with("peso_base=400")));
+        assert!(resp
+            .iter()
+            .any(|l| l.contains("tokens_s_recente=sem_dados")));
+        assert!(resp.iter().any(|l| l.contains("cpu.weight mantido")));
+        assert_eq!(scheduler::read_weight(&state.cgroup_root), None);
+
+        fs::remove_dir_all(&state.data_dir).unwrap();
+    }
+
+    #[test]
+    fn sched_adapt_after_apply_with_no_new_data_keeps_same_weight() {
+        let state = test_state("schedadaptafterapply");
+        dispatch("SCHED APPLY", &state); // grava cpu.weight=400 (perfil MEDIUM)
+
+        let resp = dispatch("SCHED ADAPT", &state);
+        assert!(resp.iter().any(|l| l.contains("cpu.weight mantido")));
+        assert_eq!(scheduler::read_weight(&state.cgroup_root), Some(400));
+
+        fs::remove_dir_all(&state.data_dir).unwrap();
+    }
+
+    #[test]
+    fn sched_adapt_reports_all_telemetry_lines() {
+        let state = test_state("schedadapttelemetry");
+        let resp = dispatch("SCHED ADAPT", &state);
+
+        // telemetria real do /proc deste host — só confirmamos que as
+        // linhas existem e têm o formato esperado, não valores fixos.
+        assert!(resp.iter().any(|l| l.starts_with("load1=")));
+        assert!(resp.iter().any(|l| l.starts_with("mem_disponivel_pct=")));
+        assert!(resp.iter().any(|l| l.starts_with("tokens_s_recente=")));
+        assert!(resp.iter().any(|l| l.starts_with("peso_base=")));
 
         fs::remove_dir_all(&state.data_dir).unwrap();
     }

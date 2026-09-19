@@ -16,10 +16,21 @@ use crate::json;
 const READ_TIMEOUT: Duration = Duration::from_secs(120);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Envia `prompt` a `addr` (ex.: "127.0.0.1:8080") via `POST /completion`
-/// e retorna o campo `content` da resposta. `n_predict` limita o número
-/// de tokens gerados.
-pub fn complete(addr: &str, prompt: &str, n_predict: u32) -> Result<String, String> {
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompletionResult {
+    pub content: String,
+    /// Tokens/s de geração, lido do campo aninhado
+    /// `timings.predicted_per_second` que o llama-server inclui na
+    /// resposta de `/completion` (não-streaming). `None` quando o
+    /// servidor não inclui `timings` (ex.: versões mais antigas, ou
+    /// requisições em streaming) — telemetria real usada pela etapa 0.8
+    /// (`telemetry.rs`), ausente sem quebrar o resultado da tarefa.
+    pub tokens_per_second: Option<f64>,
+}
+
+/// Envia `prompt` a `addr` (ex.: "127.0.0.1:8080") via `POST /completion`.
+/// `n_predict` limita o número de tokens gerados.
+pub fn complete(addr: &str, prompt: &str, n_predict: u32) -> Result<CompletionResult, String> {
     let socket_addr = addr
         .parse()
         .map_err(|e| format!("endereço inválido '{addr}': {e}"))?;
@@ -58,8 +69,14 @@ pub fn complete(addr: &str, prompt: &str, n_predict: u32) -> Result<String, Stri
         format!("resposta HTTP sem corpo separado por linha em branco: {response}")
     })?;
 
-    json::extract_string_field(response_body, "content").ok_or_else(|| {
+    let content = json::extract_string_field(response_body, "content").ok_or_else(|| {
         format!("campo 'content' ausente na resposta de {addr}/completion: {response_body}")
+    })?;
+    let tokens_per_second = json::extract_number_field(response_body, "predicted_per_second");
+
+    Ok(CompletionResult {
+        content,
+        tokens_per_second,
     })
 }
 
@@ -101,7 +118,19 @@ mod tests {
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"content\":\"ola do mock\"}",
         );
         let result = complete(&addr, "diga oi", 16).unwrap();
-        assert_eq!(result, "ola do mock");
+        assert_eq!(result.content, "ola do mock");
+        assert_eq!(result.tokens_per_second, None);
+    }
+
+    #[test]
+    fn successful_completion_extracts_tokens_per_second_from_nested_timings() {
+        let addr = spawn_mock_server(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n\
+             {\"content\":\"ola\",\"timings\":{\"predicted_n\":10,\"predicted_per_second\":27.5}}",
+        );
+        let result = complete(&addr, "diga oi", 16).unwrap();
+        assert_eq!(result.content, "ola");
+        assert_eq!(result.tokens_per_second, Some(27.5));
     }
 
     #[test]

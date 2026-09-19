@@ -47,6 +47,7 @@ Comandos:
   memory protect <bytes>         define manualmente o piso de proteção
   scheduler status               peso de CPU (cpu.weight) do cgroup do modelo
   scheduler apply                aplica o peso do perfil de hardware atual
+  scheduler adapt                ajusta o peso a partir de telemetria real
   hwdetect                      sonda de hardware standalone (não depende do ai-core)
   workspace                     abre um shell em /data/workspace
   shell                          abre um shell ash completo
@@ -111,7 +112,8 @@ while true; do
             case "${arg1}" in
                 status) ia-scheduler status ;;
                 apply) ia-scheduler apply ;;
-                *) echo "uso: scheduler status | scheduler apply" ;;
+                adapt) ia-scheduler adapt ;;
+                *) echo "uso: scheduler status | scheduler apply | scheduler adapt" ;;
             esac
             ;;
         hwdetect) ia-hwdetect ;;

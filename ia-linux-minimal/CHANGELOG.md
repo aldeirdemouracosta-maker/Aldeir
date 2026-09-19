@@ -1,5 +1,43 @@
 # Changelog — IA Linux Minimal
 
+## 0.8.0-alpha9 — Scheduler adaptativo (telemetria real, regra determinística)
+
+- Novo módulo `ai-core/src/telemetry.rs`: lê `/proc/loadavg` e
+  `/proc/meminfo` diretamente — ao contrário de `memory.rs`/
+  `scheduler.rs`, essas leituras **não** precisam de caminho
+  parametrizável, porque `/proc` existe de verdade neste ambiente de
+  desenvolvimento (mesmo padrão que `hardware.rs` já usa desde a 0.4).
+- `telemetry::adapt_weight` é uma **regra determinística se-então**, não
+  aprendizado por reforço nem qualquer forma de ML: se o throughput
+  recente (tokens/s) caiu bem abaixo do melhor já observado nesta sessão,
+  E há contenção real de CPU (carga por núcleo > 1.0), E a memória
+  disponível não está criticamente baixa, aumenta `cpu.weight` em 50%
+  (capado em 2000); se o throughput está bom e sobra CPU, relaxa de
+  volta ao peso base do perfil; caso contrário mantém o peso atual
+  (nunca abaixo do peso base).
+- `llama_client::complete` passa a retornar `CompletionResult{content,
+  tokens_per_second}`, extraindo `timings.predicted_per_second` da
+  resposta do llama-server (`json::extract_number_field`, novo,
+  encontra campos numéricos em qualquer nível de aninhamento).
+- `agent::Task` ganha o campo `tokens_per_second`;
+  `AgentManager::tokens_per_second_stats(recent_n)` calcula a média das
+  últimas `recent_n` tarefas concluídas e o melhor valor já observado em
+  toda a sessão (não persiste — reinicia com o daemon).
+- Novo subcomando IPC `SCHED ADAPT` (além de `STATUS`/`APPLY` da 0.7) e
+  `ia-scheduler adapt` / `scheduler adapt` no `ia-shell`. Diferente de
+  `SCHED APPLY` (peso fixo do perfil), pode subir, manter ou relaxar o
+  peso conforme telemetria observada.
+- `scheduler::apply_weight` refatorado sobre um novo
+  `apply_weight_value(cgroup_root, peso)`, reutilizado por `SCHED ADAPT`
+  para aplicar um peso calculado (não apenas o peso fixo do perfil).
+- Smoke test manual ponta a ponta: telemetria real do `/proc` deste
+  sandbox (`load1=0.25`, `mem_disponivel_pct=96.2`) combinada com
+  histórico real de tokens/s de um `llama-server` de mentira (valores
+  50.0/8.0/7.5 → média recente 21.8, melhor 50.0, ambos calculados
+  corretamente) — a regra manteve o peso porque não havia contenção real
+  de CPU neste ambiente, exatamente o comportamento esperado.
+- 102 testes unitários (eram 73 na 0.7).
+
 ## 0.7.0-alpha8 — AI Scheduler (escopo reduzido: cgroup v2 cpu.weight)
 
 - Novo módulo `ai-core/src/scheduler.rs`: prioriza CPU para o

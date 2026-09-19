@@ -5,9 +5,11 @@
 //! `llama-server` e extrair um campo string de uma resposta plana.
 //!
 //! Não é um parser JSON completo: não lida com objetos/arrays aninhados
-//! de forma genérica, apenas com um campo string de nível superior. É
-//! suficiente para a resposta de `/completion` do llama.cpp, que tem
-//! `"content"` como campo string de nível superior.
+//! de forma genérica, apenas procura um campo pelo nome em qualquer
+//! nível do documento (útil para campos como `timings.predicted_per_second`,
+//! que ficam aninhados, sem precisar navegar a árvore). É suficiente
+//! para a resposta de `/completion` do llama.cpp, que tem `"content"` e
+//! (dentro de `"timings"`) `"predicted_per_second"`.
 
 /// Converte uma string Rust em uma string JSON válida entre aspas,
 /// escapando `"`, `\`, controle e novas linhas.
@@ -72,6 +74,27 @@ pub fn extract_string_field(json: &str, field: &str) -> Option<String> {
         }
     }
     None // string não terminada
+}
+
+/// Extrai o valor de um campo numérico `"campo": 123.45` (sem aspas) de
+/// um JSON plano, em qualquer nível de aninhamento (busca o nome do
+/// campo no texto inteiro, não só no nível superior — ver nota do
+/// módulo). Aceita inteiros e decimais com sinal; não lida com notação
+/// científica (`1e10`), que o llama-server não usa nesses campos.
+pub fn extract_number_field(json: &str, field: &str) -> Option<f64> {
+    let key_needle = format!("\"{field}\"");
+    let key_idx = json.find(&key_needle)?;
+    let after_key = &json[key_idx + key_needle.len()..];
+
+    let after_colon = skip_whitespace_then_expect(after_key, ':')?;
+    let trimmed = after_colon.trim_start();
+    let end = trimmed
+        .find(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-' || c == '+'))
+        .unwrap_or(trimmed.len());
+    if end == 0 {
+        return None;
+    }
+    trimmed[..end].parse().ok()
 }
 
 /// Pula espaço em branco no início de `s` e confirma que o próximo
@@ -163,5 +186,48 @@ mod tests {
     fn unterminated_string_returns_none() {
         let json = r#"{"content":"sem fim"#;
         assert_eq!(extract_string_field(json, "content"), None);
+    }
+
+    #[test]
+    fn extracts_decimal_number_field() {
+        let json = r#"{"predicted_per_second":42.75}"#;
+        assert_eq!(
+            extract_number_field(json, "predicted_per_second"),
+            Some(42.75)
+        );
+    }
+
+    #[test]
+    fn extracts_integer_number_field() {
+        let json = r#"{"predicted_n":128}"#;
+        assert_eq!(extract_number_field(json, "predicted_n"), Some(128.0));
+    }
+
+    #[test]
+    fn extracts_number_field_nested_and_with_space_after_colon() {
+        let json = r#"{"content":"ok","timings": {"predicted_n":10,"predicted_per_second": 33.3}}"#;
+        assert_eq!(
+            extract_number_field(json, "predicted_per_second"),
+            Some(33.3)
+        );
+    }
+
+    #[test]
+    fn number_field_stops_at_comma_or_brace() {
+        let json = r#"{"a":1.5,"b":2}"#;
+        assert_eq!(extract_number_field(json, "a"), Some(1.5));
+        assert_eq!(extract_number_field(json, "b"), Some(2.0));
+    }
+
+    #[test]
+    fn missing_number_field_returns_none() {
+        let json = r#"{"other":1.0}"#;
+        assert_eq!(extract_number_field(json, "predicted_per_second"), None);
+    }
+
+    #[test]
+    fn non_numeric_value_returns_none() {
+        let json = r#"{"predicted_per_second":"nan"}"#;
+        assert_eq!(extract_number_field(json, "predicted_per_second"), None);
     }
 }

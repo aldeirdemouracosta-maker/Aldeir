@@ -40,7 +40,7 @@ Esta árvore foi escrita e testada **sem** acesso a `buildroot.org` (o
 sandbox onde o projeto foi montado não tem esse acesso de rede). Por
 isso:
 
-- `ai-core` foi compilado, testado (`cargo test`, 73 testes) e verificado
+- `ai-core` foi compilado, testado (`cargo test`, 102 testes) e verificado
   com `cargo clippy -- -D warnings` diretamente — isso não depende do
   Buildroot.
 - Todos os scripts shell (`rootfs-overlay/`, `scripts/`, `buildroot/board/`)
@@ -64,12 +64,18 @@ isso:
   controlador `cpu` de cgroup v2 (`cpu.weight`) em vez de um scheduler
   `sched_ext`/eBPF de verdade, pela mesma razão de validação. Ver
   `kernel/patches/README.md` para a decisão completa.
+- Diferente do DAMON/cgroup v2, `/proc/loadavg` e `/proc/meminfo`
+  existem e são legíveis neste ambiente — a telemetria da 0.8
+  (`ai-core/src/telemetry.rs`) foi validada contra o `/proc` real deste
+  sandbox, não simulada. Só o efeito da decisão (escrever `cpu.weight`)
+  continua testado contra diretórios simulando cgroupfs, pela mesma
+  razão da 0.7.
 
 ## Desenvolvendo apenas o `ai-core` (sem Buildroot/QEMU)
 
 ```sh
 cd ai-core
-cargo test              # 73 testes unitários (a maioria sem dependências externas; alguns usam sockets TCP/Unix locais)
+cargo test              # 102 testes unitários (a maioria sem dependências externas; alguns usam sockets TCP/Unix locais)
 cargo clippy -- -D warnings
 cargo run                # roda como servidor; Ctrl+C para parar
 IA_DATA_DIR=/tmp/data IA_CORE_SOCKET=/tmp/ai-core.sock cargo run &

@@ -9,8 +9,8 @@
 | 0.4.0-alpha5 | AI Core (Rust) — daemon + IPC | implementado |
 | 0.5.0-alpha6 | Multiagente | implementado |
 | 0.6.0-alpha7 | AI Memory (DAMON_RECLAIM + cgroup v2) | implementado |
-| **0.7.0-alpha8** | **AI Scheduler (cgroup v2 cpu.weight — sched_ext adiado)** | **implementado nesta árvore** |
-| 0.8 | Scheduler adaptativo (telemetria + aprendizado) | planejado |
+| 0.7.0-alpha8 | AI Scheduler (cgroup v2 cpu.weight — sched_ext adiado) | implementado |
+| **0.8.0-alpha9** | **Scheduler adaptativo (telemetria real + regra determinística)** | **implementado nesta árvore** |
 | 0.9 | Imagem instalável (ISO/IMG para SSD/pendrive) | planejado |
 | 1.0 | Release reproduzível | planejado |
 
@@ -52,8 +52,11 @@ Duas peças, ver `ai-core/src/memory.rs`:
 
 Não implementado ainda: ajuste *adaptativo* em tempo real com base em
 métricas observadas (hoje é só a aplicação de uma heurística estática
-por perfil, sob demanda via `MEMORY APPLY`) — candidato natural para a
-0.8 (scheduler/memória adaptativos), junto com telemetria.
+por perfil, sob demanda via `MEMORY APPLY`). A 0.8 trouxe telemetria e
+uma regra adaptativa para o **scheduler** (`SCHED ADAPT`); a mesma ideia
+aplicada à memória (ajustar DAMON_RECLAIM a partir de métricas
+observadas, não só do perfil estático) continua em aberto para uma
+etapa futura.
 
 ## 0.7 — AI Scheduler (implementado, escopo reduzido)
 
@@ -75,11 +78,25 @@ ver `ai-core/src/scheduler.rs`. `kernel/config/sched-ext.fragment`
 continua preparado (desligado por padrão) para quando um scheduler
 `sched_ext` de verdade puder ser desenvolvido contra um kernel real.
 
-## 0.8 — Scheduler adaptativo
+## 0.8 — Scheduler adaptativo (implementado)
 
-Métricas de CPU, memória, latência e tokens/s alimentando decisões do AI
-Scheduler — passo em direção ao aprendizado de fato, não apenas regras
-fixas.
+Métricas de CPU (`/proc/loadavg`), memória (`/proc/meminfo`) e tokens/s
+(extraídos da resposta do `llama-server`) alimentando `SCHED ADAPT` —
+ver `ai-core/src/telemetry.rs`. Ao contrário de `memory.rs`/
+`scheduler.rs`, essas leituras de `/proc` **não** precisam de caminho
+parametrizável: existem de verdade neste ambiente de desenvolvimento
+(mesmo padrão que `hardware.rs` já usa desde a 0.4), então a telemetria
+em si foi validada contra o kernel real deste sandbox, não simulada.
+
+`adapt_weight` é uma regra determinística se-então (throughput caiu +
+CPU contendida + memória OK → sobe o peso; throughput bom + CPU ociosa →
+volta ao peso base; caso contrário mantém) — **não é aprendizado por
+reforço nem qualquer forma de ML**. É exatamente o que a descrição
+original desta etapa pedia: "um passo em direção ao aprendizado, não
+apenas regras fixas" — telemetria real substituindo o valor estático por
+perfil da 0.7, mas ainda não um scheduler que aprende de fato (ajustando
+parâmetros a partir de recompensa observada). Isso continua sendo
+trabalho futuro, na mesma linha do scheduler `sched_ext` adiado na 0.7.
 
 ## 0.9 / 1.0 — Distribuição
 
