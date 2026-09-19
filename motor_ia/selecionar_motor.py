@@ -14,8 +14,10 @@ Uso:
 """
 
 import json
+import os
 import platform
 import shutil
+import signal
 import subprocess
 import urllib.error
 import urllib.request
@@ -191,6 +193,51 @@ def listar_processos_llama_server(raiz_proc: Path = Path("/proc")) -> list:
             }
         )
     return processos
+
+
+def encerrar_processos_llama_server(
+    raiz_proc: Path = Path("/proc"),
+    sinal: int = signal.SIGTERM,
+    matar: Callable[[int, int], None] = os.kill,
+) -> list:
+    """Encerra todo processo `llama-server` encontrado por
+    `listar_processos_llama_server` — botão de emergência complementar:
+    esse último só avisa que um servidor está rodando sem limite de
+    GPU, este age sobre o aviso sem precisar achar o PID na mão. Mata
+    tudo que casar, inclusive um servidor de código/visão subido
+    manualmente pelo usuário fora do controle da Fábrica — use só em
+    emergência (ex.: aviso de GPU sem limite combinado com temperatura
+    alta). Devolve a lista de PIDs que receberam o sinal com sucesso."""
+    encerrados = []
+    for processo in listar_processos_llama_server(raiz_proc):
+        try:
+            matar(processo["pid"], sinal)
+        except OSError:
+            continue
+        encerrados.append(processo["pid"])
+    return encerrados
+
+
+CAMINHO_HWMON_DRM = Path("/sys/class/drm")
+LIMITE_TEMPERATURA_GPU_CELSIUS = 90.0
+
+
+def temperatura_gpu_celsius(raiz: Path = CAMINHO_HWMON_DRM) -> Optional[float]:
+    """Lê a temperatura mais alta entre as GPUs via sysfs (Linux,
+    amdgpu/i915/nouveau — sem dependência nova, sem precisar de root).
+    Devolve `None` se não achar nenhum sensor (fora do Linux, sem GPU
+    dedicada, ou hwmon ainda não populado logo após o boot) — chamador
+    decide o que fazer com a ausência de leitura, não é tratado como
+    erro aqui."""
+    if not raiz.is_dir():
+        return None
+    temperaturas = []
+    for arquivo in raiz.glob("card*/device/hwmon/hwmon*/temp1_input"):
+        try:
+            temperaturas.append(int(arquivo.read_text().strip()) / 1000)
+        except (OSError, ValueError):
+            continue
+    return max(temperaturas) if temperaturas else None
 
 
 if __name__ == "__main__":

@@ -354,6 +354,60 @@ def test_buscar_codigo_aceita_ngl_customizado(tmp_path: Path, servidor_embedding
     assert comando[comando.index("--ctx-size") + 1] == "4096"
 
 
+def test_buscar_codigo_com_gpu_nao_recusa_temperatura_padrao_zero_ngl(
+    tmp_path: Path, servidor_embeddings_mock, monkeypatch
+):
+    # n_gpu_layers=0 por padrao (CPU-only) -> checagem de temperatura nem
+    # roda, mesmo que a GPU esteja "quente" (nao ha carga extra nela).
+    import busca_codigo.buscar_codigo as modulo
+
+    binario = tmp_path / "llama-server-falso"
+    binario.write_text("#!/bin/sh\nexit 0\n")
+    binario.chmod(0o755)
+    modelo = tmp_path / "modelo.gguf"
+    modelo.write_bytes(b"fake")
+    projeto = tmp_path / "projeto"
+    projeto.mkdir()
+    (projeto / "a.py").write_text("def a():\n    pass\n")
+
+    base_url = servidor_embeddings_mock()
+    porta = int(base_url.rsplit(":", 1)[1].split("/")[0])
+
+    monkeypatch.setattr(modulo, "temperatura_gpu_celsius", lambda: 99.0)
+    monkeypatch.setattr(modulo.subprocess, "Popen", lambda *a, **k: _ProcessoFalso())
+    monkeypatch.setattr(modulo, "_aguardar_pronto", lambda base_url, timeout: None)
+
+    modulo.buscar_codigo(binario, modelo, projeto, "algo", porta=porta)
+
+
+def test_buscar_codigo_recusa_com_gpu_quente_quando_ngl_maior_que_zero(
+    tmp_path: Path, servidor_embeddings_mock, monkeypatch
+):
+    import busca_codigo.buscar_codigo as modulo
+
+    binario = tmp_path / "llama-server-falso"
+    binario.write_text("#!/bin/sh\nexit 0\n")
+    binario.chmod(0o755)
+    modelo = tmp_path / "modelo.gguf"
+    modelo.write_bytes(b"fake")
+    projeto = tmp_path / "projeto"
+    projeto.mkdir()
+    (projeto / "a.py").write_text("def a():\n    pass\n")
+
+    base_url = servidor_embeddings_mock()
+    porta = int(base_url.rsplit(":", 1)[1].split("/")[0])
+
+    monkeypatch.setattr(modulo, "temperatura_gpu_celsius", lambda: 95.0)
+
+    def _popen_que_nao_deveria_ser_chamado(comando, **kwargs):
+        raise AssertionError("Popen não deveria ser chamado com GPU quente")
+
+    monkeypatch.setattr(modulo.subprocess, "Popen", _popen_que_nao_deveria_ser_chamado)
+
+    with pytest.raises(ServidorBuscaIndisponivelError, match="acima do limite seguro"):
+        modulo.buscar_codigo(binario, modelo, projeto, "algo", porta=porta, n_gpu_layers=20)
+
+
 def test_buscar_codigo_ordena_por_similaridade(tmp_path: Path, servidor_embeddings_mock, monkeypatch):
     import busca_codigo.buscar_codigo as modulo
 

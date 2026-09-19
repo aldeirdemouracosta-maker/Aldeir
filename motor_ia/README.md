@@ -76,3 +76,37 @@ Cada entrada é um `MotorIA` com:
 
 Nenhuma outra parte do código precisa saber como cada motor funciona
 por dentro.
+
+## Segurança de GPU
+
+Três funções, sem dependência nova (Linux, lendo `/proc` e `/sys`),
+existem por causa de um incidente real: um `llama-server` sem limite
+de camadas na GPU sob carga sustentada travou o driver Vulkan de uma
+RX 580 até corromper o sistema (ver `TESTE_LOCAL.md`). O orquestrador
+já usa `-ngl`/`--ctx-size` conservadores em tudo que ele mesmo sobe
+(`busca_codigo`, `visao_mockup`) — estas três funções cobrem o que ele
+**não controla**: um `llama-server` de código subido manualmente pelo
+usuário fora do seu processo.
+
+- `listar_processos_llama_server()` — lista todo processo
+  `llama-server` rodando agora (lendo `/proc/<pid>/cmdline`) e se cada
+  um foi iniciado com `-ngl`/`--n-gpu-layers`. Só informa, não age.
+- `encerrar_processos_llama_server()` — manda `SIGTERM` em todo
+  processo listado acima. Botão de emergência: complementa a função
+  anterior com uma forma de agir sobre o aviso sem precisar achar o
+  PID na mão. Aceita `matar` (padrão `os.kill`) pra ser testável sem
+  matar processo de verdade.
+- `temperatura_gpu_celsius()` — lê a maior temperatura entre as GPUs
+  via sysfs (`/sys/class/drm/card*/device/hwmon/hwmon*/temp1_input`).
+  Devolve `None` se não achar sensor (fora do Linux, sem GPU dedicada,
+  hwmon ainda não populado) — quem chama decide o que fazer com a
+  ausência de leitura. `busca_codigo.buscar_codigo` e
+  `visao_mockup.interpretar_mockup` usam isso pra **recusar** subir um
+  `llama-server` na GPU se ela já estiver acima de
+  `LIMITE_TEMPERATURA_GPU_CELSIUS` (90°C por padrão) — checagem
+  adicional ao limite de camadas: não adianta limitar `-ngl` se a
+  placa já estava no limite antes mesmo de começar.
+
+Todas as três são usadas pela interface (botões "Verificar
+configuração da GPU" e "Encerrar todos os llama-server" — ver
+`interface/README.md`).

@@ -49,7 +49,11 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import List, Optional
 
-from motor_ia.selecionar_motor import endpoint_responde
+from motor_ia.selecionar_motor import (
+    LIMITE_TEMPERATURA_GPU_CELSIUS,
+    endpoint_responde,
+    temperatura_gpu_celsius,
+)
 
 PREFIXO_QUERY = "Represent this query for searching relevant code: "
 
@@ -332,6 +336,7 @@ def buscar_codigo(
     peso_bm25: float = 0.4,
     n_gpu_layers: int = 0,
     ctx_size: int = 2048,
+    limite_temperatura_celsius: Optional[float] = LIMITE_TEMPERATURA_GPU_CELSIUS,
 ) -> List[dict]:
     """Sobe um llama-server com o modelo de embeddings so para esta
     chamada, (re)indexa o projeto sob demanda, busca os pedacos mais
@@ -345,7 +350,12 @@ def buscar_codigo(
     `n_gpu_layers=0` por padrao — o CodeRankEmbed e pequeno o bastante
     pra rodar so em CPU sem ficar lento, e isso soma zero carga extra na
     GPU (que ja esta ocupada com o modelo de codigo/visao). Só suba pra
-    GPU se tiver testado que a placa aguenta a carga combinada."""
+    GPU se tiver testado que a placa aguenta a carga combinada.
+
+    Se `n_gpu_layers > 0`, confere a temperatura da GPU (sysfs, Linux)
+    antes de subir o servidor e recusa se estiver acima de
+    `limite_temperatura_celsius` — mesma logica de seguranca usada em
+    `visao_mockup.interpretar_mockup`, ver motivo em TESTE_LOCAL.md."""
     if not (caminho_binario_llama_server.is_file() and os.access(caminho_binario_llama_server, os.X_OK)):
         raise ServidorBuscaIndisponivelError(
             f"binario do llama-server nao encontrado ou sem permissao de execucao: {caminho_binario_llama_server}"
@@ -354,6 +364,15 @@ def buscar_codigo(
         raise ServidorBuscaIndisponivelError(f"modelo de embeddings nao encontrado: {caminho_modelo}")
     if not raiz_projeto.is_dir():
         raise ServidorBuscaIndisponivelError(f"pasta do projeto nao encontrada: {raiz_projeto}")
+
+    if n_gpu_layers > 0 and limite_temperatura_celsius is not None:
+        temperatura = temperatura_gpu_celsius()
+        if temperatura is not None and temperatura >= limite_temperatura_celsius:
+            raise ServidorBuscaIndisponivelError(
+                f"GPU a {temperatura:.0f}°C, acima do limite seguro "
+                f"({limite_temperatura_celsius:.0f}°C) — nao vou subir o llama-server "
+                "na GPU agora. Deixe esfriar (ou rode com n_gpu_layers=0) antes de tentar de novo."
+            )
 
     base_url = f"http://127.0.0.1:{porta}/v1"
     processo = subprocess.Popen(
@@ -431,6 +450,10 @@ def main() -> None:
         help="camadas offloaded na GPU (padrão 0 = só CPU — o modelo de embeddings é pequeno o bastante)",
     )
     parser.add_argument("--ctx-size", type=int, default=2048)
+    parser.add_argument(
+        "--sem-checagem-temperatura", action="store_true",
+        help="nao recusa subir o servidor mesmo com a GPU quente (sysfs) — use com cautela",
+    )
     args = parser.parse_args()
 
     resultados = buscar_codigo(
@@ -444,6 +467,7 @@ def main() -> None:
         peso_bm25=args.peso_bm25,
         n_gpu_layers=args.n_gpu_layers,
         ctx_size=args.ctx_size,
+        limite_temperatura_celsius=None if args.sem_checagem_temperatura else LIMITE_TEMPERATURA_GPU_CELSIUS,
     )
     for resultado in resultados:
         print(f"{resultado['arquivo']}:{resultado['linha_inicio']}-{resultado['linha_fim']} "

@@ -187,3 +187,84 @@ def test_interpretar_mockup_aceita_ngl_e_ctx_size_customizados(tmp_path: Path, i
     comando = comandos_capturados[0]
     assert comando[comando.index("-ngl") + 1] == "99"
     assert comando[comando.index("--ctx-size") + 1] == "8192"
+
+
+def test_interpretar_mockup_recusa_com_gpu_quente(tmp_path: Path, imagem_fake: Path, monkeypatch):
+    import visao_mockup.interpretar_mockup as modulo
+
+    binario = tmp_path / "llama-server"
+    binario.write_text("#!/bin/sh\nexit 0\n")
+    binario.chmod(0o755)
+    modelo = tmp_path / "modelo.gguf"
+    modelo.write_bytes(b"fake")
+    mmproj = tmp_path / "mmproj.gguf"
+    mmproj.write_bytes(b"fake")
+
+    monkeypatch.setattr(modulo, "temperatura_gpu_celsius", lambda: 95.0)
+
+    def _popen_que_nao_deveria_ser_chamado(comando, **kwargs):
+        raise AssertionError("Popen não deveria ser chamado com GPU quente")
+
+    monkeypatch.setattr(modulo.subprocess, "Popen", _popen_que_nao_deveria_ser_chamado)
+
+    with pytest.raises(ServidorVisaoIndisponivelError, match="acima do limite seguro"):
+        interpretar_mockup(binario, modelo, mmproj, imagem_fake)
+
+
+def test_interpretar_mockup_sobe_normal_com_gpu_fria(tmp_path: Path, imagem_fake: Path, monkeypatch):
+    import visao_mockup.interpretar_mockup as modulo
+
+    binario = tmp_path / "llama-server"
+    binario.write_text("#!/bin/sh\nexit 0\n")
+    binario.chmod(0o755)
+    modelo = tmp_path / "modelo.gguf"
+    modelo.write_bytes(b"fake")
+    mmproj = tmp_path / "mmproj.gguf"
+    mmproj.write_bytes(b"fake")
+
+    class _ProcessoFalso:
+        stderr = None
+
+        def terminate(self):
+            pass
+
+        def wait(self, timeout=None):
+            pass
+
+    monkeypatch.setattr(modulo, "temperatura_gpu_celsius", lambda: 60.0)
+    monkeypatch.setattr(modulo.subprocess, "Popen", lambda comando, **kwargs: _ProcessoFalso())
+    monkeypatch.setattr(modulo, "_aguardar_pronto", lambda base_url, timeout: None)
+    monkeypatch.setattr(modulo, "interpretar_imagem", lambda *a, **k: "descrição")
+
+    assert modulo.interpretar_mockup(binario, modelo, mmproj, imagem_fake) == "descrição"
+
+
+def test_interpretar_mockup_ignora_temperatura_se_limite_none(tmp_path: Path, imagem_fake: Path, monkeypatch):
+    import visao_mockup.interpretar_mockup as modulo
+
+    binario = tmp_path / "llama-server"
+    binario.write_text("#!/bin/sh\nexit 0\n")
+    binario.chmod(0o755)
+    modelo = tmp_path / "modelo.gguf"
+    modelo.write_bytes(b"fake")
+    mmproj = tmp_path / "mmproj.gguf"
+    mmproj.write_bytes(b"fake")
+
+    class _ProcessoFalso:
+        stderr = None
+
+        def terminate(self):
+            pass
+
+        def wait(self, timeout=None):
+            pass
+
+    monkeypatch.setattr(modulo, "temperatura_gpu_celsius", lambda: 95.0)
+    monkeypatch.setattr(modulo.subprocess, "Popen", lambda comando, **kwargs: _ProcessoFalso())
+    monkeypatch.setattr(modulo, "_aguardar_pronto", lambda base_url, timeout: None)
+    monkeypatch.setattr(modulo, "interpretar_imagem", lambda *a, **k: "descrição")
+
+    assert (
+        modulo.interpretar_mockup(binario, modelo, mmproj, imagem_fake, limite_temperatura_celsius=None)
+        == "descrição"
+    )

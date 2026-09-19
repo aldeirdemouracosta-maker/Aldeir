@@ -125,7 +125,15 @@ Vulkan e corrompendo o sistema numa sessão real. Comece conservador
 (`-ngl 20`), suba aos poucos só monitorando temperatura (`CoreCtrl`,
 `nvtop`), nunca sem limite nenhum. `visao_mockup` e `busca_codigo`
 (que sobem seus próprios `llama-server` internamente) já usam esse
-mesmo padrão conservador por default.
+mesmo padrão conservador por default — e, além de limitar `-ngl`,
+recusam subir o servidor na GPU se a temperatura já estiver acima de
+90°C no momento (via sysfs, ver `motor_ia/README.md`).
+
+Esse servidor manual, por ser subido fora do controle da Fábrica, não
+tem essa checagem — é o motivo do botão "Verificar configuração da
+GPU" (mostra a temperatura atual e se algum `llama-server` está sem
+`-ngl`) e do botão de emergência "Encerrar todos os llama-server" na
+interface (ver `interface/README.md`).
 
 `--jinja` é obrigatório — ativa o processamento de chat template
 necessário para o tool calling do orquestrador funcionar (sem isso o

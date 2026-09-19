@@ -93,6 +93,28 @@ FERRAMENTAS = [
     {
         "type": "function",
         "function": {
+            "name": "listar_arquivos",
+            "description": (
+                "Lista arquivos e subpastas diretos de uma pasta do projeto (não "
+                "recursivo). Use antes de ler_arquivo/buscar_codigo quando não "
+                "souber os nomes exatos dos arquivos, ou pra confirmar que um "
+                "arquivo/pasta existe antes de tentar acessá-lo."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "caminho": {
+                        "type": "string",
+                        "description": "Caminho relativo à raiz do projeto (vazio ou omitido = raiz)",
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "executar_comando",
             "description": (
                 "Roda um comando isolado (sandbox, sem rede) com a raiz do projeto como "
@@ -199,6 +221,20 @@ def escrever_arquivo(raiz: Path, relativo: str, conteudo: str) -> None:
     caminho = _resolver_caminho_seguro(raiz, relativo)
     caminho.parent.mkdir(parents=True, exist_ok=True)
     caminho.write_text(conteudo)
+
+
+def listar_arquivos(raiz: Path, relativo: str = "") -> list:
+    """Lista o conteúdo direto (não recursivo) de uma pasta do projeto —
+    alternativa nativa a `executar_comando(["ls", ...])`: não depende do
+    sandbox (mais barato, sem subprocesso) e devolve um resultado
+    estruturado em vez de texto solto pro modelo interpretar."""
+    caminho = _resolver_caminho_seguro(raiz, relativo or ".")
+    if not caminho.is_dir():
+        raise NotADirectoryError(f"não é uma pasta dentro do projeto: {relativo!r}")
+    return [
+        {"nome": item.name, "tipo": "pasta" if item.is_dir() else "arquivo"}
+        for item in sorted(caminho.iterdir())
+    ]
 
 
 def extrair_chamada_de_texto(texto: str) -> Optional[dict]:
@@ -315,6 +351,13 @@ def executar_ferramenta(
             escrever_arquivo(raiz_projeto, argumentos["caminho"], argumentos["conteudo"])
             return "ok"
         except (OSError, CaminhoForaDoProjetoError) as erro:
+            return f"erro: {erro}"
+
+    if nome == "listar_arquivos":
+        try:
+            itens = listar_arquivos(raiz_projeto, argumentos.get("caminho", ""))
+            return json.dumps(itens, ensure_ascii=False)
+        except (OSError, CaminhoForaDoProjetoError, NotADirectoryError) as erro:
             return f"erro: {erro}"
 
     if nome == "executar_comando":

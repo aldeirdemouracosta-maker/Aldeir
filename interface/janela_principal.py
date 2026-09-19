@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QVBoxLayout,
@@ -39,7 +40,11 @@ from PySide6.QtWidgets import (
 from analisador_projeto.analisar_completude import analisar_completude, formatar_diagnostico_para_prompt
 from geracao_mockup.gerar_mockup_simples import gerar_mockup_simples
 from importador_zip.inspecionar_zip import analisar_projeto as analisar_zip
-from motor_ia.selecionar_motor import listar_processos_llama_server
+from motor_ia.selecionar_motor import (
+    encerrar_processos_llama_server,
+    listar_processos_llama_server,
+    temperatura_gpu_celsius,
+)
 from orquestrador.orquestrador import ExecucaoInterrompidaError, Orquestrador
 from visao_mockup.interpretar_mockup import interpretar_mockup as interpretar_mockup_imagem
 
@@ -278,10 +283,19 @@ class JanelaPrincipal(QMainWindow):
             "sustentada o driver pode travar (visto na prática nesta máquina)."
         )
         self.botao_verificar_gpu.clicked.connect(self._verificar_configuracao_gpu)
+        self.botao_encerrar_gpu = QPushButton("Encerrar todos os llama-server")
+        self.botao_encerrar_gpu.setToolTip(
+            "Botão de emergência: manda SIGTERM em todo processo llama-server "
+            "encontrado, inclusive um servidor de código/visão que você tenha "
+            "subido manualmente. Usa antes de qualquer chamada em andamento no "
+            "aplicativo falhar. Pede confirmação antes de agir."
+        )
+        self.botao_encerrar_gpu.clicked.connect(self._encerrar_llama_server)
         linha_executar.addWidget(self.botao_executar)
         linha_executar.addWidget(self.botao_parar)
         linha_executar.addWidget(self.botao_configurar_busca)
         linha_executar.addWidget(self.botao_verificar_gpu)
+        linha_executar.addWidget(self.botao_encerrar_gpu)
         layout.addLayout(linha_executar)
 
         self.rotulo_status = QLabel("")
@@ -674,6 +688,10 @@ class JanelaPrincipal(QMainWindow):
         self.area_relatorios.appendPlainText(f"[{time.strftime('%H:%M:%S')}] {mensagem}")
 
     def _verificar_configuracao_gpu(self) -> None:
+        temperatura = temperatura_gpu_celsius()
+        if temperatura is not None:
+            self._registrar_relatorio(f"[GPU] Temperatura atual: {temperatura:.0f}°C.")
+
         processos = listar_processos_llama_server()
         if not processos:
             self._registrar_relatorio("[GPU] Nenhum llama-server rodando no momento.")
@@ -696,6 +714,31 @@ class JanelaPrincipal(QMainWindow):
             )
         else:
             self.rotulo_status.setText("Todos os llama-server rodando com limite de GPU configurado.")
+
+    def _encerrar_llama_server(self) -> None:
+        processos = listar_processos_llama_server()
+        if not processos:
+            self._registrar_relatorio("[GPU] Nenhum llama-server rodando para encerrar.")
+            self.rotulo_status.setText("Nenhum llama-server encontrado.")
+            return
+
+        resposta = QMessageBox.question(
+            self,
+            "Encerrar llama-server",
+            f"Encerrar {len(processos)} processo(s) llama-server agora (SIGTERM)? "
+            "Isso inclui qualquer servidor de código ou visão subido manualmente — "
+            "uma execução em andamento no aplicativo, se houver, vai falhar.",
+        )
+        if resposta != QMessageBox.Yes:
+            return
+
+        encerrados = encerrar_processos_llama_server()
+        if encerrados:
+            self._registrar_relatorio(f"[GPU] Encerrados: PID(s) {', '.join(str(p) for p in encerrados)}.")
+            self.rotulo_status.setText(f"{len(encerrados)} llama-server encerrado(s).")
+        else:
+            self._registrar_relatorio("[GPU] Nenhum processo foi encerrado (falha ao enviar sinal).")
+            self.rotulo_status.setText("Falha ao encerrar llama-server — ver painel Relatórios.")
 
     def _atualizar_painel_codigo(self, linha: str) -> None:
         prefixo = "escrever_arquivo("
@@ -727,7 +770,9 @@ class JanelaPrincipal(QMainWindow):
                 )
             return
 
-        for nome_ferramenta in ("ler_arquivo", "escrever_arquivo", "executar_comando", "buscar_codigo", "finalizar"):
+        for nome_ferramenta in (
+            "ler_arquivo", "escrever_arquivo", "listar_arquivos", "executar_comando", "buscar_codigo", "finalizar",
+        ):
             if linha.startswith(nome_ferramenta + "("):
                 self._ultima_ferramenta_chamada = nome_ferramenta
                 return

@@ -6,10 +6,12 @@ from pathlib import Path
 
 from motor_ia.selecionar_motor import (
     MotorIA,
+    encerrar_processos_llama_server,
     endpoint_responde,
     listar_processos_llama_server,
     motores_conhecidos,
     selecionar_motor,
+    temperatura_gpu_celsius,
 )
 
 
@@ -142,3 +144,66 @@ def test_listar_processos_llama_server_varios_processos(tmp_path: Path):
     processos = listar_processos_llama_server(tmp_path)
 
     assert {p["pid"] for p in processos} == {555, 666}
+
+
+def test_encerrar_processos_llama_server_manda_sinal_em_cada_pid(tmp_path: Path):
+    _criar_processo_falso(tmp_path, 555, ["/usr/bin/llama-server", "-m", "a.gguf", "--port", "8080"])
+    _criar_processo_falso(tmp_path, 666, ["/usr/bin/llama-server", "-m", "b.gguf", "--port", "8081"])
+    _criar_processo_falso(tmp_path, 777, ["/usr/bin/bash"])
+
+    recebidos = []
+    encerrados = encerrar_processos_llama_server(
+        tmp_path, sinal=15, matar=lambda pid, sinal: recebidos.append((pid, sinal))
+    )
+
+    assert sorted(recebidos) == [(555, 15), (666, 15)]
+    assert sorted(encerrados) == [555, 666]
+
+
+def test_encerrar_processos_llama_server_ignora_falha_de_um_pid(tmp_path: Path):
+    _criar_processo_falso(tmp_path, 555, ["/usr/bin/llama-server", "-m", "a.gguf", "--port", "8080"])
+    _criar_processo_falso(tmp_path, 666, ["/usr/bin/llama-server", "-m", "b.gguf", "--port", "8081"])
+
+    def matar_falso(pid, sinal):
+        if pid == 555:
+            raise OSError("processo já morreu")
+
+    encerrados = encerrar_processos_llama_server(tmp_path, matar=matar_falso)
+
+    assert encerrados == [666]
+
+
+def test_encerrar_processos_llama_server_sem_processos_devolve_vazio(tmp_path: Path):
+    assert encerrar_processos_llama_server(tmp_path, matar=lambda pid, sinal: None) == []
+
+
+def test_temperatura_gpu_celsius_sem_sysfs_devolve_none(tmp_path: Path):
+    assert temperatura_gpu_celsius(tmp_path / "nao_existe") is None
+
+
+def test_temperatura_gpu_celsius_le_sensor(tmp_path: Path):
+    hwmon = tmp_path / "card0" / "device" / "hwmon" / "hwmon0"
+    hwmon.mkdir(parents=True)
+    (hwmon / "temp1_input").write_text("65000\n")
+
+    assert temperatura_gpu_celsius(tmp_path) == 65.0
+
+
+def test_temperatura_gpu_celsius_usa_a_maior_entre_varias_gpus(tmp_path: Path):
+    hwmon0 = tmp_path / "card0" / "device" / "hwmon" / "hwmon0"
+    hwmon0.mkdir(parents=True)
+    (hwmon0 / "temp1_input").write_text("60000\n")
+
+    hwmon1 = tmp_path / "card1" / "device" / "hwmon" / "hwmon1"
+    hwmon1.mkdir(parents=True)
+    (hwmon1 / "temp1_input").write_text("91000\n")
+
+    assert temperatura_gpu_celsius(tmp_path) == 91.0
+
+
+def test_temperatura_gpu_celsius_ignora_sensor_ilegivel(tmp_path: Path):
+    hwmon = tmp_path / "card0" / "device" / "hwmon" / "hwmon0"
+    hwmon.mkdir(parents=True)
+    (hwmon / "temp1_input").write_text("não é número")
+
+    assert temperatura_gpu_celsius(tmp_path) is None

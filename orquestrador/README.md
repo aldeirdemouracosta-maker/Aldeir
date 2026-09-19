@@ -21,6 +21,14 @@ repetindo até o modelo chamar `finalizar` ou estourar
 
 - `ler_arquivo(caminho)` — leitura confinada à raiz do projeto.
 - `escrever_arquivo(caminho, conteudo)` — escrita confinada à raiz do projeto.
+- `listar_arquivos(caminho)` — lista o conteúdo direto (não recursivo) de
+  uma pasta do projeto (raiz se `caminho` vazio/omitido). Sempre
+  disponível (diferente de `buscar_codigo`, não depende de nada
+  configurado). Existe como alternativa nativa a
+  `executar_comando(["ls", ...])`: não passa pelo sandbox (sem
+  subprocesso, mais barato) e devolve uma lista estruturada
+  `[{"nome": ..., "tipo": "arquivo"|"pasta"}, ...]` em vez de texto
+  solto pro modelo interpretar.
 - `executar_comando(comando)` — roda via `sandbox_execucao` (sem rede, timeout).
 - `buscar_codigo(pergunta)` — **opcional**: busca semântica no código via
   `busca_codigo/buscar_codigo.py` (embeddings, ver README daquele

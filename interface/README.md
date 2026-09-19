@@ -18,6 +18,7 @@ Janela única, minimalista, que reaproveita `analisador_projeto` e
 │ └────────────────────────────────────────────────────┘│             │
 │ [Executar] [Parar] [Configurar busca semântica…]      │             │
 │ [Verificar configuração da GPU]                       │             │
+│ [Encerrar todos os llama-server]                      │             │
 │ (status)                                              │             │
 ├────────────────────────────────────────────────────────────────────┤
 │ Progresso ou Relatórios (abas, dockável, arrastável)                │
@@ -98,13 +99,23 @@ pro agente.
 O botão **"Verificar configuração da GPU"** lista (via
 `motor_ia.listar_processos_llama_server`, lendo `/proc` — Linux) todo
 processo `llama-server` rodando agora e avisa, no painel "Relatórios",
-se algum foi iniciado **sem** `-ngl`/`--n-gpu-layers`. Existe porque o
-servidor do modelo de código é subido manualmente pelo usuário, fora
-do controle da Fábrica — nada no código impede rodar sem limite de
-GPU, e isso já derrubou uma GPU sob carga sustentada numa sessão real
-(ver `TESTE_LOCAL.md`). Esse botão só torna o problema visível, não o
-resolve sozinho — o usuário ainda precisa reiniciar o `llama-server`
-manualmente com a flag certa se o aviso aparecer.
+se algum foi iniciado **sem** `-ngl`/`--n-gpu-layers`. Também mostra a
+temperatura atual da GPU (via `motor_ia.temperatura_gpu_celsius`,
+sysfs), quando o sistema expõe o sensor. Existe porque o servidor do
+modelo de código é subido manualmente pelo usuário, fora do controle
+da Fábrica — nada no código impede rodar sem limite de GPU, e isso já
+derrubou uma GPU sob carga sustentada numa sessão real (ver
+`TESTE_LOCAL.md`). Esse botão só torna o problema visível, não o
+resolve sozinho.
+
+O botão **"Encerrar todos os llama-server"**, ao lado, é o
+complemento que age sobre o aviso: manda `SIGTERM` (via
+`motor_ia.encerrar_processos_llama_server`) em todo processo listado
+acima — pede confirmação antes (`QMessageBox`), porque isso inclui
+qualquer servidor de código ou visão que o usuário tenha subido
+manualmente, e derruba na hora qualquer execução em andamento no
+aplicativo. Pensado como botão de emergência (ex.: GPU sem limite +
+temperatura alta ao mesmo tempo), não como parte do fluxo normal.
 
 ## Abrir um projeto em ZIP
 

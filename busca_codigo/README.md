@@ -35,6 +35,13 @@ carga sustentada — evitamos repetir isso aqui de propósito. Só mude
 `n_gpu_layers` se tiver testado que a placa aguenta a carga combinada,
 monitorando temperatura (`CoreCtrl`, `nvtop`).
 
+Se `n_gpu_layers > 0`, `buscar_codigo` também confere a temperatura
+atual da GPU (`motor_ia.temperatura_gpu_celsius`, sysfs) antes de
+subir o servidor e **recusa** (`ServidorBuscaIndisponivelError`) se
+estiver acima de `limite_temperatura_celsius` (90°C por padrão,
+`--sem-checagem-temperatura` desativa na CLI) — checagem adicional ao
+limite de camadas, não substitui.
+
 ## Divisão em pedaços (chunking)
 
 Arquivos **Python** são cortados por função/classe de nível superior

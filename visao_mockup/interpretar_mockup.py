@@ -27,8 +27,13 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import Optional
 
-from motor_ia.selecionar_motor import endpoint_responde
+from motor_ia.selecionar_motor import (
+    LIMITE_TEMPERATURA_GPU_CELSIUS,
+    endpoint_responde,
+    temperatura_gpu_celsius,
+)
 
 PROMPT_PADRAO = (
     "Descreva este mockup de interface de aplicativo desktop. Liste cada "
@@ -118,6 +123,7 @@ def interpretar_mockup(
     timeout_geracao: int = 180,
     n_gpu_layers: int = 20,
     ctx_size: int = 4096,
+    limite_temperatura_celsius: Optional[float] = LIMITE_TEMPERATURA_GPU_CELSIUS,
 ) -> str:
     """Sobe um llama-server com modelo de visao so para esta chamada,
     interpreta a imagem, desliga o servidor, e devolve a descricao —
@@ -129,7 +135,13 @@ def interpretar_mockup(
     maximo sob carga sustentada. Visto na prática: uma RX 580 travando
     o driver Vulkan/sistema inteiro durante uma chamada real. Ajuste
     pra cima com cautela, monitorando temperatura (ver `CoreCtrl`/
-    `nvtop`), nunca sem limite nenhum."""
+    `nvtop`), nunca sem limite nenhum.
+
+    Alem do limite de camadas, confere a temperatura atual da GPU
+    (sysfs, Linux) antes de subir o servidor e recusa se estiver acima
+    de `limite_temperatura_celsius` (90°C por padrao) — nao adianta
+    limitar `-ngl` se a placa ja estava no limite antes mesmo de
+    comecar."""
     if not (caminho_binario_llama_server.is_file() and os.access(caminho_binario_llama_server, os.X_OK)):
         raise ServidorVisaoIndisponivelError(
             f"binario do llama-server nao encontrado ou sem permissao de execucao: {caminho_binario_llama_server}"
@@ -140,6 +152,15 @@ def interpretar_mockup(
         raise ServidorVisaoIndisponivelError(f"mmproj nao encontrado: {caminho_mmproj}")
     if not caminho_imagem.is_file():
         raise ServidorVisaoIndisponivelError(f"imagem nao encontrada: {caminho_imagem}")
+
+    if n_gpu_layers > 0 and limite_temperatura_celsius is not None:
+        temperatura = temperatura_gpu_celsius()
+        if temperatura is not None and temperatura >= limite_temperatura_celsius:
+            raise ServidorVisaoIndisponivelError(
+                f"GPU a {temperatura:.0f}°C, acima do limite seguro "
+                f"({limite_temperatura_celsius:.0f}°C) — nao vou subir o llama-server "
+                "na GPU agora. Deixe esfriar (ou rode com n_gpu_layers=0) antes de tentar de novo."
+            )
 
     base_url = f"http://127.0.0.1:{porta}/v1"
     processo = subprocess.Popen(
@@ -191,6 +212,10 @@ def main() -> None:
         help="camadas offloaded na GPU (padrão conservador — evite offload total sem monitorar temperatura)",
     )
     parser.add_argument("--ctx-size", type=int, default=4096)
+    parser.add_argument(
+        "--sem-checagem-temperatura", action="store_true",
+        help="nao recusa subir o servidor mesmo com a GPU quente (sysfs) — use com cautela",
+    )
     args = parser.parse_args()
 
     descricao = interpretar_mockup(
@@ -204,6 +229,7 @@ def main() -> None:
         timeout_geracao=args.timeout_geracao,
         n_gpu_layers=args.n_gpu_layers,
         ctx_size=args.ctx_size,
+        limite_temperatura_celsius=None if args.sem_checagem_temperatura else LIMITE_TEMPERATURA_GPU_CELSIUS,
     )
     print(descricao)
 

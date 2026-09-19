@@ -15,7 +15,7 @@ import pytest
 pytest.importorskip("PySide6")
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QDockWidget
+from PySide6.QtWidgets import QDockWidget, QMessageBox
 
 import interface.janela_principal as jp
 import orquestrador.orquestrador as orq
@@ -225,6 +225,77 @@ def test_verificar_gpu_sem_limite_avisa_no_relatorio_e_status(qtbot, monkeypatch
     assert "PID 222" in relatorio
     assert "SEM limite de GPU" in relatorio
     assert "sem limite de GPU" in janela.rotulo_status.text()
+
+
+def test_verificar_gpu_mostra_temperatura_quando_disponivel(qtbot, monkeypatch):
+    monkeypatch.setattr(jp, "temperatura_gpu_celsius", lambda: 72.0)
+    monkeypatch.setattr(jp, "listar_processos_llama_server", lambda: [])
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._verificar_configuracao_gpu()
+
+    assert "72" in janela.area_relatorios.toPlainText()
+
+
+def test_encerrar_llama_server_sem_processos_avisa(qtbot, monkeypatch):
+    monkeypatch.setattr(jp, "listar_processos_llama_server", lambda: [])
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._encerrar_llama_server()
+
+    assert "Nenhum llama-server" in janela.area_relatorios.toPlainText()
+
+
+def test_encerrar_llama_server_pede_confirmacao_e_encerra(qtbot, monkeypatch):
+    monkeypatch.setattr(
+        jp,
+        "listar_processos_llama_server",
+        lambda: [{"pid": 333, "porta": 8080, "tem_limite_gpu": False, "cmdline": "..."}],
+    )
+    chamados = {}
+
+    def _encerrar_falso():
+        chamados["chamou"] = True
+        return [333]
+
+    monkeypatch.setattr(jp, "encerrar_processos_llama_server", _encerrar_falso)
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._encerrar_llama_server()
+
+    assert chamados.get("chamou") is True
+    assert "333" in janela.area_relatorios.toPlainText()
+    assert "encerrado" in janela.rotulo_status.text()
+
+
+def test_encerrar_llama_server_cancelado_nao_encerra(qtbot, monkeypatch):
+    monkeypatch.setattr(
+        jp,
+        "listar_processos_llama_server",
+        lambda: [{"pid": 333, "porta": 8080, "tem_limite_gpu": False, "cmdline": "..."}],
+    )
+    chamados = {}
+
+    def _encerrar_falso():
+        chamados["chamou"] = True
+        return [333]
+
+    monkeypatch.setattr(jp, "encerrar_processos_llama_server", _encerrar_falso)
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.No)
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._encerrar_llama_server()
+
+    assert "chamou" not in chamados
 
 
 def test_execucao_interrompida_registra_no_relatorio(qtbot):

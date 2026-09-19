@@ -425,6 +425,64 @@ def test_montar_ferramentas_com_busca_inclui_buscar_codigo():
     assert "buscar_codigo" in nomes
 
 
+def test_listar_arquivos_lista_raiz_do_projeto(projeto: Path):
+    (projeto / "pasta").mkdir()
+
+    itens = orq.listar_arquivos(projeto)
+
+    nomes_tipos = {(i["nome"], i["tipo"]) for i in itens}
+    assert ("existente.txt", "arquivo") in nomes_tipos
+    assert ("pasta", "pasta") in nomes_tipos
+
+
+def test_listar_arquivos_nao_e_recursivo(projeto: Path):
+    (projeto / "pasta").mkdir()
+    (projeto / "pasta" / "dentro.txt").write_text("x")
+
+    itens = orq.listar_arquivos(projeto)
+
+    assert all(i["nome"] != "dentro.txt" for i in itens)
+
+
+def test_listar_arquivos_subcaminho(projeto: Path):
+    (projeto / "pasta").mkdir()
+    (projeto / "pasta" / "dentro.txt").write_text("x")
+
+    itens = orq.listar_arquivos(projeto, "pasta")
+
+    assert itens == [{"nome": "dentro.txt", "tipo": "arquivo"}]
+
+
+def test_listar_arquivos_recusa_caminho_fora_do_projeto(projeto: Path):
+    with pytest.raises(orq.CaminhoForaDoProjetoError):
+        orq.listar_arquivos(projeto, "../fora")
+
+
+def test_listar_arquivos_erro_se_nao_for_pasta(projeto: Path):
+    with pytest.raises(NotADirectoryError):
+        orq.listar_arquivos(projeto, "existente.txt")
+
+
+def test_executar_ferramenta_listar_arquivos(projeto: Path):
+    resultado = orq.executar_ferramenta(
+        projeto, orq.ConfiguracaoSandbox(), "listar_arquivos", {"caminho": ""}
+    )
+    itens = json.loads(resultado)
+    assert {"nome": "existente.txt", "tipo": "arquivo"} in itens
+
+
+def test_executar_ferramenta_listar_arquivos_erro_vira_texto_erro(projeto: Path):
+    resultado = orq.executar_ferramenta(
+        projeto, orq.ConfiguracaoSandbox(), "listar_arquivos", {"caminho": "nao/existe"}
+    )
+    assert resultado.startswith("erro:")
+
+
+def test_montar_ferramentas_sempre_inclui_listar_arquivos():
+    nomes = {f["function"]["name"] for f in orq.montar_ferramentas(busca_disponivel=False)}
+    assert "listar_arquivos" in nomes
+
+
 def test_executar_ferramenta_buscar_codigo_sem_configuracao_retorna_erro(projeto: Path):
     resultado = orq.executar_ferramenta(
         projeto, orq.ConfiguracaoSandbox(), "buscar_codigo", {"pergunta": "onde fica X"}
