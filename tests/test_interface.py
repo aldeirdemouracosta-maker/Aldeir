@@ -586,6 +586,94 @@ def test_trabalhador_orquestrador_emite_interrompido_quando_parada_solicitada_an
     assert erros == []
 
 
+def test_configurar_busca_semantica_salva_caminhos(qtbot, monkeypatch, tmp_path: Path):
+    from PySide6.QtCore import QSettings
+
+    arquivo_config = str(tmp_path / "config.ini")
+    monkeypatch.setattr(jp, "QSettings", lambda *a, **k: QSettings(arquivo_config, QSettings.IniFormat))
+
+    binario = tmp_path / "llama-server"
+    binario.write_text("#!/bin/sh\n")
+    modelo = tmp_path / "coderankembed.gguf"
+    modelo.write_bytes(b"fake")
+
+    respostas = iter([(str(binario), ""), (str(modelo), "")])
+    monkeypatch.setattr(jp.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: next(respostas)))
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._configurar_busca_semantica()
+
+    assert janela._configuracoes.value("busca/binario") == str(binario)
+    assert janela._configuracoes.value("busca/modelo") == str(modelo)
+    assert "configurada" in janela.rotulo_status.text()
+
+
+def test_configurar_busca_semantica_cancelado_nao_salva_nada(qtbot, monkeypatch, tmp_path: Path):
+    from PySide6.QtCore import QSettings
+
+    arquivo_config = str(tmp_path / "config.ini")
+    monkeypatch.setattr(jp, "QSettings", lambda *a, **k: QSettings(arquivo_config, QSettings.IniFormat))
+    monkeypatch.setattr(jp.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: ("", "")))
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._configurar_busca_semantica()
+
+    assert janela._configuracoes.value("busca/binario") is None
+
+
+def test_executar_orquestrador_passa_caminhos_de_busca_configurados(qtbot, projeto: Path, servidor_llm_mock, monkeypatch, tmp_path: Path):
+    from PySide6.QtCore import QSettings
+
+    arquivo_config = str(tmp_path / "config.ini")
+    monkeypatch.setattr(jp, "QSettings", lambda *a, **k: QSettings(arquivo_config, QSettings.IniFormat))
+
+    binario = tmp_path / "llama-server"
+    binario.write_text("#!/bin/sh\n")
+    modelo = tmp_path / "coderankembed.gguf"
+    modelo.write_bytes(b"fake")
+
+    base_url = servidor_llm_mock([_msg_tool_call("1", "finalizar", {"resumo": "ok", "sucesso": True})])
+    orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": base_url}
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela._configuracoes.setValue("busca/binario", str(binario))
+    janela._configuracoes.setValue("busca/modelo", str(modelo))
+    janela.campo_pasta.setText(str(projeto))
+    janela.campo_instrucao.setPlainText("faça algo")
+
+    janela.botao_executar.click()
+    qtbot.waitUntil(lambda: janela.botao_executar.isEnabled(), timeout=5000)
+
+    assert janela._trabalhador.caminho_binario_busca == binario
+    assert janela._trabalhador.caminho_modelo_busca == modelo
+
+
+def test_executar_orquestrador_sem_configuracao_de_busca_usa_none(qtbot, projeto: Path, servidor_llm_mock, monkeypatch, tmp_path: Path):
+    from PySide6.QtCore import QSettings
+
+    arquivo_config = str(tmp_path / "config.ini")
+    monkeypatch.setattr(jp, "QSettings", lambda *a, **k: QSettings(arquivo_config, QSettings.IniFormat))
+
+    base_url = servidor_llm_mock([_msg_tool_call("1", "finalizar", {"resumo": "ok", "sucesso": True})])
+    orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": base_url}
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela.campo_pasta.setText(str(projeto))
+    janela.campo_instrucao.setPlainText("faça algo")
+
+    janela.botao_executar.click()
+    qtbot.waitUntil(lambda: janela.botao_executar.isEnabled(), timeout=5000)
+
+    assert janela._trabalhador.caminho_binario_busca is None
+    assert janela._trabalhador.caminho_modelo_busca is None
+
+
 def test_descrever_mockup_sugere_pasta_do_mockup_gerado(qtbot, monkeypatch, tmp_path: Path):
     janela = JanelaPrincipal()
     qtbot.addWidget(janela)

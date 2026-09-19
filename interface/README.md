@@ -16,7 +16,7 @@ Janela única, minimalista, que reaproveita `analisador_projeto` e
 │ ┌────────────────────────────────────────────────────┐│             │
 │ │                                                      ││             │
 │ └────────────────────────────────────────────────────┘│             │
-│ [Executar] [Parar]                                    │             │
+│ [Executar] [Parar] [Configurar busca semântica…]      │             │
 │ (status)                                              │             │
 ├────────────────────────────────────────────────────────────────────┤
 │ Progresso (dockável, arrastável)                                    │
@@ -71,6 +71,14 @@ um modelo pequeno pode entrar num padrão de "correção" ruim (ex.:
 reescrever um arquivo inteiro repetidamente tentando "consertar" um
 falso positivo do diagnóstico) e antes não havia como interromper sem
 fechar a janela inteira.
+
+O botão **"Configurar busca semântica…"** aponta o executável
+`llama-server` e o GGUF de um modelo de embeddings (ver
+`busca_codigo/README.md`) — sempre pede os dois arquivos de novo a
+cada clique, não reaproveita um caminho salvo (evita repetir o bug do
+caminho de visão que travava). Opcional: sem configurar, "Executar"
+funciona normalmente, só sem a ferramenta `buscar_codigo` disponível
+pro agente.
 
 ## Abrir um projeto em ZIP
 

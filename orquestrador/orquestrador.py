@@ -130,6 +130,35 @@ FERRAMENTAS = [
     },
 ]
 
+FERRAMENTA_BUSCAR_CODIGO = {
+    "type": "function",
+    "function": {
+        "name": "buscar_codigo",
+        "description": (
+            "Busca semântica no código do projeto — devolve os trechos mais "
+            "relevantes pra uma pergunta em linguagem natural, com arquivo e "
+            "linhas, sem precisar ler cada arquivo pra achar o trecho certo. "
+            "Use antes de ler_arquivo quando não souber onde procurar."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "pergunta": {"type": "string", "description": "O que procurar, em linguagem natural"},
+            },
+            "required": ["pergunta"],
+        },
+    },
+}
+
+
+def montar_ferramentas(busca_disponivel: bool) -> list:
+    """FERRAMENTAS + buscar_codigo, se um modelo de embeddings estiver
+    configurado — não faz sentido anunciar ao modelo uma ferramenta que
+    vai sempre falhar por falta de configuração."""
+    if not busca_disponivel:
+        return FERRAMENTAS
+    return FERRAMENTAS + [FERRAMENTA_BUSCAR_CODIGO]
+
 
 class MotorIndisponivelError(Exception):
     """Nenhum motor de IA elegível está respondendo (ver motor_ia)."""
@@ -205,7 +234,9 @@ def extrair_chamada_de_texto(texto: str) -> Optional[dict]:
     return None
 
 
-def chamar_llm(base_url: str, mensagens: list, timeout: int = 120, max_tokens: int = 512) -> dict:
+def chamar_llm(
+    base_url: str, mensagens: list, timeout: int = 120, max_tokens: int = 512, ferramentas: list = None
+) -> dict:
     # tool_choice="required" pede ao servidor para sempre emitir uma
     # chamada de ferramenta — em motores que respeitam isso, ativa a
     # gramática que garante tool_calls estruturado. Na prática, nem todo
@@ -223,7 +254,7 @@ def chamar_llm(base_url: str, mensagens: list, timeout: int = 120, max_tokens: i
         {
             "model": "local",
             "messages": mensagens,
-            "tools": FERRAMENTAS,
+            "tools": ferramentas if ferramentas is not None else FERRAMENTAS,
             "tool_choice": "required",
             "max_tokens": max_tokens,
         }
@@ -266,7 +297,12 @@ def chamar_llm(base_url: str, mensagens: list, timeout: int = 120, max_tokens: i
 
 
 def executar_ferramenta(
-    raiz_projeto: Path, config_sandbox: ConfiguracaoSandbox, nome: str, argumentos: dict
+    raiz_projeto: Path,
+    config_sandbox: ConfiguracaoSandbox,
+    nome: str,
+    argumentos: dict,
+    caminho_binario_busca: Optional[Path] = None,
+    caminho_modelo_busca: Optional[Path] = None,
 ) -> str:
     if nome == "ler_arquivo":
         try:
@@ -309,6 +345,19 @@ def executar_ferramenta(
             )
         return json.dumps(payload)
 
+    if nome == "buscar_codigo":
+        if not (caminho_binario_busca and caminho_modelo_busca):
+            return "erro: busca semântica não configurada nesta execução"
+        from busca_codigo.buscar_codigo import ServidorBuscaIndisponivelError, buscar_codigo
+
+        try:
+            resultados = buscar_codigo(
+                caminho_binario_busca, caminho_modelo_busca, raiz_projeto, argumentos["pergunta"]
+            )
+        except ServidorBuscaIndisponivelError as erro:
+            return f"erro: {erro}"
+        return json.dumps(resultados, ensure_ascii=False)
+
     return f"erro: ferramenta desconhecida {nome!r}"
 
 
@@ -320,6 +369,8 @@ class Orquestrador:
         max_iteracoes: int = 20,
         timeout_llm: int = 300,
         max_tokens_resposta: int = 512,
+        caminho_binario_busca: Optional[Path] = None,
+        caminho_modelo_busca: Optional[Path] = None,
     ):
         self.raiz_projeto = raiz_projeto
         self.config_sandbox = config_sandbox or ConfiguracaoSandbox()
@@ -329,6 +380,11 @@ class Orquestrador:
         # com tool_choice=required pode passar de 120s na primeira chamada.
         self.timeout_llm = timeout_llm
         self.max_tokens_resposta = max_tokens_resposta
+        # Opcional: só oferece a ferramenta buscar_codigo se um modelo de
+        # embeddings (ex.: CodeRankEmbed) estiver configurado — ver
+        # busca_codigo/README.md.
+        self.caminho_binario_busca = caminho_binario_busca
+        self.caminho_modelo_busca = caminho_modelo_busca
 
     def rodar(
         self,
@@ -375,6 +431,9 @@ class Orquestrador:
             {"role": "system", "content": PROMPT_SISTEMA},
             {"role": "user", "content": mensagem_usuario},
         ]
+        ferramentas_disponiveis = montar_ferramentas(
+            bool(self.caminho_binario_busca and self.caminho_modelo_busca)
+        )
 
         for iteracao in range(self.max_iteracoes):
             if parar_pedido():
@@ -387,6 +446,7 @@ class Orquestrador:
                 mensagens,
                 timeout=self.timeout_llm,
                 max_tokens=self.max_tokens_resposta,
+                ferramentas=ferramentas_disponiveis,
             )
             mensagens.append(mensagem_modelo)
 
@@ -409,7 +469,12 @@ class Orquestrador:
 
                 avisar(f"{nome}({json.dumps(argumentos, ensure_ascii=False)})")
                 resultado = executar_ferramenta(
-                    self.raiz_projeto, self.config_sandbox, nome, argumentos
+                    self.raiz_projeto,
+                    self.config_sandbox,
+                    nome,
+                    argumentos,
+                    caminho_binario_busca=self.caminho_binario_busca,
+                    caminho_modelo_busca=self.caminho_modelo_busca,
                 )
                 avisar(f"  → {resultado[:200]}")
                 mensagens.append(
@@ -458,6 +523,18 @@ def main() -> None:
             "antes do texto, por causa de VRAM: ver TESTE_LOCAL.md)"
         ),
     )
+    parser.add_argument(
+        "--busca-binario",
+        type=Path,
+        default=None,
+        help="executável llama-server pra servir o modelo de embeddings (ativa a ferramenta buscar_codigo)",
+    )
+    parser.add_argument(
+        "--busca-modelo",
+        type=Path,
+        default=None,
+        help="GGUF do modelo de embeddings (ex.: CodeRankEmbed) — ver busca_codigo/README.md",
+    )
     args = parser.parse_args()
 
     partes_contexto = []
@@ -476,6 +553,8 @@ def main() -> None:
         ConfiguracaoSandbox(timeout_segundos=args.timeout_comando),
         timeout_llm=args.timeout_llm,
         max_tokens_resposta=args.max_tokens_resposta,
+        caminho_binario_busca=args.busca_binario,
+        caminho_modelo_busca=args.busca_modelo,
     )
     try:
         resultado = orquestrador.rodar(args.instrucao, contexto_extra=contexto_extra)

@@ -415,6 +415,49 @@ def test_deve_parar_true_antes_da_primeira_chamada_nao_completa_o_loop(projeto: 
         orq.Orquestrador(projeto).rodar("faça algo", deve_parar=lambda: True)
 
 
+def test_montar_ferramentas_sem_busca_nao_inclui_buscar_codigo():
+    nomes = {f["function"]["name"] for f in orq.montar_ferramentas(busca_disponivel=False)}
+    assert "buscar_codigo" not in nomes
+
+
+def test_montar_ferramentas_com_busca_inclui_buscar_codigo():
+    nomes = {f["function"]["name"] for f in orq.montar_ferramentas(busca_disponivel=True)}
+    assert "buscar_codigo" in nomes
+
+
+def test_executar_ferramenta_buscar_codigo_sem_configuracao_retorna_erro(projeto: Path):
+    resultado = orq.executar_ferramenta(
+        projeto, orq.ConfiguracaoSandbox(), "buscar_codigo", {"pergunta": "onde fica X"}
+    )
+    assert resultado.startswith("erro:")
+    assert "não configurada" in resultado
+
+
+def test_executar_ferramenta_buscar_codigo_chama_modulo_com_caminhos_certos(projeto: Path, monkeypatch, tmp_path: Path):
+    capturado = {}
+
+    def _buscar_falso(binario, modelo, raiz, pergunta):
+        capturado.update(binario=binario, modelo=modelo, raiz=raiz, pergunta=pergunta)
+        return [{"arquivo": "a.py", "linha_inicio": 1, "linha_fim": 5, "trecho": "...", "pontuacao": 0.9}]
+
+    import busca_codigo.buscar_codigo as modulo_busca
+
+    monkeypatch.setattr(modulo_busca, "buscar_codigo", _buscar_falso)
+
+    resultado = orq.executar_ferramenta(
+        projeto,
+        orq.ConfiguracaoSandbox(),
+        "buscar_codigo",
+        {"pergunta": "onde fica a validação"},
+        caminho_binario_busca=tmp_path / "llama-server",
+        caminho_modelo_busca=tmp_path / "coderankembed.gguf",
+    )
+
+    assert capturado["pergunta"] == "onde fica a validação"
+    assert capturado["raiz"] == projeto
+    assert json.loads(resultado)[0]["arquivo"] == "a.py"
+
+
 def test_executar_ferramenta_avisa_quando_comando_de_rede_falha(projeto: Path):
     resultado = orq.executar_ferramenta(
         projeto,

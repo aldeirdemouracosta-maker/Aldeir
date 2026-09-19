@@ -22,6 +22,12 @@ repetindo até o modelo chamar `finalizar` ou estourar
 - `ler_arquivo(caminho)` — leitura confinada à raiz do projeto.
 - `escrever_arquivo(caminho, conteudo)` — escrita confinada à raiz do projeto.
 - `executar_comando(comando)` — roda via `sandbox_execucao` (sem rede, timeout).
+- `buscar_codigo(pergunta)` — **opcional**: busca semântica no código via
+  `busca_codigo/buscar_codigo.py` (embeddings, ver README daquele
+  módulo). Só entra na lista de ferramentas anunciada ao modelo
+  (`montar_ferramentas`) se `caminho_binario_busca`/`caminho_modelo_busca`
+  forem passados ao `Orquestrador` — sem isso configurado, a ferramenta
+  simplesmente não existe pro modelo, em vez de existir e sempre falhar.
 - `finalizar(resumo, sucesso)` — encerra o loop.
 
 `ler_arquivo`/`escrever_arquivo` usam a mesma defesa contra path

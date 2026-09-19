@@ -110,11 +110,20 @@ class TrabalhadorOrquestrador(QObject):
     erro = Signal(str)
     interrompido = Signal()
 
-    def __init__(self, diretorio: Path, instrucao: str, contexto_extra: Optional[str]):
+    def __init__(
+        self,
+        diretorio: Path,
+        instrucao: str,
+        contexto_extra: Optional[str],
+        caminho_binario_busca: Optional[Path] = None,
+        caminho_modelo_busca: Optional[Path] = None,
+    ):
         super().__init__()
         self.diretorio = diretorio
         self.instrucao = instrucao
         self.contexto_extra = contexto_extra
+        self.caminho_binario_busca = caminho_binario_busca
+        self.caminho_modelo_busca = caminho_modelo_busca
         self._parar_solicitado = False
 
     def solicitar_parada(self) -> None:
@@ -126,7 +135,11 @@ class TrabalhadorOrquestrador(QObject):
 
     def rodar(self) -> None:
         try:
-            orquestrador = Orquestrador(self.diretorio)
+            orquestrador = Orquestrador(
+                self.diretorio,
+                caminho_binario_busca=self.caminho_binario_busca,
+                caminho_modelo_busca=self.caminho_modelo_busca,
+            )
             resultado = orquestrador.rodar(
                 self.instrucao,
                 contexto_extra=self.contexto_extra,
@@ -248,8 +261,16 @@ class JanelaPrincipal(QMainWindow):
         )
         self.botao_parar.setEnabled(False)
         self.botao_parar.clicked.connect(self._parar_orquestrador)
+        self.botao_configurar_busca = QPushButton("Configurar busca semântica…")
+        self.botao_configurar_busca.setToolTip(
+            "Aponta o llama-server e o modelo de embeddings (ex.: CodeRankEmbed) — "
+            "opcional, habilita a ferramenta buscar_codigo pro agente. Sem isso "
+            "configurado, o Executar funciona normalmente, só sem essa ferramenta."
+        )
+        self.botao_configurar_busca.clicked.connect(self._configurar_busca_semantica)
         linha_executar.addWidget(self.botao_executar)
         linha_executar.addWidget(self.botao_parar)
+        linha_executar.addWidget(self.botao_configurar_busca)
         layout.addLayout(linha_executar)
 
         self.rotulo_status = QLabel("")
@@ -499,6 +520,26 @@ class JanelaPrincipal(QMainWindow):
             "Caminhos do modelo de visão esquecidos — serão pedidos de novo no próximo \"Descrever mockup…\"."
         )
 
+    def _configurar_busca_semantica(self) -> None:
+        # Sempre pede de novo (não reaproveita cache como _caminho_configurado)
+        # — esse botão é a própria forma de configurar/corrigir, então não
+        # tem por que travar num caminho errado escolhido por engano.
+        binario, _ = QFileDialog.getOpenFileName(
+            self, "Escolher o executável llama-server (para embeddings)", "", "Todos os arquivos (*)"
+        )
+        if not binario:
+            return
+        modelo, _ = QFileDialog.getOpenFileName(
+            self, "Escolher o modelo de embeddings (GGUF, ex.: CodeRankEmbed)", "", "Modelos GGUF (*.gguf)"
+        )
+        if not modelo:
+            return
+        self._configuracoes.setValue("busca/binario", binario)
+        self._configuracoes.setValue("busca/modelo", modelo)
+        self.rotulo_status.setText(
+            "Busca semântica configurada — a ferramenta buscar_codigo fica disponível no próximo \"Executar\"."
+        )
+
     def _aplicar_exemplo_instrucao(self, indice: int) -> None:
         if indice <= 0:
             return
@@ -533,8 +574,15 @@ class JanelaPrincipal(QMainWindow):
             )
         self.rotulo_status.setText("Executando…")
 
+        binario_busca = self._configuracoes.value("busca/binario", "")
+        modelo_busca = self._configuracoes.value("busca/modelo", "")
+        caminho_binario_busca = Path(binario_busca) if binario_busca and Path(binario_busca).is_file() else None
+        caminho_modelo_busca = Path(modelo_busca) if modelo_busca and Path(modelo_busca).is_file() else None
+
         thread = QThread(self)
-        trabalhador = TrabalhadorOrquestrador(diretorio, instrucao, contexto_extra)
+        trabalhador = TrabalhadorOrquestrador(
+            diretorio, instrucao, contexto_extra, caminho_binario_busca, caminho_modelo_busca
+        )
         trabalhador.moveToThread(thread)
         thread.started.connect(trabalhador.rodar)
         trabalhador.evento.connect(self.area_log.appendPlainText)
