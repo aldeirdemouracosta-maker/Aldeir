@@ -510,6 +510,27 @@ def test_trocar_pasta_do_projeto_esquece_diagnostico_e_mockup_da_pasta_anterior(
     assert "Nenhuma descrição" in janela.rotulo_mockup.text()
 
 
+def test_combo_exemplos_instrucao_preenche_campo_instrucao(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela.combo_exemplos_instrucao.setCurrentIndex(1)
+
+    assert janela.campo_instrucao.toPlainText() == jp.EXEMPLOS_INSTRUCAO[0]
+    # volta pro placeholder, pronto pra escolher outro exemplo em seguida
+    assert janela.combo_exemplos_instrucao.currentIndex() == 0
+
+
+def test_combo_exemplos_instrucao_placeholder_nao_mexe_no_campo(qtbot):
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela.campo_instrucao.setPlainText("texto já escrito")
+
+    janela._aplicar_exemplo_instrucao(0)
+
+    assert janela.campo_instrucao.toPlainText() == "texto já escrito"
+
+
 def test_botao_parar_comeca_desabilitado(qtbot):
     janela = JanelaPrincipal()
     qtbot.addWidget(janela)

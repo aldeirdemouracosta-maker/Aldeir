@@ -12,7 +12,7 @@ Janela única, minimalista, que reaproveita `analisador_projeto` e
 │ [Analisar projeto] [Usar pasta extraída mesmo assim]  │             │
 │ [Descrever mockup…]  (status da descrição)            │             │
 │                                                        │             │
-│ Instrução                                             │             │
+│ Instrução      [Exemplos de instrução… ▾]             │             │
 │ ┌────────────────────────────────────────────────────┐│             │
 │ │                                                      ││             │
 │ └────────────────────────────────────────────────────┘│             │
@@ -56,6 +56,11 @@ Clicar em "Executar" sem ter rodado "Analisar projeto" antes não é
 bloqueado, mas mostra um aviso no painel de progresso — sem diagnóstico
 como contexto, o modelo tende a chutar a estrutura do projeto (visto na
 prática: um resumo citando arquivos que não existiam na pasta certa).
+
+O menu **"Exemplos de instrução…"** ao lado do rótulo "Instrução" tem
+alguns pontos de partida prontos (`EXEMPLOS_INSTRUCAO`, em
+`janela_principal.py`) — escolher um substitui o texto atual do campo e
+o menu volta pro placeholder, pronto pra escolher outro em seguida.
 
 O botão **"Parar"** (ao lado de "Executar", habilitado só durante uma
 execução) pede pro orquestrador parar antes da próxima chamada ao

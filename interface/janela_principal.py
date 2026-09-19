@@ -21,6 +21,7 @@ from typing import Optional
 from PySide6.QtCore import QObject, QSettings, Qt, QThread, Signal
 from PySide6.QtWidgets import (
     QApplication,
+    QComboBox,
     QDockWidget,
     QFileDialog,
     QHBoxLayout,
@@ -40,6 +41,15 @@ from orquestrador.orquestrador import ExecucaoInterrompidaError, Orquestrador
 from visao_mockup.interpretar_mockup import interpretar_mockup as interpretar_mockup_imagem
 
 FONTE_MONO = "Menlo, Consolas, 'DejaVu Sans Mono', monospace"
+
+EXEMPLOS_INSTRUCAO = [
+    "Termine a implementação pendente.",
+    "Corrija os testes que estão falhando, sem alterar o comportamento esperado.",
+    "Implemente a tela descrita no mockup, seguindo a descrição acima como referência.",
+    "Adicione tratamento de erro nas funções que ainda não têm.",
+    "Revise o código em busca de bugs simples e corrija os que encontrar.",
+    "Adicione testes automatizados para as funções sem cobertura.",
+]
 
 
 class TrabalhadorAnalise(QObject):
@@ -211,7 +221,18 @@ class JanelaPrincipal(QMainWindow):
         linha_mockup.addWidget(self.rotulo_mockup, stretch=1)
         layout.addLayout(linha_mockup)
 
-        layout.addWidget(QLabel("Instrução"))
+        linha_instrucao = QHBoxLayout()
+        linha_instrucao.addWidget(QLabel("Instrução"))
+        self.combo_exemplos_instrucao = QComboBox()
+        self.combo_exemplos_instrucao.addItem("Exemplos de instrução…")
+        self.combo_exemplos_instrucao.addItems(EXEMPLOS_INSTRUCAO)
+        self.combo_exemplos_instrucao.setToolTip(
+            "Escolher um exemplo substitui o texto atual do campo Instrução."
+        )
+        self.combo_exemplos_instrucao.currentIndexChanged.connect(self._aplicar_exemplo_instrucao)
+        linha_instrucao.addWidget(self.combo_exemplos_instrucao, stretch=1)
+        layout.addLayout(linha_instrucao)
+
         self.campo_instrucao = QPlainTextEdit()
         self.campo_instrucao.setPlaceholderText("ex.: termine a implementação pendente")
         self.campo_instrucao.setFixedHeight(70)
@@ -477,6 +498,12 @@ class JanelaPrincipal(QMainWindow):
         self.rotulo_mockup.setText(
             "Caminhos do modelo de visão esquecidos — serão pedidos de novo no próximo \"Descrever mockup…\"."
         )
+
+    def _aplicar_exemplo_instrucao(self, indice: int) -> None:
+        if indice <= 0:
+            return
+        self.campo_instrucao.setPlainText(EXEMPLOS_INSTRUCAO[indice - 1])
+        self.combo_exemplos_instrucao.setCurrentIndex(0)
 
     # ---- executar orquestrador -----------------------------------------------
 
