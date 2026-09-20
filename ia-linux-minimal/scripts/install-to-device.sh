@@ -87,7 +87,13 @@ echo "Destino: ${DEVICE} ($((DEVICE_SIZE / 1024 / 1024)) MiB)"
 echo
 echo "ATENÇÃO: isto apaga TUDO em ${DEVICE}. Não há como desfazer."
 echo "Para confirmar, digite exatamente o caminho do dispositivo (${DEVICE}) e pressione Enter:"
-read -r CONFIRM
+# Lê direto do terminal (/dev/tty), não do stdin do processo — evita
+# que texto colado/em fila no stdin (ex.: uma linha em branco sobrando
+# de um bloco de comando colado no terminal) seja consumido aqui como
+# se fosse a confirmação, fazendo o script abortar mesmo quando o
+# usuário digitaria o caminho certo em seguida. Confirmado como causa
+# real num teste de depuração (ver CHANGELOG.md).
+read -r CONFIRM < /dev/tty
 
 if [ "${CONFIRM}" != "${DEVICE}" ]; then
     echo "confirmação não bateu — abortando, nada foi gravado" >&2
