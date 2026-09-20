@@ -426,7 +426,7 @@ projeto. Roda em CPU por padrão (`--ngl` omitido = 0):
   --port 8083 --host 127.0.0.1 --jinja --ctx-size 4096
 ```
 
-### Achados testando cinco candidatos numa RX 580 real (Xeon sem AVX2)
+### Achados testando seis candidatos numa RX 580 real (Xeon sem AVX2)
 
 Testados de verdade, mesma instrução ("escreva uma função Python que
 valida um CPF") em todos, em CPU (`-ngl 0`, padrão):
@@ -468,8 +468,18 @@ valida um CPF") em todos, em CPU (`-ngl 0`, padrão):
   MiniCPM5-1B), recusou a tarefa sem motivo real ("não pode/recomenda"
   validar CPF) e documentou a função com 9 dígitos (errado, CPF tem
   11). **Não recomendado.**
+- **`TinySwallow-1.5B-Instruct`** (`SakanaAI/TinySwallow-1.5B-Instruct-GGUF`,
+  Apache-2.0 + sujeito à Gemma Prohibited Use Policy — treinado com
+  dados gerados via Gemma; o próprio SakanaAI declara "não destinado a
+  uso comercial ou ambientes de missão crítica") — testado por
+  curiosidade, sem intenção de adotar dada a restrição de licença.
+  Pior resultado dos sete: alucinou conceitos sem relação com CPF
+  ("bairro", "mãe"), indexou `cpf[11]` numa string de 11 caracteres
+  (índice inválido, `IndexError` garantido) e nunca terminou — bateu
+  em `max_tokens` no meio de uma expressão, nem chega a ser Python
+  válido. Descartado por qualidade **e** por licença.
 
-**Nenhum dos quatro challengers superou o `Qwen2.5-Coder-0.5B-Instruct`
+**Nenhum dos cinco challengers superou o `Qwen2.5-Coder-0.5B-Instruct`
 — confirmado como escolha final** pro papel de microagente nesta
 máquina, sem necessidade de testar mais candidatos pra esse papel.
 
