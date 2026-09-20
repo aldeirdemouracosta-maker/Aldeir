@@ -1,5 +1,58 @@
 # Changelog — IA Linux Minimal
 
+## Bugs reais de Kconfig encontrados no primeiro build de verdade (fora do sandbox)
+
+Continuação da sessão de depuração ao vivo com o usuário rodando
+`./build.sh bios` numa máquina real com acesso ao buildroot.org —
+depois da correção do `BR2_EXTERNAL` (ver seção abaixo), mais 3 bugs
+reais apareceram, todos do mesmo tipo já avisado em `docs/build.md`:
+nomes de opção `BR2_*` nunca confirmados símbolo-a-símbolo contra a
+árvore 2026.08 real.
+
+1. **`BR2_PACKAGE_UTIL_LINUX_LSBLK` não existe.** Usado nos três
+   defconfigs e em `package/ai-shell/Config.in`. Confirmado inspecionando
+   `package/util-linux/Config.in` real: `lsblk` não tem opção
+   individual nessa árvore — faz parte do "basic set"
+   (`BR2_PACKAGE_UTIL_LINUX_BINARIES`, que já inclui blkid, findmnt,
+   lscpu etc. e seleciona as libs necessárias). Corrigido nos três
+   defconfigs e no `select`.
+
+2. **`BR2_x86_cortina=n` no defconfig `qemu`** — símbolo que nunca
+   existiu em nenhuma versão do Buildroot ("Cortina" é uma família de
+   SoC ARM/MIPS sem relação com x86_64); aparentemente uma sobra sem
+   função. Removido.
+
+3. **`BR2_TARGET_GRUB2_BUILTIN_MODULES`/`BR2_TARGET_GRUB2_BUILTIN_CONFIG`
+   foram divididas em variantes `_PC` (BIOS) e `_EFI` (UEFI) no
+   Buildroot 2021.08+.** Essa foi a causa real do erro fatal
+   `"You have legacy configuration in your .config!"` que travava o
+   build (`Makefile.legacy`) — as duas opções antigas ainda existem
+   como stubs de compatibilidade que disparam `BR2_LEGACY=y`, mas o
+   Buildroot trata isso como erro duro, não aviso. Diagnosticado
+   cruzando programaticamente (script Python descartável) a lista de
+   símbolos com `select BR2_LEGACY` em `Config.in.legacy` contra o
+   `.config` real gerado — nem `validate-buildroot-configs.sh` (que só
+   detecta símbolo inexistente, não símbolo legado-mas-ainda-aceito)
+   nem `make oldconfig` (que não reproduziu o erro) apontavam isso
+   diretamente. Corrigido: `ia_linux_bios_x86_64_defconfig` agora usa
+   `BR2_TARGET_GRUB2_BUILTIN_MODULES_PC`/`_CONFIG_PC`;
+   `ia_linux_uefi_x86_64_defconfig` usa `_MODULES_EFI`/`_CONFIG_EFI`.
+
+Também corrigido `scripts/validate-buildroot-configs.sh`: ele buscava
+o nome do símbolo **sem** o prefixo `BR2_` (`short="${symbol#BR2_}"`),
+mas o Buildroot mantém esse prefixo literal na linha `config` dos
+`Config.in` (diferente do Kconfig do kernel Linux) — por isso o script
+acusava até símbolos básicos e certamente reais
+(`BR2_x86_64`, `BR2_ROOTFS_OVERLAY`) como "não encontrados" na primeira
+rodada. Corrigido e testado com uma árvore Buildroot fake neste
+sandbox antes de pedir pro usuário rodar de novo.
+
+Nenhum desses 4 bugs (BR2_EXTERNAL, UTIL_LINUX_LSBLK, x86_cortina,
+GRUB2_BUILTIN_*) apareceu em nenhum teste rodado neste sandbox — só um
+build real, numa árvore Buildroot 2026.08 de verdade, expunha cada um.
+Ainda não confirmado neste ponto: se o build passa da etapa de
+configuração para a compilação de fato (kernel, toolchain, llama.cpp).
+
 ## Correção crítica — BR2_EXTERNAL apontava para o diretório errado
 
 Primeira vez que `./build.sh` rodou de verdade fora deste sandbox (numa
