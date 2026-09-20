@@ -67,9 +67,9 @@ cp "${ROOTFS_IMAGE}" "${BINARIES_DIR}/system.ext4"
 
 # ext4 de dados vazio; será preenchido pelo usuário/instalador
 mkdir -p "${BINARIES_DIR}/data-empty"
-"${HOST_DIR}/sbin/mkfs.ext4" -L IA_DATA -d "${BINARIES_DIR}/data-empty" "${BINARIES_DIR}/data.ext4" "${DATA_FS_SIZE}"
+"${HOST_DIR}/sbin/mkfs.ext4" -F -L IA_DATA -d "${BINARIES_DIR}/data-empty" "${BINARIES_DIR}/data.ext4" "${DATA_FS_SIZE}"
 mkdir -p "${BINARIES_DIR}/recovery-empty"
-"${HOST_DIR}/sbin/mkfs.ext4" -L IA_RECOVERY -d "${BINARIES_DIR}/recovery-empty" "${BINARIES_DIR}/recovery.ext4" 128M
+"${HOST_DIR}/sbin/mkfs.ext4" -F -L IA_RECOVERY -d "${BINARIES_DIR}/recovery-empty" "${BINARIES_DIR}/recovery.ext4" 128M
 
 if [ "${MODE}" = "uefi" ]; then
     # genimage-uefi.cfg monta efi.vfat a partir de $BINARIES_DIR/EFI —
