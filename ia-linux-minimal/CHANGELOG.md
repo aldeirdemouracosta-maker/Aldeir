@@ -1,5 +1,39 @@
 # Changelog — IA Linux Minimal
 
+## install-to-device.sh: confirmação chegava vazia (causa não isolada)
+
+`disk.img` gerado com sucesso pela primeira vez nesta sessão. Na
+gravação (`install-to-device.sh`), a confirmação exigida (digitar o
+caminho do dispositivo de novo) falhava repetidamente com
+`confirmação não bateu`, mesmo com o usuário digitando `/dev/sdd`
+manualmente, isolando o comando (sem colar blocos com múltiplos
+comandos) e com `read -r CONFIRM < /dev/tty` (tentativa de correção
+anterior, que não resolveu).
+
+Um teste de depuração instrumentado confirmou: `CONFIRM=[]` (vazio,
+0 bytes) chegava ao script, enquanto `DEVICE=[/dev/sdd]` (8 bytes)
+estava correto — ou seja, o `read` de fato recebia uma linha vazia
+antes da linha digitada pelo usuário, não um texto diferente. `set -e`
+não abortava o script nesse ponto, confirmando que o `read` retornou
+com sucesso (uma linha vazia real chegou), não um EOF de verdade.
+
+**Não conseguimos isolar a causa raiz remotamente** — testes
+equivalentes (`read -r x` isolado, com e sem `sudo`, direto no
+terminal do usuário) sempre funcionaram perfeitamente, byte a byte,
+fora do contexto do script real. A hipótese mais provável (colar
+blocos de comando com uma linha em branco sobrando) foi descartada
+depois que o usuário isolou o comando e digitou manualmente e o
+problema persistiu.
+
+**Mitigação aplicada** (sem enfraquecer a segurança): em vez de
+abortar na primeira leitura vazia, o script agora tenta de novo até 3
+vezes, continuando a exigir o caminho exato do dispositivo em alguma
+das tentativas. Testado com um teste funcional simulando entradas
+vazias seguidas da entrada correta — confirma que o loop aceita a
+confirmação certa depois de descartar as vazias, e continuaria
+recusando qualquer coisa que não seja exatamente o caminho do
+dispositivo.
+
 ## post-build.sh e post-image.sh: 2 bugs reais na reta final do build
 
 O build real do usuário (mesma sessão dos bugs de Kconfig abaixo)

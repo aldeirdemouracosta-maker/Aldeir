@@ -86,14 +86,24 @@ echo "Imagem : ${IMG} ($((IMG_SIZE / 1024 / 1024)) MiB)"
 echo "Destino: ${DEVICE} ($((DEVICE_SIZE / 1024 / 1024)) MiB)"
 echo
 echo "ATENÇÃO: isto apaga TUDO em ${DEVICE}. Não há como desfazer."
-echo "Para confirmar, digite exatamente o caminho do dispositivo (${DEVICE}) e pressione Enter:"
 # Lê direto do terminal (/dev/tty), não do stdin do processo — evita
 # que texto colado/em fila no stdin (ex.: uma linha em branco sobrando
 # de um bloco de comando colado no terminal) seja consumido aqui como
-# se fosse a confirmação, fazendo o script abortar mesmo quando o
-# usuário digitaria o caminho certo em seguida. Confirmado como causa
-# real num teste de depuração (ver CHANGELOG.md).
-read -r CONFIRM < /dev/tty
+# se fosse a confirmação. Mesmo assim, alguns terminais/ambientes
+# entregam uma linha vazia na primeira leitura por motivos que não
+# conseguimos isolar remotamente (ver CHANGELOG.md) — em vez de abortar
+# na primeira leitura vazia, tenta de novo até 3 vezes antes de desistir,
+# sem enfraquecer a exigência de digitar o caminho exato.
+TENTATIVA=0
+CONFIRM=""
+while [ -z "${CONFIRM}" ] && [ "${TENTATIVA}" -lt 3 ]; do
+    echo "Para confirmar, digite exatamente o caminho do dispositivo (${DEVICE}) e pressione Enter:"
+    read -r CONFIRM < /dev/tty
+    if [ -z "${CONFIRM}" ]; then
+        TENTATIVA=$((TENTATIVA + 1))
+        echo "aviso: entrada vazia recebida — tentativa ${TENTATIVA}/3" >&2
+    fi
+done
 
 if [ "${CONFIRM}" != "${DEVICE}" ]; then
     echo "confirmação não bateu — abortando, nada foi gravado" >&2
