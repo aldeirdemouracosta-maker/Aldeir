@@ -88,8 +88,8 @@ Hardware físico usa Mesa RADV (GCN/RDNA, sem exigir ROCm) — ver
 ```
 BIOS                              UEFI
 ┌─────────────────────┐          ┌─────────────────────┐
-│ SYSTEM     512 MiB   │          │ EFI          64 MiB  │
-│ RECOVERY   128 MiB   │          │ SYSTEM      512 MiB  │
+│ SYSTEM    2560 MiB   │          │ EFI          64 MiB  │
+│ RECOVERY   128 MiB   │          │ SYSTEM     2560 MiB  │
 │ DATA       (ajustável)│         │ RECOVERY    128 MiB  │
 └─────────────────────┘          │ DATA        (ajustável)│
                                     └─────────────────────┘
