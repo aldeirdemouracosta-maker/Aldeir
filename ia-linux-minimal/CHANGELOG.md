@@ -1,5 +1,36 @@
 # Changelog — IA Linux Minimal
 
+## install-to-device.sh: confirmação virou argumento, não prompt (resolvido)
+
+Continuação direta da investigação abaixo ("confirmação chegava vazia
+— causa não isolada"). Depois de mais testes, isolamos o padrão exato:
+um script mínimo com só alguns `echo` seguidos de um `read` (sem
+nenhuma lógica do install-to-device.sh — sem sudo, sem findmnt/lsblk/
+blockdev, sem `/dev/tty`, com ou sem `sleep` antes do `read`)
+reproduzia `CONFIRM=[]` de forma consistente no ambiente de terminal
+do usuário. Um `read` isolado, chamado sozinho sem nenhum `echo` antes,
+sempre funcionava. Ou seja: **qualquer `read` interativo posicionado
+depois de algumas linhas de saída, dentro de um arquivo de script,
+falha nesse ambiente especificamente** — não é sobre `sudo`, `/dev/tty`,
+texto colado, nem timing (o `sleep 0.5` não mudou nada).
+
+Não conseguimos (e não vamos conseguir, remotamente) identificar a
+causa exata desse ambiente de terminal. Em vez de continuar tentando
+variações de `read`, **removemos a dependência de leitura interativa
+por completo**: a confirmação agora é um terceiro argumento na linha
+de comando (`install-to-device.sh disk.img /dev/sdX /dev/sdX` — o
+caminho do dispositivo repetido), verificado antes de qualquer outra
+coisa. Isso preserva a intenção de segurança original (sem atalho
+`--yes`; é preciso escrever o caminho do dispositivo de propósito) sem
+depender de nenhum mecanismo de terminal interativo, que provamos
+repetidamente não ser confiável neste caso.
+
+Testado com `bash -n`, `shellcheck -S warning`, e três casos
+funcionais diretos (sem args → mostra uso e sai 1; confirmação
+diferente do dispositivo → recusa; imagem inexistente com confirmação
+correta → recusa pela imagem, não pela confirmação). `docs/build.md`
+atualizado para o novo uso de três argumentos.
+
 ## install-to-device.sh: confirmação chegava vazia (causa não isolada)
 
 `disk.img` gerado com sucesso pela primeira vez nesta sessão. Na

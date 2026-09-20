@@ -119,8 +119,11 @@ kernel; em desenvolvimento, apontam para diretórios temporários.
    abaixo sobre suas salvaguardas):
    ```sh
    sudo ./scripts/install-to-device.sh \
-       .build/buildroot-2026.08/output/images/disk.img /dev/sdX
+       .build/buildroot-2026.08/output/images/disk.img /dev/sdX /dev/sdX
    ```
+   O terceiro argumento (o mesmo `/dev/sdX` repetido) é a confirmação —
+   não existe atalho `--yes`; é preciso digitar o caminho do
+   dispositivo de propósito, duas vezes.
    Ou manualmente: `sudo dd if=disk.img of=/dev/sdX bs=4M status=progress conv=fsync`
    (confira o dispositivo de destino com cuidado — `dd` sobrescreve sem
    confirmação; é exatamente esse risco que `install-to-device.sh`
@@ -130,12 +133,15 @@ kernel; em desenvolvimento, apontam para diretórios temporários.
 
 `scripts/install-to-device.sh` (etapa 0.9) recusa gravar se o destino
 não for um dispositivo de bloco de verdade, se a imagem for maior que o
-destino, ou se o destino parecer ser o disco onde a raiz do host está
-montada — e exige digitar o caminho do dispositivo de novo como
-confirmação. É um script real, testado neste ambiente (incluindo um bug
-de verdade encontrado e corrigido — ver `CHANGELOG.md`), mas as
-salvaguardas são best-effort: confira o dispositivo de destino sempre,
-mesmo usando o script.
+destino, se o destino parecer ser o disco onde a raiz do host está
+montada, ou se a confirmação (terceiro argumento) não bater com o
+dispositivo. A confirmação é passada como argumento, não digitada num
+prompt interativo — um build real revelou que `read` interativo não
+funciona de forma confiável em alguns ambientes de terminal (ver
+`CHANGELOG.md` para o histórico completo da investigação). É um script
+real, testado neste ambiente (incluindo bugs reais encontrados e
+corrigidos), mas as salvaguardas são best-effort: confira o dispositivo
+de destino sempre, mesmo usando o script.
 
 **O que este ambiente de desenvolvimento não pode validar**: se o modo
 `RECOVERY` (menu de boot definido desde a 0.1.1, ver
