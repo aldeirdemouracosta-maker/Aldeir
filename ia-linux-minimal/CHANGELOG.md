@@ -1,5 +1,40 @@
 # Changelog — IA Linux Minimal
 
+## post-build.sh e post-image.sh: 2 bugs reais na reta final do build
+
+O build real do usuário (mesma sessão dos bugs de Kconfig abaixo)
+passou de toda a compilação (toolchain, kernel, llama.cpp, Vulkan) e
+travou em duas etapas finais:
+
+1. **`post-build.sh` calculava a raiz do repositório com um nível de
+   menos.** `IA_LINUX_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"` —
+   mas o script vive em `buildroot/board/ia-linux/`, 3 níveis abaixo
+   da raiz (onde está `hardware/detect.sh`, que o script instala), não
+   2. Resolvia para `buildroot/` em vez da raiz, e o `install` falhava
+   por arquivo inexistente. Corrigido para `../../../`.
+
+2. **`post-image.sh` lia o modo (`bios`/`uefi`) do argumento errado.**
+   O Buildroot sempre invoca scripts de `BR2_ROOTFS_POST_IMAGE_SCRIPT`
+   como `<script> <BINARIES_DIR> <BR2_ROOTFS_POST_IMAGE_SCRIPT_ARGS...>`
+   — o primeiro argumento é **sempre** `BINARIES_DIR`, nunca o que
+   configuramos em `BR2_ROOTFS_POST_IMAGE_SCRIPT_ARGS`. O script lia
+   `MODE="${1:-bios}"` (pegando o caminho de `BINARIES_DIR` como se
+   fosse o modo) em vez de `MODE="${2:-bios}"`. Corrigido.
+
+**Retificação importante sobre validação anterior**: a seção
+"Correções pós-0.9" abaixo descreve testes de `post-image.sh`
+chamando-o como `post-image.sh bios` (um argumento). Isso replicava
+nosso próprio entendimento errado da convenção de chamada do
+Buildroot, não a convenção real — por isso aquele teste nunca
+detectou o bug 2 acima, mesmo sendo descrito como "validação de
+verdade". Os testes foram re-executados agora chamando o script com a
+convenção real (`post-image.sh <BINARIES_DIR> bios`, dois argumentos)
+e confirmam a correção. Fica como lição registrada: reproduzir a
+própria suposição sobre uma interface externa, em vez da interface
+documentada/real, não é validação — só descobrimos isso ao ler o
+comportamento real do Buildroot depois que o build de verdade expôs o
+bug.
+
 ## Bugs reais de Kconfig encontrados no primeiro build de verdade (fora do sandbox)
 
 Continuação da sessão de depuração ao vivo com o usuário rodando

@@ -8,7 +8,15 @@
 set -eu
 
 BOARD_DIR="$(dirname "$0")"
-MODE="${1:-bios}"
+# Buildroot sempre chama scripts de post-image como
+# "<script> <BINARIES_DIR> <BR2_ROOTFS_POST_IMAGE_SCRIPT_ARGS...>" — o
+# primeiro argumento é SEMPRE o BINARIES_DIR (que também chega via a
+# variável de ambiente $BINARIES_DIR, já usada no resto deste script),
+# nunca o nosso "bios"/"uefi". Esse argumento configurado em
+# BR2_ROOTFS_POST_IMAGE_SCRIPT_ARGS chega em $2, não em $1 — bug
+# confirmado no primeiro build real fora deste sandbox (ver
+# CHANGELOG.md): "$1" continha o caminho de BINARIES_DIR, não "bios".
+MODE="${2:-bios}"
 
 # Mesmo UUID fixo gravado no ext4 da SYSTEM aqui e usado em grub.cfg —
 # ver o comentário em grub.cfg para o porquê de ser fixo em vez de um
