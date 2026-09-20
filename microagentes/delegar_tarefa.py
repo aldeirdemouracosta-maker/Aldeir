@@ -51,6 +51,16 @@ class ServidorMicroagenteIndisponivelError(Exception):
     o servidor nao fica pronto dentro do timeout."""
 
 
+class RespostaTruncadaError(Exception):
+    """Levantado quando o modelo atinge max_tokens sem produzir nenhum
+    conteudo em `message.content` — visto na pratica com um modelo de
+    raciocinio (MiniCPM5-1B) que gasta o orcamento inteiro de tokens no
+    campo separado `reasoning_content` e nunca chega a escrever a
+    resposta final. Sem isso, `gerar_resposta` devolveria "" em
+    silencio, e quem chamou (o coordenador) nao teria como distinguir
+    "resposta vazia de proposito" de "geracao cortada no meio"."""
+
+
 def montar_mensagens(instrucao: str, contexto: Optional[str], prompt_sistema: str) -> list:
     conteudo_usuario = instrucao if not contexto else f"Contexto:\n{contexto}\n\nTarefa:\n{instrucao}"
     return [
@@ -74,7 +84,21 @@ def gerar_resposta(base_url: str, mensagens: list, timeout: int = 120, max_token
     )
     with urllib.request.urlopen(requisicao, timeout=timeout) as resposta:
         payload = json.loads(resposta.read())
-    return payload["choices"][0]["message"]["content"] or ""
+
+    escolha = payload["choices"][0]
+    conteudo = escolha["message"].get("content") or ""
+    if not conteudo and escolha.get("finish_reason") == "length":
+        # Visto na pratica com MiniCPM5-1B: um modelo de raciocinio pode
+        # gastar todo o max_tokens em `reasoning_content` (campo separado,
+        # fora do que lemos aqui) sem nunca escrever a resposta final em
+        # `content`. "" nesse caso nao significa "resposta vazia", significa
+        # "geracao cortada antes de comecar a responder de verdade".
+        raise RespostaTruncadaError(
+            f"o modelo atingiu o limite de {max_tokens} tokens sem produzir nenhuma "
+            "resposta em `content` — comum em modelos de raciocínio que gastam o "
+            "orçamento pensando antes de responder. Aumente max_tokens ou troque de modelo."
+        )
+    return conteudo
 
 
 def _aguardar_pronto(base_url: str, timeout: float) -> None:

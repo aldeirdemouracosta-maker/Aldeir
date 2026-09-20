@@ -59,14 +59,39 @@ recusando se estiver acima do limite seguro — mesma lógica de
 ## Escolha do modelo
 
 `Qwen2.5-Coder-0.5B-Instruct` (Apache-2.0, GGUF oficial) é a
-recomendação inicial — mesma família do `Qwen2.5-Coder-3B/7B` já
-usados no projeto, reduzindo o risco de tool-calling/chat-template
-"surpresa" (aqui nem é usado tool calling, mas o chat template
-continua relevante pra qualidade da resposta). Ver `TESTE_LOCAL.md`
-para outros candidatos avaliados (ERNIE-4.5-0.3B, MiniCPM5-1B) e por
-que modelos T5/encoder-decoder ou state-space puro (Mamba base) não
-servem aqui — sem chat template/instruct tuning, não seguem a
-instrução delegada.
+recomendação — **testado numa RX 580 real** (ver `TESTE_LOCAL.md`,
+seção 12): respondeu rápido e no formato certo. Mesma família do
+`Qwen2.5-Coder-3B/7B` já usados no projeto, reduzindo o risco de
+chat-template "surpresa".
+
+Dois candidatos testados na mesma sessão e **descartados** com motivo
+concreto: `ERNIE-4.5-0.3B` (suporte a português fraco — alucinou,
+misturou idiomas, vazou caractere chinês) e `MiniCPM5-1B` (é um
+**modelo de raciocínio** — gasta o orçamento de tokens "pensando" num
+campo separado antes de responder, lento e caro pro papel de
+microagente; ver `RespostaTruncadaError` abaixo). Ver `TESTE_LOCAL.md`
+para os detalhes de cada teste, e por que modelos T5/encoder-decoder ou
+state-space puro (Mamba base) nem chegam a rodar aqui — sem chat
+template/instruct tuning, não seguem a instrução delegada.
+
+**Evite modelos de raciocínio** ("thinking"/"reasoning" no nome ou na
+documentação) pra esse papel — mesmo que tecnicamente funcionem, o
+ponto de um microagente é ser rápido e barato, e um modelo de
+raciocínio é estruturalmente o oposto disso.
+
+## Geração truncada sem resposta
+
+`gerar_resposta` levanta `RespostaTruncadaError` quando o modelo
+atinge `max_tokens` **sem** produzir nada em `message.content` (mesma
+ideia do `GeracaoTruncadaError` do orquestrador, versão local deste
+módulo) — achado real testando `MiniCPM5-1B` (modelo de raciocínio):
+ele gasta o orçamento de tokens em `reasoning_content`, um campo
+separado, e `content` vem `""` se estourar o limite antes de começar a
+responder de verdade. Sem essa checagem, `delegar_tarefa` devolveria
+uma string vazia em silêncio, e o coordenador não teria como saber que
+foi "geração cortada" em vez de "resposta vazia de propósito". No
+orquestrador, isso vira `"erro: ..."` no resultado da ferramenta,
+igual qualquer outro erro de `delegar_tarefa`.
 
 ## Uso
 

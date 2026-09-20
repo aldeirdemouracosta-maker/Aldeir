@@ -426,22 +426,51 @@ projeto. Roda em CPU por padrão (`--ngl` omitido = 0):
   --port 8083 --host 127.0.0.1 --jinja --ctx-size 4096
 ```
 
-Outros candidatos avaliados pra esse papel (microagentes 0,3B–1B):
-`ERNIE-4.5-0.3B` (Baidu, Apache-2.0, GGUF confirmado, suporte nativo
-no llama.cpp pra variante densa — extremamente pequeno) e `MiniCPM5-1B`
-(OpenBMB, mesma geração do MiniCPM5-2B já avaliado como coordenador,
-com skill oficial de deploy llama.cpp + tool-calling documentado —
-mais pesado que o Qwen 0.5B, mas mais testado pra esse uso).
+### Achados testando os três candidatos numa RX 580 real (Xeon sem AVX2)
 
-**Filtro arquitetural importante**: nem todo modelo pequeno "GGUF
-existe" serve aqui. Modelos T5 (encoder-decoder, ex.: FRED-T5,
-Occiglot5) não têm chat template/tool-calling no `llama-server` mesmo
-convertidos pra GGUF — servem pra tradução/geração de texto solto, não
-pra seguir uma instrução delegada. Modelos base sem fine-tune de chat
-(ex.: Mamba 130M) têm o mesmo problema — sem instruct tuning, não
-seguem `PROMPT_SISTEMA_PADRAO`. Confirme "Instruct"/"Chat" no nome do
-checkpoint e chat template documentado antes de adotar um candidato
-novo pra esse papel.
+Testados de verdade, mesma instrução ("escreva uma função Python que
+valida um CPF") nos três, em CPU (`-ngl 0`, padrão):
+
+- **`Qwen2.5-Coder-0.5B-Instruct`** (`Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF`,
+  Apache-2.0) — respondeu rápido, direto, código no formato certo
+  (a lógica de CPF em si ficou simplificada, esperado pro tamanho).
+  **Confirmado como recomendação padrão.**
+- **`ERNIE-4.5-0.3B-PT`** (`unsloth/ERNIE-4.5-0.3B-PT-GGUF`, Apache-2.0) —
+  respondeu rápido, mas degenerado: alucinou termos sem sentido,
+  misturou espanhol/português, e vazou um caractere chinês no meio do
+  texto. Suporte a português fraco nesse checkpoint — **não
+  recomendado** pra este projeto (instruções em PT-BR).
+- **`MiniCPM5-1B`** (`openbmb/MiniCPM5-1B-GGUF`, Apache-2.0) — é um
+  **modelo de raciocínio** (thinking model): gasta tokens num campo
+  separado (`reasoning_content`) antes de escrever a resposta final em
+  `content`. Com `max_tokens=300` (padrão de teste manual) o raciocínio
+  sozinho já estourou o limite e `content` veio vazio — precisou de
+  `--max-tokens 2000` pra finalmente responder, e mesmo assim a
+  resposta final ficou desconectada do raciocínio (identificou o
+  algoritmo certo — módulo 11 — mas implementou algo errado). **Não
+  recomendado** pro papel de microagente: o ponto é ser rápido/barato,
+  e um modelo de raciocínio é o oposto disso.
+
+Esse teste revelou uma lacuna real: quando um modelo de raciocínio
+estoura `max_tokens` antes de escrever `content`, a resposta vinha
+`""` em silêncio — sem distinguir "resposta vazia de propósito" de
+"geração cortada no meio". `gerar_resposta` agora levanta
+`RespostaTruncadaError` nesse caso especificamente (`content` vazio +
+`finish_reason == "length"`), que vira `"erro: ..."` no resultado da
+ferramenta pro coordenador, em vez de silêncio.
+
+**Filtro arquitetural importante** (vale pra qualquer candidato novo,
+não só os três testados): nem todo modelo pequeno "GGUF existe" serve
+aqui. Modelos T5 (encoder-decoder, ex.: FRED-T5, Occiglot5) não têm
+chat template/tool-calling no `llama-server` mesmo convertidos pra
+GGUF — servem pra tradução/geração de texto solto, não pra seguir uma
+instrução delegada. Modelos base sem fine-tune de chat (ex.: Mamba
+130M) têm o mesmo problema — sem instruct tuning, não seguem
+`PROMPT_SISTEMA_PADRAO`. E, como visto acima, um modelo de
+**raciocínio** tecnicamente funciona mas é a escolha errada pro papel
+(lento, caro em tokens). Confirme "Instruct"/"Chat" no nome do
+checkpoint, chat template documentado, e que **não** é um modelo de
+raciocínio antes de adotar um candidato novo pra esse papel.
 
 Na interface, "Configurar microagente…" aponta o binário e o modelo —
 opcional, sem isso a ferramenta `delegar_tarefa` simplesmente não

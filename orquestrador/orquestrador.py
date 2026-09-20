@@ -435,7 +435,11 @@ def executar_ferramenta(
     if nome == "delegar_tarefa":
         if not (caminho_binario_microagente and caminho_modelo_microagente):
             return "erro: microagente não configurado nesta execução"
-        from microagentes.delegar_tarefa import ServidorMicroagenteIndisponivelError, delegar_tarefa
+        from microagentes.delegar_tarefa import (
+            RespostaTruncadaError,
+            ServidorMicroagenteIndisponivelError,
+            delegar_tarefa,
+        )
 
         try:
             resposta = delegar_tarefa(
@@ -444,7 +448,7 @@ def executar_ferramenta(
                 argumentos["instrucao"],
                 contexto=argumentos.get("contexto"),
             )
-        except ServidorMicroagenteIndisponivelError as erro:
+        except (ServidorMicroagenteIndisponivelError, RespostaTruncadaError) as erro:
             return f"erro: {erro}"
         return resposta
 

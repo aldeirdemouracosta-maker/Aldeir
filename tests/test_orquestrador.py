@@ -504,6 +504,29 @@ def test_executar_ferramenta_delegar_tarefa_sem_configuracao_retorna_erro(projet
     assert "não configurado" in resultado
 
 
+def test_executar_ferramenta_delegar_tarefa_resposta_truncada_vira_erro(
+    projeto: Path, monkeypatch, tmp_path: Path
+):
+    import microagentes.delegar_tarefa as modulo_microagente
+
+    def _delegar_que_trunca(binario, modelo, instrucao, contexto=None):
+        raise modulo_microagente.RespostaTruncadaError("o modelo atingiu o limite de tokens")
+
+    monkeypatch.setattr(modulo_microagente, "delegar_tarefa", _delegar_que_trunca)
+
+    resultado = orq.executar_ferramenta(
+        projeto,
+        orq.ConfiguracaoSandbox(),
+        "delegar_tarefa",
+        {"instrucao": "faça X"},
+        caminho_binario_microagente=tmp_path / "llama-server",
+        caminho_modelo_microagente=tmp_path / "modelo.gguf",
+    )
+
+    assert resultado.startswith("erro:")
+    assert "atingiu o limite" in resultado
+
+
 def test_executar_ferramenta_delegar_tarefa_chama_modulo_com_argumentos_certos(
     projeto: Path, monkeypatch, tmp_path: Path
 ):
