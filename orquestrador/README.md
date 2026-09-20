@@ -43,6 +43,12 @@ repetindo até o modelo chamar `finalizar` ou estourar
   Qwen2.5-Coder-0.5B) — sem acesso a ferramentas, sem histórico da
   conversa, só a instrução e um contexto opcional. Ver
   `microagentes/README.md`.
+- `analisar_erro(erro, contexto)` — **opcional**, mesmo padrão (só
+  existe se `caminho_binario_analise`/`caminho_modelo_analise` forem
+  passados). Delega o diagnóstico de um erro a um modelo de
+  **raciocínio** dedicado (ex.: MiniCPM5-1B) — papel oposto ao de
+  `delegar_tarefa`: mais lento de propósito, prioriza precisão sobre
+  velocidade. Ver `microagentes/README.md`.
 - `finalizar(resumo, sucesso)` — encerra o loop.
 
 `ler_arquivo`/`escrever_arquivo` usam a mesma defesa contra path

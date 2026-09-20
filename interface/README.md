@@ -18,6 +18,7 @@ Janela única, minimalista, que reaproveita `analisador_projeto` e
 │ └────────────────────────────────────────────────────┘│             │
 │ [Executar] [Parar] [Configurar busca semântica…]      │             │
 │ [Configurar microagente…]                             │             │
+│ [Configurar analisador de erros…]                     │             │
 │ [Verificar configuração da GPU]                       │             │
 │ [Encerrar todos os llama-server]                      │             │
 │ (status)                                              │             │
@@ -104,6 +105,15 @@ semântica…": sempre pede os dois de novo a cada clique. Opcional: sem
 configurar, "Executar" funciona normalmente, só sem a ferramenta
 `delegar_tarefa` disponível pro agente principal delegar sub-tarefas
 pequenas a um modelo mais leve.
+
+O botão **"Configurar analisador de erros…"** é o par oposto: aponta
+o `llama-server` e o GGUF de um modelo de **raciocínio** (ex.:
+`MiniCPM5-1B`, ver `microagentes/README.md`) — habilita a ferramenta
+`analisar_erro`, que o agente principal usa pra diagnosticar a causa
+de um erro antes de tentar corrigi-lo. Mais lento de propósito
+(prioriza precisão), independente do "Configurar microagente…" — os
+dois podem estar configurados ao mesmo tempo, com modelos diferentes,
+cada um pro seu papel.
 
 O botão **"Verificar configuração da GPU"** lista (via
 `motor_ia.listar_processos_llama_server`, lendo `/proc` — Linux) todo

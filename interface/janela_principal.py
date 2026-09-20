@@ -127,6 +127,8 @@ class TrabalhadorOrquestrador(QObject):
         caminho_modelo_busca: Optional[Path] = None,
         caminho_binario_microagente: Optional[Path] = None,
         caminho_modelo_microagente: Optional[Path] = None,
+        caminho_binario_analise: Optional[Path] = None,
+        caminho_modelo_analise: Optional[Path] = None,
     ):
         super().__init__()
         self.diretorio = diretorio
@@ -136,6 +138,8 @@ class TrabalhadorOrquestrador(QObject):
         self.caminho_modelo_busca = caminho_modelo_busca
         self.caminho_binario_microagente = caminho_binario_microagente
         self.caminho_modelo_microagente = caminho_modelo_microagente
+        self.caminho_binario_analise = caminho_binario_analise
+        self.caminho_modelo_analise = caminho_modelo_analise
         self._parar_solicitado = False
 
     def solicitar_parada(self) -> None:
@@ -153,6 +157,8 @@ class TrabalhadorOrquestrador(QObject):
                 caminho_modelo_busca=self.caminho_modelo_busca,
                 caminho_binario_microagente=self.caminho_binario_microagente,
                 caminho_modelo_microagente=self.caminho_modelo_microagente,
+                caminho_binario_analise=self.caminho_binario_analise,
+                caminho_modelo_analise=self.caminho_modelo_analise,
             )
             resultado = orquestrador.rodar(
                 self.instrucao,
@@ -290,6 +296,16 @@ class JanelaPrincipal(QMainWindow):
             "normalmente, só sem essa ferramenta."
         )
         self.botao_configurar_microagente.clicked.connect(self._configurar_microagente)
+        self.botao_configurar_analise = QPushButton("Configurar analisador de erros…")
+        self.botao_configurar_analise.setToolTip(
+            "Aponta o llama-server e um modelo de raciocínio (ex.: MiniCPM5-1B) — "
+            "opcional, habilita a ferramenta analisar_erro pro agente principal "
+            "diagnosticar a causa de um erro antes de corrigi-lo. Diferente do "
+            "microagente: aqui o modelo raciocina antes de responder, então é mais "
+            "lento de propósito. Sem isso configurado, o Executar funciona "
+            "normalmente, só sem essa ferramenta."
+        )
+        self.botao_configurar_analise.clicked.connect(self._configurar_analise_erro)
         self.botao_verificar_gpu = QPushButton("Verificar configuração da GPU")
         self.botao_verificar_gpu.setToolTip(
             "Lista processos llama-server rodando agora e avisa se algum foi "
@@ -309,6 +325,7 @@ class JanelaPrincipal(QMainWindow):
         linha_executar.addWidget(self.botao_parar)
         linha_executar.addWidget(self.botao_configurar_busca)
         linha_executar.addWidget(self.botao_configurar_microagente)
+        linha_executar.addWidget(self.botao_configurar_analise)
         linha_executar.addWidget(self.botao_verificar_gpu)
         linha_executar.addWidget(self.botao_encerrar_gpu)
         layout.addLayout(linha_executar)
@@ -628,6 +645,25 @@ class JanelaPrincipal(QMainWindow):
             "Microagente configurado — a ferramenta delegar_tarefa fica disponível no próximo \"Executar\"."
         )
 
+    def _configurar_analise_erro(self) -> None:
+        # Mesmo padrão de _configurar_busca_semantica/_configurar_microagente:
+        # sempre pede de novo, não reaproveita caminho salvo.
+        binario, _ = QFileDialog.getOpenFileName(
+            self, "Escolher o executável llama-server (para o analisador de erros)", "", "Todos os arquivos (*)"
+        )
+        if not binario:
+            return
+        modelo, _ = QFileDialog.getOpenFileName(
+            self, "Escolher o modelo de raciocínio (GGUF, ex.: MiniCPM5-1B)", "", "Modelos GGUF (*.gguf)"
+        )
+        if not modelo:
+            return
+        self._configuracoes.setValue("analise/binario", binario)
+        self._configuracoes.setValue("analise/modelo", modelo)
+        self.rotulo_status.setText(
+            "Analisador de erros configurado — a ferramenta analisar_erro fica disponível no próximo \"Executar\"."
+        )
+
     def _aplicar_exemplo_instrucao(self, indice: int) -> None:
         if indice <= 0:
             return
@@ -677,6 +713,15 @@ class JanelaPrincipal(QMainWindow):
             Path(modelo_microagente) if modelo_microagente and Path(modelo_microagente).is_file() else None
         )
 
+        binario_analise = self._configuracoes.value("analise/binario", "")
+        modelo_analise = self._configuracoes.value("analise/modelo", "")
+        caminho_binario_analise = (
+            Path(binario_analise) if binario_analise and Path(binario_analise).is_file() else None
+        )
+        caminho_modelo_analise = (
+            Path(modelo_analise) if modelo_analise and Path(modelo_analise).is_file() else None
+        )
+
         thread = QThread(self)
         trabalhador = TrabalhadorOrquestrador(
             diretorio,
@@ -686,6 +731,8 @@ class JanelaPrincipal(QMainWindow):
             caminho_modelo_busca,
             caminho_binario_microagente,
             caminho_modelo_microagente,
+            caminho_binario_analise,
+            caminho_modelo_analise,
         )
         trabalhador.moveToThread(thread)
         thread.started.connect(trabalhador.rodar)
@@ -821,7 +868,7 @@ class JanelaPrincipal(QMainWindow):
 
         for nome_ferramenta in (
             "ler_arquivo", "escrever_arquivo", "listar_arquivos", "executar_comando",
-            "buscar_codigo", "delegar_tarefa", "finalizar",
+            "buscar_codigo", "delegar_tarefa", "analisar_erro", "finalizar",
         ):
             if linha.startswith(nome_ferramenta + "("):
                 self._ultima_ferramenta_chamada = nome_ferramenta

@@ -449,7 +449,9 @@ valida um CPF") em todos, em CPU (`-ngl 0`, padrão):
   resposta final ficou desconectada do raciocínio (identificou o
   algoritmo certo — módulo 11 — mas implementou algo errado). **Não
   recomendado** pro papel de microagente: o ponto é ser rápido/barato,
-  e um modelo de raciocínio é o oposto disso.
+  e um modelo de raciocínio é o oposto disso. Mas essa mesma
+  característica (raciocinar antes de responder) é exatamente o que se
+  quer pra *diagnosticar* um erro — ver seção 13, `analisar_erro`.
 - **`Qwen3-0.6B`** (`Qwen/Qwen3-0.6B-GGUF`, Apache-2.0) — formato
   limpo, sem preâmbulo (melhor que o Qwen2.5-Coder nesse quesito
   específico), mas com **bug lógico real**: `first_digit = int(cpf[0])`
@@ -495,6 +497,34 @@ raciocínio antes de adotar um candidato novo pra esse papel.
 Na interface, "Configurar microagente…" aponta o binário e o modelo —
 opcional, sem isso a ferramenta `delegar_tarefa` simplesmente não
 aparece pro agente principal.
+
+## 13. Analisar erros com um modelo de raciocínio
+
+`microagentes/analisar_erro.py` é o par oposto de `delegar_tarefa`:
+existe porque o `MiniCPM5-1B` testado acima, ruim pra gerar código
+rápido, é candidato natural pra **diagnosticar** um erro — raciocinar
+em várias etapas antes de concluir é vantagem aqui, não defeito. Lê
+`reasoning_content` (quando o servidor expõe esse campo, além de
+`content`) e usa `max_tokens=2000` por padrão, já calibrado pelo teste
+real acima (foi o valor que fez o MiniCPM5-1B terminar de responder).
+
+```bash
+python3 -m microagentes.analisar_erro \
+  --binario ./llama.cpp/build/bin/llama-server \
+  --modelo ~/modelos/minicpm5-1b/MiniCPM5-1B-Q4_K_M.gguf \
+  --erro "pytest: AssertionError em test_soma: esperado 5, recebido 4"
+```
+
+Assim como `delegar_tarefa`, roda em CPU por padrão (`-ngl 0`) — o
+coordenador continua na GPU em paralelo — e recusa subir na GPU se
+`n_gpu_layers>0` for passado com a placa quente (mesma checagem de
+temperatura via sysfs).
+
+Na interface, "Configurar analisador de erros…" aponta o binário e o
+modelo — opcional e independente de "Configurar microagente…", sem
+isso a ferramenta `analisar_erro` simplesmente não aparece pro agente
+principal. Os dois botões podem estar configurados ao mesmo tempo,
+cada um com um modelo diferente pro seu papel.
 
 ## Achados testando contra um modelo real (Xeon + RX 580, Qwen2.5-Coder-7B)
 

@@ -1,11 +1,22 @@
 # Microagentes — delegação de sub-tarefas pequenas
 
-`delegar_tarefa.py` sobe um `llama-server` temporário com um modelo
-**pequeno e rápido** (0,3B–1B, ex.: `Qwen2.5-Coder-0.5B`), manda uma
-única instrução (sem tool calling — o microagente não tem acesso a
-ferramenta nenhuma, só gera texto/código), devolve a resposta, desliga
-o servidor. Mesmo padrão de "agente reduzido" já usado em
-`busca_codigo/buscar_codigo.py` e `visao_mockup/interpretar_mockup.py`.
+Dois módulos irmãos, mesmo padrão de "agente reduzido" já usado em
+`busca_codigo/buscar_codigo.py` e `visao_mockup/interpretar_mockup.py`
+(sobe um `llama-server` temporário, faz uma chamada, desliga), mas com
+papéis opostos de propósito:
+
+- **`delegar_tarefa.py`** — modelo **pequeno e rápido** (0,3B–1B, ex.:
+  `Qwen2.5-Coder-0.5B`) pra sub-tarefas simples e autocontidas. Sem
+  tool calling, sem histórico da conversa.
+- **`analisar_erro.py`** — modelo **de raciocínio** (ex.: `MiniCPM5-1B`)
+  pra diagnosticar a causa de um erro antes de tentar corrigi-lo. Mais
+  lento de propósito — aqui precisão importa mais que velocidade.
+
+A separação existe porque testamos os dois papéis com o mesmo tipo de
+modelo e não funcionou: um modelo de raciocínio é ruim gerando código
+rápido (gasta tokens demais "pensando"), e um modelo rápido não pensa
+o suficiente pra diagnosticar um erro direito. Ver TESTE_LOCAL.md,
+seção 12, pros achados reais que levaram a essa divisão.
 
 ## Por quê
 
@@ -80,9 +91,12 @@ puro (Mamba base) nem chegam a rodar aqui — sem chat template/instruct
 tuning, não seguem a instrução delegada.
 
 **Evite modelos de raciocínio** ("thinking"/"reasoning" no nome ou na
-documentação) pra esse papel — mesmo que tecnicamente funcionem, o
-ponto de um microagente é ser rápido e barato, e um modelo de
-raciocínio é estruturalmente o oposto disso.
+documentação) pra `delegar_tarefa` — mesmo que tecnicamente funcionem,
+o ponto desse papel é ser rápido e barato, e um modelo de raciocínio é
+estruturalmente o oposto disso. Isso não significa que um modelo de
+raciocínio seja inútil pro projeto — ver `analisar_erro.py` abaixo,
+onde a mesma característica que atrapalhou aqui (raciocinar antes de
+responder) é exatamente o que se quer.
 
 ## Geração truncada sem resposta
 
@@ -98,6 +112,39 @@ foi "geração cortada" em vez de "resposta vazia de propósito". No
 orquestrador, isso vira `"erro: ..."` no resultado da ferramenta,
 igual qualquer outro erro de `delegar_tarefa`.
 
+## `analisar_erro.py` — diagnóstico via modelo de raciocínio
+
+`analisar_erro(erro, contexto)` é ferramenta **opcional** no
+orquestrador, mesmo padrão de `delegar_tarefa`/`buscar_codigo`: só
+existe pro modelo se `caminho_binario_analise`/`caminho_modelo_analise`
+forem configurados. Porta padrão diferente (`8084` vs `8083` do
+`delegar_tarefa`) — os dois podem, em tese, rodar na mesma execução
+(analisar um erro, depois delegar a correção).
+
+Duas diferenças de propósito em relação a `delegar_tarefa`:
+
+- **Lê `reasoning_content`, não só `content`.** Quando um servidor de
+  raciocínio expõe esse campo separado (visto na prática com
+  MiniCPM5-1B), `extrair_analise` prefere `content` (resposta final),
+  mas cai para `reasoning_content` se `content` vier vazio — aqui o
+  raciocínio *é* a análise, não é descartável como em
+  `delegar_tarefa.gerar_resposta`.
+- **`max_tokens=2000` por padrão** (vs `1024` do `delegar_tarefa`) —
+  orçamento maior de propósito, porque um modelo de raciocínio gasta
+  tokens "pensando" antes de responder (MiniCPM5-1B precisou de 2000
+  pra terminar no teste real, ver TESTE_LOCAL.md).
+
+Mesma infraestrutura de segurança que o resto do projeto:
+`n_gpu_layers=0` por padrão (CPU — o coordenador continua na GPU em
+paralelo), checagem de temperatura se `n_gpu_layers>0` for passado
+explicitamente, `RespostaTruncadaError` (reaproveitado de
+`delegar_tarefa.py`) se nem `content` nem `reasoning_content` vierem
+com nada.
+
+**Modelo recomendado**: `MiniCPM5-1B` — descartado como microagente de
+`delegar_tarefa` justamente por raciocinar antes de responder, mas é
+exatamente o que se quer aqui.
+
 ## Uso
 
 Como biblioteca:
@@ -110,6 +157,14 @@ resposta = delegar_tarefa(
     Path("~/modelos/qwen2.5-coder-0.5b-instruct.gguf").expanduser(),
     "escreva uma função que valida um CPF",
 )
+
+from microagentes.analisar_erro import analisar_erro
+
+analise = analisar_erro(
+    Path("./llama.cpp/build/bin/llama-server"),
+    Path("~/modelos/minicpm5-1b/MiniCPM5-1B-Q4_K_M.gguf").expanduser(),
+    "pytest: AssertionError em test_soma: esperado 5, recebido 4",
+)
 ```
 
 CLI:
@@ -119,11 +174,16 @@ python3 -m microagentes.delegar_tarefa \
     --binario ./llama.cpp/build/bin/llama-server \
     --modelo ~/modelos/qwen2.5-coder-0.5b-instruct.gguf \
     --instrucao "escreva uma função que valida um CPF"
+
+python3 -m microagentes.analisar_erro \
+    --binario ./llama.cpp/build/bin/llama-server \
+    --modelo ~/modelos/minicpm5-1b/MiniCPM5-1B-Q4_K_M.gguf \
+    --erro "pytest: AssertionError em test_soma: esperado 5, recebido 4"
 ```
 
-Na interface, o botão **"Configurar microagente…"** aponta o
-`llama-server` e o GGUF do microagente (mesmo padrão do "Configurar
-busca semântica…" — sempre pede os dois de novo, não reaproveita
-caminho salvo). Opcional: sem configurar, "Executar" funciona
-normalmente, só sem a ferramenta `delegar_tarefa` disponível pro
-agente.
+Na interface, os botões **"Configurar microagente…"** e **"Configurar
+analisador de erros…"** apontam o `llama-server` e o GGUF de cada um
+(mesmo padrão do "Configurar busca semântica…" — sempre pedem os
+caminhos de novo, não reaproveitam o que foi salvo). Os dois são
+independentes e opcionais: sem configurar, "Executar" funciona
+normalmente, só sem a respectiva ferramenta disponível pro agente.

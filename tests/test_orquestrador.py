@@ -527,6 +527,101 @@ def test_executar_ferramenta_delegar_tarefa_resposta_truncada_vira_erro(
     assert "atingiu o limite" in resultado
 
 
+def test_montar_ferramentas_sem_analise_nao_inclui_analisar_erro():
+    nomes = {f["function"]["name"] for f in orq.montar_ferramentas(busca_disponivel=False)}
+    assert "analisar_erro" not in nomes
+
+
+def test_montar_ferramentas_com_analise_inclui_analisar_erro():
+    nomes = {
+        f["function"]["name"]
+        for f in orq.montar_ferramentas(busca_disponivel=False, analise_disponivel=True)
+    }
+    assert "analisar_erro" in nomes
+
+
+def test_executar_ferramenta_analisar_erro_sem_configuracao_retorna_erro(projeto: Path):
+    resultado = orq.executar_ferramenta(
+        projeto, orq.ConfiguracaoSandbox(), "analisar_erro", {"erro": "AssertionError em test_x"}
+    )
+    assert resultado.startswith("erro:")
+    assert "não configurado" in resultado
+
+
+def test_executar_ferramenta_analisar_erro_chama_modulo_com_argumentos_certos(
+    projeto: Path, monkeypatch, tmp_path: Path
+):
+    capturado = {}
+
+    def _analisar_falso(binario, modelo, erro, contexto=None):
+        capturado.update(binario=binario, modelo=modelo, erro=erro, contexto=contexto)
+        return "a causa provável é X"
+
+    import microagentes.analisar_erro as modulo_analise
+
+    monkeypatch.setattr(modulo_analise, "analisar_erro", _analisar_falso)
+
+    resultado = orq.executar_ferramenta(
+        projeto,
+        orq.ConfiguracaoSandbox(),
+        "analisar_erro",
+        {"erro": "AssertionError em test_x", "contexto": "arquivo x.py"},
+        caminho_binario_analise=tmp_path / "llama-server",
+        caminho_modelo_analise=tmp_path / "minicpm5-1b.gguf",
+    )
+
+    assert capturado["erro"] == "AssertionError em test_x"
+    assert capturado["contexto"] == "arquivo x.py"
+    assert resultado == "a causa provável é X"
+
+
+def test_executar_ferramenta_analisar_erro_resposta_truncada_vira_erro(
+    projeto: Path, monkeypatch, tmp_path: Path
+):
+    import microagentes.delegar_tarefa as modulo_microagente
+
+    def _analisar_que_trunca(binario, modelo, erro, contexto=None):
+        raise modulo_microagente.RespostaTruncadaError("o modelo atingiu o limite de tokens")
+
+    import microagentes.analisar_erro as modulo_analise
+
+    monkeypatch.setattr(modulo_analise, "analisar_erro", _analisar_que_trunca)
+
+    resultado = orq.executar_ferramenta(
+        projeto,
+        orq.ConfiguracaoSandbox(),
+        "analisar_erro",
+        {"erro": "erro qualquer"},
+        caminho_binario_analise=tmp_path / "llama-server",
+        caminho_modelo_analise=tmp_path / "modelo.gguf",
+    )
+
+    assert resultado.startswith("erro:")
+    assert "atingiu o limite" in resultado
+
+
+def test_loop_completo_analisa_erro_e_finaliza(projeto: Path, servidor_llm_mock, monkeypatch, tmp_path: Path):
+    base_url = servidor_llm_mock(
+        [
+            _msg_tool_call("1", "analisar_erro", {"erro": "AssertionError em test_soma"}),
+            _msg_tool_call("2", "finalizar", {"resumo": "diagnosticado", "sucesso": True}),
+        ]
+    )
+    orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": base_url}
+
+    import microagentes.analisar_erro as modulo_analise
+
+    monkeypatch.setattr(modulo_analise, "analisar_erro", lambda *a, **k: "a causa é um off-by-one")
+
+    resultado = orq.Orquestrador(
+        projeto,
+        caminho_binario_analise=tmp_path / "llama-server",
+        caminho_modelo_analise=tmp_path / "minicpm5-1b.gguf",
+    ).rodar("analise o erro")
+
+    assert resultado == {"resumo": "diagnosticado", "sucesso": True}
+
+
 def test_executar_ferramenta_delegar_tarefa_chama_modulo_com_argumentos_certos(
     projeto: Path, monkeypatch, tmp_path: Path
 ):

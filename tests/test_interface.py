@@ -971,6 +971,98 @@ def test_executar_orquestrador_sem_configuracao_de_microagente_usa_none(
     assert janela._trabalhador.caminho_modelo_microagente is None
 
 
+def test_configurar_analise_erro_salva_caminhos(qtbot, monkeypatch, tmp_path: Path):
+    from PySide6.QtCore import QSettings
+
+    arquivo_config = str(tmp_path / "config.ini")
+    monkeypatch.setattr(jp, "QSettings", lambda *a, **k: QSettings(arquivo_config, QSettings.IniFormat))
+
+    binario = tmp_path / "llama-server"
+    binario.write_text("#!/bin/sh\n")
+    modelo = tmp_path / "minicpm5-1b.gguf"
+    modelo.write_bytes(b"fake")
+
+    respostas = iter([(str(binario), ""), (str(modelo), "")])
+    monkeypatch.setattr(jp.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: next(respostas)))
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._configurar_analise_erro()
+
+    assert janela._configuracoes.value("analise/binario") == str(binario)
+    assert janela._configuracoes.value("analise/modelo") == str(modelo)
+    assert "configurado" in janela.rotulo_status.text()
+
+
+def test_configurar_analise_erro_cancelado_nao_salva_nada(qtbot, monkeypatch, tmp_path: Path):
+    from PySide6.QtCore import QSettings
+
+    arquivo_config = str(tmp_path / "config.ini")
+    monkeypatch.setattr(jp, "QSettings", lambda *a, **k: QSettings(arquivo_config, QSettings.IniFormat))
+    monkeypatch.setattr(jp.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: ("", "")))
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+
+    janela._configurar_analise_erro()
+
+    assert janela._configuracoes.value("analise/binario") is None
+
+
+def test_executar_orquestrador_passa_caminhos_de_analise_configurados(
+    qtbot, projeto: Path, servidor_llm_mock, monkeypatch, tmp_path: Path
+):
+    from PySide6.QtCore import QSettings
+
+    arquivo_config = str(tmp_path / "config.ini")
+    monkeypatch.setattr(jp, "QSettings", lambda *a, **k: QSettings(arquivo_config, QSettings.IniFormat))
+
+    binario = tmp_path / "llama-server"
+    binario.write_text("#!/bin/sh\n")
+    modelo = tmp_path / "minicpm5-1b.gguf"
+    modelo.write_bytes(b"fake")
+
+    base_url = servidor_llm_mock([_msg_tool_call("1", "finalizar", {"resumo": "ok", "sucesso": True})])
+    orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": base_url}
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela._configuracoes.setValue("analise/binario", str(binario))
+    janela._configuracoes.setValue("analise/modelo", str(modelo))
+    janela.campo_pasta.setText(str(projeto))
+    janela.campo_instrucao.setPlainText("faça algo")
+
+    janela.botao_executar.click()
+    qtbot.waitUntil(lambda: janela.botao_executar.isEnabled(), timeout=5000)
+
+    assert janela._trabalhador.caminho_binario_analise == binario
+    assert janela._trabalhador.caminho_modelo_analise == modelo
+
+
+def test_executar_orquestrador_sem_configuracao_de_analise_usa_none(
+    qtbot, projeto: Path, servidor_llm_mock, monkeypatch, tmp_path: Path
+):
+    from PySide6.QtCore import QSettings
+
+    arquivo_config = str(tmp_path / "config.ini")
+    monkeypatch.setattr(jp, "QSettings", lambda *a, **k: QSettings(arquivo_config, QSettings.IniFormat))
+
+    base_url = servidor_llm_mock([_msg_tool_call("1", "finalizar", {"resumo": "ok", "sucesso": True})])
+    orq.selecionar_motor = lambda: {"escolhido": "mock", "base_url": base_url}
+
+    janela = JanelaPrincipal()
+    qtbot.addWidget(janela)
+    janela.campo_pasta.setText(str(projeto))
+    janela.campo_instrucao.setPlainText("faça algo")
+
+    janela.botao_executar.click()
+    qtbot.waitUntil(lambda: janela.botao_executar.isEnabled(), timeout=5000)
+
+    assert janela._trabalhador.caminho_binario_analise is None
+    assert janela._trabalhador.caminho_modelo_analise is None
+
+
 def test_descrever_mockup_sugere_pasta_do_mockup_gerado(qtbot, monkeypatch, tmp_path: Path):
     janela = JanelaPrincipal()
     qtbot.addWidget(janela)

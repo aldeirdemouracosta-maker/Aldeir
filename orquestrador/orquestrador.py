@@ -177,12 +177,13 @@ FERRAMENTA_DELEGAR_TAREFA = {
     "function": {
         "name": "delegar_tarefa",
         "description": (
-            "Delega uma sub-tarefa pequena e bem definida (gerar uma função "
-            "isolada, resumir um trecho, explicar uma mensagem de erro) para "
-            "um modelo menor e mais rápido, dedicado só a isso — sem acesso "
-            "a ferramentas. Use pra tarefas simples e autocontidas em vez de "
+            "Delega uma sub-tarefa pequena, bem definida e rápida de resolver "
+            "(gerar uma função isolada, resumir um trecho) para um modelo "
+            "menor e mais rápido, dedicado só a isso — sem acesso a "
+            "ferramentas. Use pra tarefas simples e autocontidas em vez de "
             "fazer você mesmo; pra tarefas que exigem ler/escrever arquivos "
-            "ou rodar comandos, use as ferramentas normais, não esta."
+            "ou rodar comandos, use as ferramentas normais, não esta; pra "
+            "entender a causa de um erro, use analisar_erro, não esta."
         ),
         "parameters": {
             "type": "object",
@@ -198,16 +199,46 @@ FERRAMENTA_DELEGAR_TAREFA = {
     },
 }
 
+FERRAMENTA_ANALISAR_ERRO = {
+    "type": "function",
+    "function": {
+        "name": "analisar_erro",
+        "description": (
+            "Delega o diagnóstico de um erro (mensagem, stack trace, saída de "
+            "teste que falhou) para um modelo especializado em raciocinar "
+            "sobre o problema antes de responder — mais lento que "
+            "delegar_tarefa, mas mais cuidadoso; use quando precisar entender "
+            "a causa de uma falha antes de tentar corrigi-la, não para gerar "
+            "código novo (para isso use delegar_tarefa)."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "erro": {"type": "string", "description": "A mensagem/stack trace/saída de erro a analisar"},
+                "contexto": {
+                    "type": "string",
+                    "description": "Contexto opcional (ex.: trecho de código relevante ao erro)",
+                },
+            },
+            "required": ["erro"],
+        },
+    },
+}
 
-def montar_ferramentas(busca_disponivel: bool, delegacao_disponivel: bool = False) -> list:
-    """FERRAMENTAS + buscar_codigo/delegar_tarefa, cada um só se o
-    respectivo modelo estiver configurado — não faz sentido anunciar ao
-    modelo uma ferramenta que vai sempre falhar por falta de configuração."""
+
+def montar_ferramentas(
+    busca_disponivel: bool, delegacao_disponivel: bool = False, analise_disponivel: bool = False
+) -> list:
+    """FERRAMENTAS + buscar_codigo/delegar_tarefa/analisar_erro, cada um só
+    se o respectivo modelo estiver configurado — não faz sentido anunciar
+    ao modelo uma ferramenta que vai sempre falhar por falta de configuração."""
     ferramentas = list(FERRAMENTAS)
     if busca_disponivel:
         ferramentas.append(FERRAMENTA_BUSCAR_CODIGO)
     if delegacao_disponivel:
         ferramentas.append(FERRAMENTA_DELEGAR_TAREFA)
+    if analise_disponivel:
+        ferramentas.append(FERRAMENTA_ANALISAR_ERRO)
     return ferramentas
 
 
@@ -370,6 +401,8 @@ def executar_ferramenta(
     caminho_modelo_busca: Optional[Path] = None,
     caminho_binario_microagente: Optional[Path] = None,
     caminho_modelo_microagente: Optional[Path] = None,
+    caminho_binario_analise: Optional[Path] = None,
+    caminho_modelo_analise: Optional[Path] = None,
 ) -> str:
     if nome == "ler_arquivo":
         try:
@@ -452,6 +485,23 @@ def executar_ferramenta(
             return f"erro: {erro}"
         return resposta
 
+    if nome == "analisar_erro":
+        if not (caminho_binario_analise and caminho_modelo_analise):
+            return "erro: analisador de erros não configurado nesta execução"
+        from microagentes.analisar_erro import analisar_erro
+        from microagentes.delegar_tarefa import RespostaTruncadaError, ServidorMicroagenteIndisponivelError
+
+        try:
+            analise = analisar_erro(
+                caminho_binario_analise,
+                caminho_modelo_analise,
+                argumentos["erro"],
+                contexto=argumentos.get("contexto"),
+            )
+        except (ServidorMicroagenteIndisponivelError, RespostaTruncadaError) as erro:
+            return f"erro: {erro}"
+        return analise
+
     return f"erro: ferramenta desconhecida {nome!r}"
 
 
@@ -467,6 +517,8 @@ class Orquestrador:
         caminho_modelo_busca: Optional[Path] = None,
         caminho_binario_microagente: Optional[Path] = None,
         caminho_modelo_microagente: Optional[Path] = None,
+        caminho_binario_analise: Optional[Path] = None,
+        caminho_modelo_analise: Optional[Path] = None,
     ):
         self.raiz_projeto = raiz_projeto
         self.config_sandbox = config_sandbox or ConfiguracaoSandbox()
@@ -486,6 +538,12 @@ class Orquestrador:
         # configurado — ver microagentes/README.md.
         self.caminho_binario_microagente = caminho_binario_microagente
         self.caminho_modelo_microagente = caminho_modelo_microagente
+        # Opcional: só oferece a ferramenta analisar_erro se um modelo de
+        # raciocínio (ex.: MiniCPM5-1B) estiver configurado — separado do
+        # microagente de delegação porque o papel exige um modelo diferente
+        # (raciocina antes de responder; ver microagentes/analisar_erro.py).
+        self.caminho_binario_analise = caminho_binario_analise
+        self.caminho_modelo_analise = caminho_modelo_analise
 
     def rodar(
         self,
@@ -535,6 +593,7 @@ class Orquestrador:
         ferramentas_disponiveis = montar_ferramentas(
             bool(self.caminho_binario_busca and self.caminho_modelo_busca),
             delegacao_disponivel=bool(self.caminho_binario_microagente and self.caminho_modelo_microagente),
+            analise_disponivel=bool(self.caminho_binario_analise and self.caminho_modelo_analise),
         )
 
         for iteracao in range(self.max_iteracoes):
@@ -579,6 +638,8 @@ class Orquestrador:
                     caminho_modelo_busca=self.caminho_modelo_busca,
                     caminho_binario_microagente=self.caminho_binario_microagente,
                     caminho_modelo_microagente=self.caminho_modelo_microagente,
+                    caminho_binario_analise=self.caminho_binario_analise,
+                    caminho_modelo_analise=self.caminho_modelo_analise,
                 )
                 avisar(f"  → {resultado[:200]}")
                 mensagens.append(
@@ -651,6 +712,18 @@ def main() -> None:
         default=None,
         help="GGUF de um modelo pequeno pra sub-tarefas (ex.: Qwen2.5-Coder-0.5B) — ver microagentes/README.md",
     )
+    parser.add_argument(
+        "--analise-binario",
+        type=Path,
+        default=None,
+        help="executável llama-server pra servir o modelo de análise de erros (ativa a ferramenta analisar_erro)",
+    )
+    parser.add_argument(
+        "--analise-modelo",
+        type=Path,
+        default=None,
+        help="GGUF de um modelo de raciocínio pra diagnóstico de erros (ex.: MiniCPM5-1B) — ver microagentes/README.md",
+    )
     args = parser.parse_args()
 
     partes_contexto = []
@@ -673,6 +746,8 @@ def main() -> None:
         caminho_modelo_busca=args.busca_modelo,
         caminho_binario_microagente=args.microagente_binario,
         caminho_modelo_microagente=args.microagente_modelo,
+        caminho_binario_analise=args.analise_binario,
+        caminho_modelo_analise=args.analise_modelo,
     )
     try:
         resultado = orquestrador.rodar(args.instrucao, contexto_extra=contexto_extra)
