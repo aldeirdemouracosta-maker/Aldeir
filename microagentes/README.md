@@ -64,15 +64,20 @@ seção 12): respondeu rápido e no formato certo. Mesma família do
 `Qwen2.5-Coder-3B/7B` já usados no projeto, reduzindo o risco de
 chat-template "surpresa".
 
-Dois candidatos testados na mesma sessão e **descartados** com motivo
-concreto: `ERNIE-4.5-0.3B` (suporte a português fraco — alucinou,
-misturou idiomas, vazou caractere chinês) e `MiniCPM5-1B` (é um
-**modelo de raciocínio** — gasta o orçamento de tokens "pensando" num
-campo separado antes de responder, lento e caro pro papel de
-microagente; ver `RespostaTruncadaError` abaixo). Ver `TESTE_LOCAL.md`
-para os detalhes de cada teste, e por que modelos T5/encoder-decoder ou
-state-space puro (Mamba base) nem chegam a rodar aqui — sem chat
-template/instruct tuning, não seguem a instrução delegada.
+Quatro outros candidatos testados na mesma sessão, todos
+**descartados** com motivo concreto: `ERNIE-4.5-0.3B` (suporte a
+português fraco — alucinou, misturou idiomas, vazou caractere chinês),
+`MiniCPM5-1B` (é um **modelo de raciocínio** — gasta o orçamento de
+tokens "pensando" num campo separado antes de responder, lento e caro
+pro papel de microagente; ver `RespostaTruncadaError` abaixo),
+`Qwen3-0.6B` (formato de resposta limpo, mas lógica sempre-falsa — bug
+real, não estilístico) e `Falcon-H1-0.5B-Instruct` (carregou sem
+problema — arquitetura híbrida já suportada na `llama.cpp` mainline —
+mas foi o pior em qualidade: português quebrado, erro de domínio sobre
+o que é CPF, recusa sem motivo). Ver `TESTE_LOCAL.md` para os detalhes
+de cada teste, e por que modelos T5/encoder-decoder ou state-space
+puro (Mamba base) nem chegam a rodar aqui — sem chat template/instruct
+tuning, não seguem a instrução delegada.
 
 **Evite modelos de raciocínio** ("thinking"/"reasoning" no nome ou na
 documentação) pra esse papel — mesmo que tecnicamente funcionem, o

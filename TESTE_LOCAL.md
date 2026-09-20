@@ -426,10 +426,10 @@ projeto. Roda em CPU por padrão (`--ngl` omitido = 0):
   --port 8083 --host 127.0.0.1 --jinja --ctx-size 4096
 ```
 
-### Achados testando os três candidatos numa RX 580 real (Xeon sem AVX2)
+### Achados testando cinco candidatos numa RX 580 real (Xeon sem AVX2)
 
 Testados de verdade, mesma instrução ("escreva uma função Python que
-valida um CPF") nos três, em CPU (`-ngl 0`, padrão):
+valida um CPF") em todos, em CPU (`-ngl 0`, padrão):
 
 - **`Qwen2.5-Coder-0.5B-Instruct`** (`Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF`,
   Apache-2.0) — respondeu rápido, direto, código no formato certo
@@ -450,6 +450,26 @@ valida um CPF") nos três, em CPU (`-ngl 0`, padrão):
   algoritmo certo — módulo 11 — mas implementou algo errado). **Não
   recomendado** pro papel de microagente: o ponto é ser rápido/barato,
   e um modelo de raciocínio é o oposto disso.
+- **`Qwen3-0.6B`** (`Qwen/Qwen3-0.6B-GGUF`, Apache-2.0) — formato
+  limpo, sem preâmbulo (melhor que o Qwen2.5-Coder nesse quesito
+  específico), mas com **bug lógico real**: `first_digit = int(cpf[0])`
+  seguido de `if first_digit < 10` — um dígito único é sempre `< 10`,
+  então a condição é sempre verdadeira e a função sempre devolve
+  `False`, pra qualquer entrada. Código com aparência boa, quebrado por
+  completo. **Não recomendado.**
+- **`Falcon-H1-0.5B-Instruct`** (`tiiuae/Falcon-H1-0.5B-Instruct-GGUF`,
+  licença Falcon) — carregou sem erro de arquitetura (o suporte
+  híbrido Transformer+Mamba2 já está mesclado na `llama.cpp` mainline
+  usada aqui, boa notícia à parte). Mas foi o pior em qualidade:
+  português quebrado (misturou espanhol), errou o que CPF significa
+  ("Countrywide Postal Code" — mesmo tipo de erro de domínio do
+  MiniCPM5-1B), recusou a tarefa sem motivo real ("não pode/recomenda"
+  validar CPF) e documentou a função com 9 dígitos (errado, CPF tem
+  11). **Não recomendado.**
+
+**Nenhum dos quatro challengers superou o `Qwen2.5-Coder-0.5B-Instruct`
+— confirmado como escolha final** pro papel de microagente nesta
+máquina, sem necessidade de testar mais candidatos pra esse papel.
 
 Esse teste revelou uma lacuna real: quando um modelo de raciocínio
 estoura `max_tokens` antes de escrever `content`, a resposta vinha
