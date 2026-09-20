@@ -4,7 +4,10 @@
 set -eu
 
 TARGET_DIR="$1"
-IA_LINUX_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# post-build.sh vive em buildroot/board/ia-linux/ — 3 níveis abaixo da
+# raiz do repositório (onde está hardware/, ver install abaixo), não 2:
+# buildroot/board/ia-linux -> buildroot/board -> buildroot -> raiz.
+IA_LINUX_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 
 # ia-hwdetect é instalado a partir de hardware/detect.sh (fonte canônica,
 # fora do overlay para não duplicar conteúdo — ver hardware/*/README.md).
