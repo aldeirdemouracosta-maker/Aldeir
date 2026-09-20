@@ -1,5 +1,49 @@
 # Changelog — IA Linux Minimal
 
+## Bug crítico de boot físico: código do GRUB nunca era embutido no MBR
+
+Primeiro boot físico real (SSD gravado com sucesso, PC ligado com o
+menu de boot apontando pro SSD): o firmware caía direto pra PXE/rede
+("Reboot and Select proper Boot device"), sem nem tentar o disco. O
+SSD tinha uma tabela de partição válida (confirmada nos testes de
+`genimage` desta sessão) mas **nenhum código executável no setor de
+boot (MBR)** — só uma tabela de partição não é suficiente pro BIOS
+bootar; ele precisa achar código de verdade pra executar no início do
+disco.
+
+Causa raiz: `genimage-bios.cfg` sempre montou as partições
+(system/recovery/data) mas nunca teve nenhuma entrada pra embutir o
+código de boot do GRUB (`boot.img`, o 1º estágio, e `grub.img`, o 2º
+estágio com os módulos e o `grub.cfg` embutidos via
+`BUILTIN_MODULES_PC`/`BUILTIN_CONFIG_PC`) — apesar do Buildroot já
+produzir `grub.img` pronto em `output/images/` o tempo todo, sem
+nenhum outro pacote consumi-lo. `boot.img` nem chegava a
+`$BINARIES_DIR` — ficava só no diretório de build interno do grub2.
+
+Confirmado comparando com `board/pc/`, a placa de referência que vem
+com o próprio Buildroot: o `post-build.sh` dela copia
+`$TARGET_DIR/lib/grub/i386-pc/boot.img` pra `$BINARIES_DIR`, e o
+`genimage-bios.cfg` dela tem duas entradas (`in-partition-table =
+"no"`) que embutem `boot.img` no setor 0 (com um "hole" nos bytes
+440-512 pra preservar a assinatura/tabela de partição que o genimage
+escreve) e `grub.img` logo em seguida, no setor 1 — antes de qualquer
+partição de verdade.
+
+Corrigido: `post-image.sh` agora copia `boot.img` pra `$BINARIES_DIR`
+no modo `bios` (mesmo padrão do `board/pc/post-build.sh`), e
+`genimage-bios.cfg` ganhou as mesmas duas entradas de embutir boot
+(`boot`/`grub`) antes das partições `system`/`recovery`/`data`.
+
+**Não pôde ser testado neste sandbox** (sem hardware físico nem forma
+de simular um boot real de BIOS aqui) — a única validação possível é
+`bash -n`/`shellcheck` no script e revisão visual do `.cfg` contra a
+referência oficial do Buildroot. A confirmação de verdade é o próximo
+boot físico do usuário. Diferente das correções de build anteriores,
+não é preciso refazer o `disk.img` do zero: como as mudanças só
+afetam a montagem final via `genimage`, dá pra rodar só
+`./build.sh bios` de novo (reaproveita tudo já compilado) e regravar o
+SSD.
+
 ## install-to-device.sh: confirmação virou argumento, não prompt (resolvido)
 
 Continuação direta da investigação abaixo ("confirmação chegava vazia

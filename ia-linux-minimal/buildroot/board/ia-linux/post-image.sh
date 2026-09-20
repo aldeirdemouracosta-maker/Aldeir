@@ -71,6 +71,26 @@ mkdir -p "${BINARIES_DIR}/data-empty"
 mkdir -p "${BINARIES_DIR}/recovery-empty"
 "${HOST_DIR}/sbin/mkfs.ext4" -F -L IA_RECOVERY -d "${BINARIES_DIR}/recovery-empty" "${BINARIES_DIR}/recovery.ext4" 128M
 
+if [ "${MODE}" = "bios" ]; then
+    # genimage-bios.cfg embute o código de boot do GRUB (1º estágio,
+    # boot.img, gravado no setor 0/MBR) diretamente no disk.img, fora da
+    # tabela de partição. Sem isso, disk.img tem partições válidas mas
+    # nenhum código executável no MBR — o BIOS não acha nada pra rodar
+    # e cai pro próximo dispositivo de boot (confirmado num boot físico
+    # de verdade: caía pra PXE/rede, ver CHANGELOG.md). Padrão idêntico
+    # ao post-build.sh de referência do Buildroot (board/pc/), que copia
+    # o mesmo arquivo do mesmo caminho.
+    BOOT_IMG="${TARGET_DIR}/lib/grub/i386-pc/boot.img"
+    if [ ! -f "${BOOT_IMG}" ]; then
+        echo "post-image.sh: ERRO — não encontrei ${BOOT_IMG}" >&2
+        echo "  (boot.img de 1º estágio do GRUB — sem ele, disk.img não tem" >&2
+        echo "  código de boot no MBR e não bota fisicamente). Confira se" >&2
+        echo "  BR2_TARGET_GRUB2_I386_PC está habilitado no defconfig." >&2
+        exit 1
+    fi
+    cp -f "${BOOT_IMG}" "${BINARIES_DIR}/boot.img"
+fi
+
 if [ "${MODE}" = "uefi" ]; then
     # genimage-uefi.cfg monta efi.vfat a partir de $BINARIES_DIR/EFI —
     # ninguém cria esse diretório automaticamente, então montamos aqui:
