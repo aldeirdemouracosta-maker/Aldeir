@@ -2,7 +2,7 @@ config BR2_PACKAGE_AI_SHELL
 	bool "ai-shell"
 	select BR2_PACKAGE_AI_CORE
 	select BR2_PACKAGE_UTIL_LINUX
-	select BR2_PACKAGE_UTIL_LINUX_LSBLK
+	select BR2_PACKAGE_UTIL_LINUX_BINARIES
 	help
 	  Console interativo (prompt "IA>") e utilitários de linha de
 	  comando (ia-model, ia-chat, ia-benchmark, ia-server, ia-gpu,
