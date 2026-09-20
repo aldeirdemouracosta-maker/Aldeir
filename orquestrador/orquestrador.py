@@ -750,7 +750,7 @@ def main() -> None:
         caminho_modelo_analise=args.analise_modelo,
     )
     try:
-        resultado = orquestrador.rodar(args.instrucao, contexto_extra=contexto_extra)
+        resultado = orquestrador.rodar(args.instrucao, contexto_extra=contexto_extra, on_evento=print)
     except (MotorIndisponivelError, GeracaoTruncadaError) as erro:
         print(json.dumps({"erro": str(erro)}, indent=2, ensure_ascii=False))
         raise SystemExit(1)
