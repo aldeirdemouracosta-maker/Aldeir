@@ -61,7 +61,7 @@ mkdir -p "${RELEASE_DIR}"
 
 if [ -d "${BUILDROOT_DIR}" ]; then
     echo "== legal-info: relatório de conformidade de licenças =="
-    make -C "${BUILDROOT_DIR}" BR2_EXTERNAL="${IA_LINUX_ROOT}/buildroot" legal-info
+    make -C "${BUILDROOT_DIR}" BR2_EXTERNAL="${IA_LINUX_ROOT}" legal-info
     if [ -d "${BUILDROOT_DIR}/output/legal-info" ]; then
         rm -rf "${RELEASE_DIR}/legal-info"
         cp -r "${BUILDROOT_DIR}/output/legal-info" "${RELEASE_DIR}/legal-info"

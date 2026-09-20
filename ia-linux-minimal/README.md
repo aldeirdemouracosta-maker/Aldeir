@@ -50,7 +50,10 @@ real, fora do alcance deste sandbox.
 
 ```
 ia-linux-minimal/
-├── buildroot/            # BR2_EXTERNAL: defconfig, genimage, board files
+├── Config.in, external.desc, external.mk   # raiz do BR2_EXTERNAL (ver abaixo)
+├── buildroot/            # defconfigs + board files (genimage, grub.cfg,
+│                          # post-image.sh/post-build.sh) — referenciados
+│                          # a partir da raiz via $(BR2_EXTERNAL_IA_LINUX_PATH)/buildroot/...
 ├── kernel/                # fragmento de config + patches (sched_ext etc.)
 ├── package/               # pacotes Buildroot próprios (ai-core, ai-shell)
 ├── ai-core/                # daemon Rust: hardware, modelos, backend, IPC

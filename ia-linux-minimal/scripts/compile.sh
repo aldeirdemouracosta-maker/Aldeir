@@ -13,6 +13,6 @@ if [ ! -f "${BUILDROOT_DIR}/.config" ]; then
     exit 1
 fi
 
-make -C "${BUILDROOT_DIR}" BR2_EXTERNAL="${IA_LINUX_ROOT}/buildroot" "$@"
+make -C "${BUILDROOT_DIR}" BR2_EXTERNAL="${IA_LINUX_ROOT}" "$@"
 
 echo "compile.sh: build concluído. Imagens em ${BUILDROOT_DIR}/output/images/"

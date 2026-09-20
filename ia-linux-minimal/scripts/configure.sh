@@ -1,7 +1,12 @@
 #!/bin/sh
 # configure.sh <qemu|bios|uefi> — aplica o defconfig do alvo escolhido
-# sobre a árvore Buildroot baixada por fetch-buildroot.sh, usando este
-# diretório (buildroot/) como BR2_EXTERNAL.
+# sobre a árvore Buildroot baixada por fetch-buildroot.sh, usando a raiz
+# deste repositório (onde estão external.desc/external.mk/Config.in)
+# como BR2_EXTERNAL — não o subdiretório buildroot/, que guarda só os
+# arquivos específicos de board (genimage, grub.cfg, post-image.sh) e
+# os *_defconfig, referenciados a partir daqui via
+# $(BR2_EXTERNAL_IA_LINUX_PATH)/buildroot/board/... nos próprios
+# defconfigs.
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -29,6 +34,6 @@ fi
 mkdir -p "${BUILDROOT_DIR}/configs"
 cp "${IA_LINUX_ROOT}/buildroot/configs/${DEFCONFIG}" "${BUILDROOT_DIR}/configs/${DEFCONFIG}"
 
-make -C "${BUILDROOT_DIR}" BR2_EXTERNAL="${IA_LINUX_ROOT}/buildroot" "${DEFCONFIG}"
+make -C "${BUILDROOT_DIR}" BR2_EXTERNAL="${IA_LINUX_ROOT}" "${DEFCONFIG}"
 
 echo "configure.sh: configurado para alvo '${TARGET}' (${DEFCONFIG})"

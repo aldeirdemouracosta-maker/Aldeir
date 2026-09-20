@@ -1,5 +1,66 @@
 # Changelog — IA Linux Minimal
 
+## Correção crítica — BR2_EXTERNAL apontava para o diretório errado
+
+Primeira vez que `./build.sh` rodou de verdade fora deste sandbox (numa
+máquina do usuário com acesso à internet real ao buildroot.org) — e
+travou imediatamente em:
+
+```
+buildroot/Config.in:1: can't open file
+  ".../buildroot/package/ai-core/Config.in"
+make[1]: *** [Makefile:1050: ia_linux_bios_x86_64_defconfig] Erro 1
+```
+
+**Causa raiz**: `scripts/configure.sh`/`compile.sh`/`make-release.sh`
+passavam `BR2_EXTERNAL="${IA_LINUX_ROOT}/buildroot"` (o subdiretório
+`buildroot/`) para o `make` do Buildroot. Mas os defconfigs
+(`buildroot/configs/*_defconfig`) sempre assumiram, de forma
+inconsistente com isso, que `$(BR2_EXTERNAL_IA_LINUX_PATH)` era a
+**raiz do repositório** — por exemplo
+`BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_IA_LINUX_PATH)/rootfs-overlay"`
+(sem prefixo `buildroot/`, e `rootfs-overlay/` só existe na raiz) e
+`BR2_TARGET_GRUB2_BUILTIN_CONFIG="$(BR2_EXTERNAL_IA_LINUX_PATH)/buildroot/board/ia-linux/grub.cfg"`
+(com prefixo `buildroot/` explícito, porque os arquivos de board *sim*
+vivem num subdiretório). Os arquivos que definem a raiz do
+BR2_EXTERNAL de verdade para o Buildroot (`Config.in`, `external.desc`,
+`external.mk`) estavam fisicamente dentro de `buildroot/`, um nível
+abaixo de onde os próprios defconfigs esperavam — por isso o Kconfig
+não achava `package/ai-core/Config.in` (que sempre esteve, correto, na
+raiz do repositório).
+
+Esse bug nunca apareceu nas 102 execuções de `cargo test` nem nos
+testes manuais de `post-image.sh`/`genimage` feitos neste ambiente,
+porque nenhum dos dois invoca o `make` do Buildroot com Kconfig de
+verdade — só um build real, fora do sandbox, expunha isso.
+
+**Corrigido**: `Config.in`, `external.desc` e `external.mk` movidos
+para a raiz do repositório (onde já viviam `package/`, `ai-core/`,
+`kernel/`, `rootfs-overlay/` — nunca precisaram mudar de lugar, pois
+os defconfigs sempre os referenciaram corretamente a partir daí).
+`buildroot/` continua existindo, mas agora só guarda o que os
+defconfigs esperam dele: os `*_defconfig` (copiados manualmente por
+`configure.sh`, sem depender de descoberta automática do Buildroot) e
+`board/ia-linux/` (genimage, grub.cfg, post-image.sh, post-build.sh —
+referenciados com o prefixo `buildroot/` explícito nos defconfigs, que
+nunca mudou). `configure.sh`, `compile.sh` e `make-release.sh` agora
+passam `BR2_EXTERNAL="${IA_LINUX_ROOT}"` (raiz do repo), consistente
+com o que os defconfigs sempre esperaram.
+
+**Validação**: sem uma árvore Buildroot real disponível neste sandbox
+(ver nota de rede em `docs/build.md`), a correção foi verificada
+resolvendo manualmente, no sistema de arquivos, cada caminho que os
+três defconfigs referenciam via `$(BR2_EXTERNAL_IA_LINUX_PATH)/...`
+com a raiz do repositório como base — todos os 13 caminhos existem
+exatamente onde esperado (`package/ai-core/Config.in`,
+`package/ai-shell/Config.in`, `ai-core/`, `package/ai-shell/src`,
+`kernel/config/*`, `rootfs-overlay/`, `buildroot/board/ia-linux/*`).
+`bash -n`/`shellcheck -S warning` limpos nos três scripts alterados.
+O que isso **não** confirma: se o Kconfig do Buildroot 2026.08 real
+aceita a sintaxe dos `Config.in` de `ai-core`/`ai-shell` sem outros
+erros — só o teste do usuário, na máquina real, vai confirmar o
+próximo passo da cadeia de build.
+
 ## Correções pós-0.9 — bugs reais de boot físico encontrados por revisão + teste de verdade
 
 Depois do fechamento da série 0.1–0.9, uma revisão de código dedicada
