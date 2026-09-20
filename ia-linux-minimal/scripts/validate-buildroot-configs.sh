@@ -28,15 +28,24 @@ for defconfig in "${IA_LINUX_ROOT}"/buildroot/configs/*_defconfig; do
     echo "== $(basename "${defconfig}") =="
     grep -oE '^(# )?BR2_[A-Za-z0-9_]+' "${defconfig}" | sed 's/^# //' | sort -u > "${WARN_FILE}.symbols"
     while IFS= read -r symbol; do
-        short="${symbol#BR2_}"
-        if ! grep -rq "config ${short}\b" \
-            "${BUILDROOT_DIR}"/package/*/Config.in \
-            "${BUILDROOT_DIR}"/Config.in \
-            "${BUILDROOT_DIR}"/Config.in.legacy \
-            "${BUILDROOT_DIR}"/arch/Config.in \
-            "${BUILDROOT_DIR}"/fs/Config.in \
-            "${BUILDROOT_DIR}"/boot/*/Config.in \
-            "${BUILDROOT_DIR}"/linux/Config.in.host 2>/dev/null; then
+        # BR2_PACKAGE_AI_CORE/AI_SHELL são definidos no nosso próprio
+        # BR2_EXTERNAL (package/ai-core|ai-shell/Config.in), não na
+        # árvore Buildroot upstream — não faz sentido procurá-los aqui.
+        case "${symbol}" in
+            BR2_PACKAGE_AI_CORE|BR2_PACKAGE_AI_SHELL) continue ;;
+        esac
+        # Buildroot mantém o prefixo BR2_ literal na própria linha
+        # "config" dos Config.in (diferente do Kconfig do kernel, onde o
+        # prefixo é implícito) — buscar sem o prefixo (versão anterior
+        # deste script) nunca batia com nada, gerando falso positivo
+        # para quase todo símbolo, incluindo os mais básicos (ex.:
+        # BR2_x86_64). Confirmado rodando contra uma árvore Buildroot
+        # 2026.08 real pela primeira vez (ver CHANGELOG.md). Também
+        # busca recursivamente em toda a árvore em vez de uma lista
+        # fixa de subdiretórios — a lista fixa anterior não cobria
+        # onde BR2_TOOLCHAIN_BUILDROOT_*/BR2_TARGET_GENERIC_*/
+        # BR2_LINUX_KERNEL_* (sem sufixo .host) são de fato definidos.
+        if ! grep -rq "config ${symbol}\b" --include="Config.in*" "${BUILDROOT_DIR}" 2>/dev/null; then
             echo "  aviso: símbolo não encontrado: ${symbol}" | tee -a "${WARN_FILE}"
         fi
     done < "${WARN_FILE}.symbols"
