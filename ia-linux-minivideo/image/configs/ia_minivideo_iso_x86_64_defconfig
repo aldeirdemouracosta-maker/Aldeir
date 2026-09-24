@@ -9,10 +9,13 @@
 # AVX2/FMA/F16C, conferido com "gcc -dM -E"). Roda no Xeon E5 v1 e v2 (X79) e em
 # qualquer CPU x86-64 mais nova (máquinas CUDA e APUs futuras). Usamos este
 # nome, e não BR2_x86_sandybridge, porque só ele tem alvo OpenBLAS
-# (SANDYBRIDGE) no Buildroot 2026.08. Obs.: na base, "BR2_X86_CPU_HAS_AVX=y"
+# (SANDYBRIDGE) no Buildroot 2026.08 (OpenBLAS está desativado; ver abaixo). Obs.: na base, "BR2_X86_CPU_HAS_AVX=y"
 # não tem efeito — é símbolo oculto; quem define as instruções é a variante.
 BR2_x86_64=y
 BR2_x86_corei7_avx=y
+
+# ---- Cache de compilação (acelera recompilações; a CI guarda ~/.buildroot-ccache) ----
+BR2_CCACHE=y
 
 # ---- Toolchain ----
 BR2_TOOLCHAIN_BUILDROOT_GLIBC=y
@@ -95,11 +98,9 @@ BR2_PACKAGE_ALSA_UTILS_ALSAMIXER=y
 BR2_PACKAGE_LLAMA_CPP=y
 BR2_PACKAGE_LLAMA_CPP_VULKAN=y
 BR2_PACKAGE_LLAMA_CPP_TOOLS=y
-# OpenBLAS com alvo SANDYBRIDGE (derivado de BR2_x86_sandybridge): o pacote
-# llama-cpp liga GGML_BLAS sozinho quando OpenBLAS está presente — acelera o
-# processamento do prompt na CPU AVX1 do X79 (achado do pacote X79 anexado).
-BR2_PACKAGE_OPENBLAS=y
-BR2_PACKAGE_OPENBLAS_USE_THREAD=y
+# OpenBLAS: desativado. No build real da CI (run 35984047266) o CMake do
+# llama.cpp b8117 não encontrou a BLAS do OpenBLAS em compilação cruzada
+# ("Could NOT find BLAS", sgemm_ not found). Pendente: pacote/ajuste próprio.
 # Transcritor, interpolador e upscaler (pacotes desta camada)
 BR2_PACKAGE_WHISPER_CPP=y
 BR2_PACKAGE_WHISPER_CPP_VULKAN=y

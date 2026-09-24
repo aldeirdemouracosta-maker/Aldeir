@@ -138,7 +138,7 @@ Gravar no pendrive: `sudo dd if=ia-linux-minivideo.iso of=/dev/sdX bs=4M conv=fs
 
 | Achado | Aplicado |
 |---|---|
-| OpenBLAS com `TARGET=SANDYBRIDGE` acelera o llama.cpp na CPU AVX1 | `BR2_PACKAGE_OPENBLAS=y`; o alvo `SANDYBRIDGE` vem da variante `BR2_x86_corei7_avx` (a `sandybridge` do Buildroot não tem alvo OpenBLAS) |
+| OpenBLAS com `TARGET=SANDYBRIDGE` acelera o llama.cpp na CPU AVX1 | **tentado e revertido**: no build real da CI o CMake do llama.cpp b8117 não achou a BLAS em compilação cruzada (`Could NOT find BLAS`). Pendente. A variante `BR2_x86_corei7_avx` ficou (mesmo ISA do Sandy Bridge) |
 | `llama-bench` para achar threads e camadas na GPU | `minivideo-modelos calibrar <gguf>` grava `Modelos/llm/calibracao.json` |
 | RADV/Mesa é a rota da RX 580; AMDVLK é legado; ROCm gfx803 só em laboratório | mantido: só RADV no ISO |
 | NVIDIA/CUDA e AMD/Vulkan como workers independentes com roteador | roteador de agentes por dispositivo; nada é dividido entre GPUs |

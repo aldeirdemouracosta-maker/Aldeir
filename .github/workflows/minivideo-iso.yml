@@ -34,12 +34,14 @@ jobs:
                glslc libelf-dev libssl-dev python3 qemu-system-x86 imagemagick
           df -h / /mnt
 
-      - name: Cache de downloads do Buildroot
-        uses: actions/cache@v4
+      - name: Restaurar cache (downloads + ccache)
+        uses: actions/cache/restore@v4
         with:
-          path: /mnt/minivideo/dl
-          key: br-dl-${{ hashFiles('ia-linux-minivideo/image/configs/*', 'ia-linux-minivideo/image/package/**') }}
-          restore-keys: br-dl-
+          path: |
+            /mnt/minivideo/dl
+            ~/.buildroot-ccache
+          key: br-${{ github.run_id }}
+          restore-keys: br-
 
       - name: Configurar e validar opções
         run: ia-linux-minivideo/image/scripts/build-iso.sh --so-configurar
@@ -49,6 +51,15 @@ jobs:
           ia-linux-minivideo/image/scripts/build-iso.sh > "$MINIVIDEO_WORK/build.log" 2>&1 \
             || { tail -300 "$MINIVIDEO_WORK/build.log"; exit 1; }
           tail -20 "$MINIVIDEO_WORK/build.log"
+
+      - name: Salvar cache (mesmo se o build falhar)
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            /mnt/minivideo/dl
+            ~/.buildroot-ccache
+          key: br-${{ github.run_id }}
 
       - name: Boot no QEMU com autoteste (serial)
         run: |
