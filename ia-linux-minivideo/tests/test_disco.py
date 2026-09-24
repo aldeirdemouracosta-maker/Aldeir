@@ -46,7 +46,7 @@ def test_lista_e_motivos_de_recusa():
 
 def test_prepara_com_confirmacao_exata():
     r = Registro()
-    assert pd.preparar("sda", "APAGAR sda", runner=r, lsblk=LSBLK, exigir_root=False, esperar=lambda s: None) \
+    assert pd.preparar("sda", "APAGAR sda", runner=r, lsblk=LSBLK, exigir_root=False, esperar=lambda s: None, achar=lambda c: c) \
         == "/dev/sda1"
     assert [c[0] for c, _ in r.chamadas] == ["wipefs", "sfdisk", "mkfs.ext4"]
     assert r.chamadas[1][1] == b"label: gpt\n,,L\n"
@@ -71,7 +71,7 @@ def test_recusas_nao_executam_nada(nome, conf, erro):
 def test_falha_no_meio_para_e_informa():
     r = Registro(falhar="sfdisk")
     with pytest.raises(pd.Recusado, match="sfdisk .* falhou: erro simulado"):
-        pd.preparar("sda", "APAGAR sda", runner=r, lsblk=LSBLK, exigir_root=False, esperar=lambda s: None)
+        pd.preparar("sda", "APAGAR sda", runner=r, lsblk=LSBLK, exigir_root=False, esperar=lambda s: None, achar=lambda c: c)
     assert [c[0] for c, _ in r.chamadas] == ["wipefs", "sfdisk"]  # mkfs não roda
 
 
@@ -86,3 +86,11 @@ def test_ativar_dados_grava_env(tmp_path):
     pd.ativar_dados(str(tmp_path / "data" / "minivideo"), str(env))
     assert env.read_text() == f"MINIVIDEO_HOME={tmp_path}/data/minivideo\n"
     assert (tmp_path / "data" / "minivideo" / "Ferramentas").is_dir()
+
+
+def test_ferramenta_ausente_recusa_antes_de_apagar():
+    r = Registro()
+    with pytest.raises(pd.Recusado, match="ferramentas ausentes: wipefs"):
+        pd.preparar("sda", "APAGAR sda", runner=r, lsblk=LSBLK, exigir_root=False,
+                    achar=lambda c: None if c == "wipefs" else c)
+    assert r.chamadas == []

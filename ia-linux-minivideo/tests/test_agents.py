@@ -310,3 +310,14 @@ def test_limpar_jobs_antigos_mantem_registro(tmp_path, capsys):
     assert sorted(os.listdir(velho)) == ["cenas.csv", "job.json"]  # quadros/ vazia foi removida
     assert os.path.exists(os.path.join(novo, "c1.mp4"))  # job recente intocado
     assert limpeza.planejar(ws.jobs, 7) == []
+
+
+def test_default_root_usa_o_env_da_sessao(tmp_path, monkeypatch):
+    from minivideo_agents import workspace as w
+    env = tmp_path / "minivideo.env"
+    env.write_text("MINIVIDEO_HOME=/data/minivideo\n")
+    monkeypatch.delenv("MINIVIDEO_HOME", raising=False)
+    monkeypatch.setattr(w, "SESSAO_ENV", str(env))
+    assert w.default_root() == "/data/minivideo"
+    monkeypatch.setenv("MINIVIDEO_HOME", "/outro")
+    assert w.default_root() == "/outro"

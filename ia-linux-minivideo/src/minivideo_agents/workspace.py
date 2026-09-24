@@ -13,10 +13,22 @@ FOLDERS = ("Projetos", "Midia", "Modelos", "Ferramentas", "Saidas", "Jobs", "Log
 SYSTEM_MODELS = "/usr/share/minivideo/modelos"
 
 
+SESSAO_ENV = "/run/minivideo.env"  # gravado pelo S30minivideo no boot
+
+
 def default_root() -> str:
     env = os.environ.get("MINIVIDEO_HOME")
     if env:
         return env
+    try:  # serviços do boot e o root rodam sem MINIVIDEO_HOME: usa o que o S30 decidiu
+        with open(SESSAO_ENV) as fh:
+            for linha in fh:
+                if linha.startswith("MINIVIDEO_HOME="):
+                    valor = linha.split("=", 1)[1].strip().strip('"')
+                    if valor:
+                        return valor
+    except OSError:
+        pass
     if os.path.ismount("/data") and os.access("/data", os.W_OK):
         return "/data/minivideo"
     return os.path.join(os.path.expanduser("~"), "MiniVideo")

@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -87,7 +88,7 @@ def comandos(disco: str) -> List[Dict]:
 
 
 def preparar(nome: str, confirmacao: str, runner: Runner = subprocess.run, lsblk: Optional[Dict] = None,
-             exigir_root: bool = True, esperar=time.sleep) -> str:
+             exigir_root: bool = True, esperar=time.sleep, achar: Callable = shutil.which) -> str:
     if exigir_root and os.geteuid() != 0:
         raise Recusado("precisa de root: saia da interface (Q) e escolha [p]")
     lista = discos(lsblk if lsblk is not None else ler_lsblk(runner))
@@ -98,7 +99,11 @@ def preparar(nome: str, confirmacao: str, runner: Runner = subprocess.run, lsblk
         raise Recusado(f"{alvo['nome']}: " + "; ".join(alvo["recusa"]))
     if confirmacao.strip() != f"APAGAR {alvo['nome']}":
         raise Recusado(f"confirmação errada: digite exatamente APAGAR {alvo['nome']}")
-    for c in comandos(alvo["caminho"]):
+    cmds = comandos(alvo["caminho"])
+    faltam = [c["cmd"][0] for c in cmds if not achar(c["cmd"][0])]
+    if faltam:  # confere antes de começar: nunca deixa o disco apagado pela metade
+        raise Recusado("ferramentas ausentes: " + ", ".join(faltam))
+    for c in cmds:
         r = runner(c["cmd"], input=(c.get("entrada") or "").encode(), stdout=subprocess.PIPE,
                    stderr=subprocess.STDOUT)
         if r.returncode != 0:
