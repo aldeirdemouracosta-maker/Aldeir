@@ -17,5 +17,6 @@ config BR2_PACKAGE_WHISPER_CPP_VULKAN
 	depends on !BR2_STATIC_LIBS
 	select BR2_PACKAGE_VULKAN_LOADER
 	select BR2_PACKAGE_VULKAN_HEADERS
+	select BR2_PACKAGE_SPIRV_HEADERS # ggml-vulkan: find_package(SPIRV-Headers)
 
 endif

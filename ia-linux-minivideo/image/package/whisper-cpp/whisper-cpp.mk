@@ -29,7 +29,9 @@ ifeq ($(BR2_PACKAGE_WHISPER_CPP_VULKAN),y)
 # Shaders Vulkan são compilados com o glslc do HOST (Buildroot 2026.08 não
 # empacota shaderc; o pacote llama-cpp tem a mesma exigência). O script
 # scripts/build-iso.sh confere a presença do glslc antes de compilar.
-WHISPER_CPP_DEPENDENCIES += vulkan-loader vulkan-headers
+# O ggml do whisper.cpp 1.9.4 também exige SPIRV-Headers (falha real na CI,
+# run 35991592605: "Could not find ... SPIRV-HeadersConfig.cmake").
+WHISPER_CPP_DEPENDENCIES += vulkan-loader vulkan-headers spirv-headers
 WHISPER_CPP_CONF_OPTS += -DGGML_VULKAN=ON
 else
 WHISPER_CPP_CONF_OPTS += -DGGML_VULKAN=OFF
