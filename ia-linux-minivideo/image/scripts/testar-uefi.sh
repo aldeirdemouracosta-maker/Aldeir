@@ -48,12 +48,9 @@ if ! espera "executed automatically" "${ESPERA_GRUB:-120}"; then
     echo "testar-uefi: menu do GRUB não apareceu (firmware não achou o BOOTX64.EFI?)" >&2
     exit 1
 fi
-# posição da entrada "Diagnostico" no menu (conta as anteriores no grub-uefi.cfg)
-CFG="$(dirname "$0")/../board/minivideo/grub-uefi.cfg"
-ANTES=$(sed -n '/^menuentry/p' "$CFG" | sed -n '/Diagnostico/q;p' | wc -l)
-i=0
-while [ "$i" -lt "$ANTES" ]; do tecla down; i=$((i + 1)); done
-tecla ret
+# "Diagnostico" tem atalho --hotkey=d no grub-uefi.cfg: uma tecla só, sem navegar
+# pelo menu com setas (na VM da CI uma seta às vezes se perdia e caía em outra entrada)
+tecla d
 # "minivideo-live: raiz" = o initramfs achou o ISO, montou o squashfs com overlay e fez switch_root
 if espera "${MARCA_FINAL:-minivideo-live: raiz}" "${ESPERA_KERNEL:-300}" \
    && grep -a -q -E "efi: EFI v" "$LOG"; then

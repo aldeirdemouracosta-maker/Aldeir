@@ -125,7 +125,7 @@ dar boot também em pendrive.
 | IA-Linux MiniVideo (RX 580 / Vulkan) | normal |
 | IA-Linux MiniVideo - carregar tudo na RAM | `minivideo.toram=1`: dá para tirar o pendrive |
 | Recuperação: sem GPU (`nomodeset`) | tela preta ou travamento no `amdgpu` |
-| Diagnóstico: console serial + tela | logs completos (`loglevel=7`) |
+| Diagnóstico: console serial + tela (no UEFI, tecla **D** no menu) | logs completos (`loglevel=7`) |
 
 ## Como compilar
 
