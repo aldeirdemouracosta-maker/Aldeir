@@ -2,6 +2,18 @@
 # GPU AMD. Aplicado nos defconfigs ia_linux_bios_x86_64 e ia_linux_uefi_x86_64.
 
 # Armazenamento
+#
+# CONFIG_ATA/CONFIG_ATA_PIIX/CONFIG_SATA_AHCI só fazem o kernel enxergar
+# e inicializar o controlador AHCI/ATA em baixo nível — quem realmente
+# cria o nó de dispositivo /dev/sda (para o controlador AHCI/ATA e
+# também para discos USB via CONFIG_USB_STORAGE abaixo) é a camada SCSI
+# de disco "sd" (sd_mod), que depende explicitamente de CONFIG_SCSI e
+# CONFIG_BLK_DEV_SD. Sem essas duas, o kernel detecta o controlador mas
+# nunca aparece /dev/sda pra montar a raiz — bug confirmado num boot
+# físico real (kernel detectava hardware e travava antes de montar a
+# raiz; ver CHANGELOG.md).
+CONFIG_SCSI=y
+CONFIG_BLK_DEV_SD=y
 CONFIG_ATA=y
 CONFIG_ATA_PIIX=y
 CONFIG_SATA_AHCI=y

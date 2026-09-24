@@ -1,5 +1,60 @@
 # Changelog — IA Linux Minimal
 
+## Bug crítico de boot físico: kernel sem driver de disco SCSI (`CONFIG_SCSI`/`CONFIG_BLK_DEV_SD`)
+
+Segundo boot físico real, depois de corrigido o bug do GRUB não embutido
+no MBR (seção seguinte deste changelog): o GRUB agora carrega e entrega
+o boot pro kernel, mas o kernel trava antes de montar a raiz — hardware
+detectado (log mostra o controlador AHCI/ATA inicializando), mas nenhum
+`/dev/sda` aparece pra montar. Diagnóstico recebido do usuário (via
+ferramenta externa) apontou a hipótese; verificamos diretamente contra
+os arquivos reais deste repositório antes de aceitar.
+
+Causa raiz confirmada em `kernel/config/physical.fragment`:
+`CONFIG_ATA`, `CONFIG_ATA_PIIX`, `CONFIG_SATA_AHCI` e
+`CONFIG_USB_STORAGE` estavam todos habilitados, mas `CONFIG_SCSI` e
+`CONFIG_BLK_DEV_SD` nunca foram adicionados a nenhum fragmento nem à
+config base (`grep -rn "CONFIG_SCSI\|CONFIG_BLK_DEV_SD" kernel/` não
+retornava nenhuma ocorrência). No Linux, os drivers de controlador
+(ATA_PIIX/SATA_AHCI) só fazem o kernel enxergar e inicializar o
+controlador em baixo nível — quem de fato cria o nó `/dev/sda` (tanto
+pra discos SATA/ATA via libata quanto pra discos USB via
+`CONFIG_USB_STORAGE`) é a camada de driver de disco SCSI "sd"
+(`sd_mod`), que depende explicitamente de `CONFIG_SCSI` (o subsistema)
+e `CONFIG_BLK_DEV_SD` (a classe de dispositivo "sd" em si). Sem essas
+duas opções, o controlador inicializa normalmente mas nenhum
+`/dev/sd*` é criado — exatamente o sintoma relatado: hardware
+detectado, mas nada pra montar como raiz (`root=UUID=...` em
+`grub.cfg` nunca resolve).
+
+Descartamos outras partes do diagnóstico externo por já estarem
+corretas neste repositório: `CONFIG_DEVTMPFS`, `CONFIG_DEVTMPFS_MOUNT`
+e `CONFIG_EXT4_FS` já estavam habilitados em
+`kernel/config/ia_linux_x86_64.config` (config base, aplicada nos três
+alvos) — conferido lendo o arquivo antes de mexer em qualquer coisa,
+não apenas tomando o diagnóstico como verdade.
+
+Corrigido: `CONFIG_SCSI=y` e `CONFIG_BLK_DEV_SD=y` adicionados a
+`kernel/config/physical.fragment` (seção "Armazenamento", junto dos
+outros drivers de disco/controlador). Fragmento específico dos alvos
+`bios`/`uefi` — não se aplica ao alvo `qemu`, que usa
+`CONFIG_VIRTIO_BLK` (`kernel/config/qemu.fragment`), um caminho de
+bloco totalmente diferente (cria `/dev/vda` diretamente, sem passar
+pela camada SCSI).
+
+**Não pôde ser testado neste sandbox** (sem hardware físico nem forma
+de simular boot real de kernel aqui) — validação possível limitada a
+conferir que as duas linhas novas não duplicam nem conflitam com nada
+já existente no fragmento (`grep` confirmou uma única ocorrência de
+cada símbolo, exatamente nas linhas adicionadas). A confirmação de
+verdade é o próximo boot físico do usuário. **Diferente das correções
+anteriores de `genimage`/`post-image.sh`, esta mudança altera a config
+do kernel — exige recompilar o kernel de verdade**, não só refazer a
+montagem final do disco: rodar `./build.sh bios` de novo é suficiente
+(o Buildroot detecta a config do kernel mudou e recompila só o que
+precisa), mas o passo não é mais "instantâneo" como as últimas
+correções.
+
 ## Bug crítico de boot físico: código do GRUB nunca era embutido no MBR
 
 Primeiro boot físico real (SSD gravado com sucesso, PC ligado com o
