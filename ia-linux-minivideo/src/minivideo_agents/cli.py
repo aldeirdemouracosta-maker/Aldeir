@@ -209,6 +209,25 @@ def cmd_esp_reproduzir(args) -> int:
     return code
 
 
+def cmd_limpar(args) -> int:
+    from . import limpeza
+    ws = Workspace(args.workspace)
+    itens = limpeza.planejar(ws.jobs, args.dias)
+    total = sum(i["bytes"] for i in itens) / 1048576
+    jobs = sorted({i["job"] for i in itens})
+    print(f"{len(itens)} arquivo(s) intermediário(s) em {len(jobs)} job(s) com mais de {args.dias:g} dia(s): "
+          f"{total:.1f} MiB")
+    for j in jobs:
+        print(f"  {j}")
+    if not itens:
+        return 0
+    if not args.confirmar:
+        print("Nada foi apagado. Use --confirmar para apagar (job.json e relatórios ficam).")
+        return 0
+    print(f"Liberados {limpeza.executar(ws.jobs, itens) / 1048576:.1f} MiB.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="minivideo-agentes", description="Agentes locais de vídeo do IA-Linux MiniVideo.")
     p.add_argument("--workspace", help="pasta de trabalho (padrão: /data/minivideo ou ~/MiniVideo)")
@@ -229,6 +248,10 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--sem-guard", action="store_true", help=argparse.SUPPRESS)
     s.set_defaults(func=cmd_executar)
 
+    s = sub.add_parser("limpar", help="apaga intermediários de jobs antigos (mantém job.json e relatórios)")
+    s.add_argument("--dias", type=float, default=7)
+    s.add_argument("--confirmar", action="store_true", help="sem isso, só lista")
+    s.set_defaults(func=cmd_limpar)
     sub.add_parser("motores", help="matriz de motores: CUDA, Vulkan ou CPU").set_defaults(func=cmd_motores)
     s = sub.add_parser("schemas", help="caminhos dos schemas JSON dos papéis")
     s.add_argument("--exportar", metavar="PASTA")

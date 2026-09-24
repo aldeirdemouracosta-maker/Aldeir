@@ -2,6 +2,7 @@ import json
 import os
 import shutil
 import stat
+import time
 import subprocess
 
 import pytest
@@ -248,6 +249,28 @@ def test_execute_rife_real(ws):
     res = Executor(ws, assigns, guard=False).run(plan_rules("mais quadros"), src, out, "t5")
     assert res.ok, res.erro
     assert round(probe(out)["fps"]) == 20
+    log = [json.loads(line) for line in open(os.path.join(ws.logs, "t5.agentes.jsonl"))]
+    onde = [e["onde"] for e in log if e["tipo"] == "quadros"]
+    assert onde == ["ram"] if os.access("/dev/shm", os.W_OK) else onde == ["disco"]
+    assert not os.path.exists("/dev/shm/minivideo-t5")  # RAM liberada no fim
+
+
+def test_quadros_vao_para_o_disco_quando_nao_cabem_na_ram(ws):
+    from minivideo_agents import executor as ex
+    from minivideo_guard.monitor import JobLog
+    e = Executor(ws, assigns_for(ws), guard=False)
+    e.job_id, e.job_dir, e._pastas_ram = "t9", os.path.join(ws.jobs, "t9"), []
+    os.makedirs(e.job_dir)
+    e.log = JobLog(ws.logs, "t9", suffix="agentes")
+    pequeno = {"video": {"width": 320, "height": 180}, "duracao": 1.0, "fps": 10.0}
+    enorme = {"video": {"width": 3840, "height": 2160}, "duracao": 36000.0, "fps": 60.0}
+    assert 0 < ex.estimar_quadros_mib(pequeno, 2) < 5
+    assert e._base_quadros(enorme, 4, "upscaler") == e.job_dir
+    if os.access("/dev/shm", os.W_OK):
+        assert e._base_quadros(pequeno, 2, "interpolador") == "/dev/shm/minivideo-t9"
+        os.rmdir("/dev/shm/minivideo-t9")
+    e.limites = dict(e.limites, quadros_ram_fracao=0)
+    assert e._base_quadros(pequeno, 2, "interpolador") == e.job_dir
 
 
 @pytest.mark.skipif(not (shutil.which("ffmpeg") and shutil.which("auto-editor")), reason="auto-editor ausente")
@@ -261,3 +284,29 @@ def test_execute_remove_silence_real(ws):
     res = Executor(ws, assigns_for(ws), guard=False).run(plan_rules("retire os silêncios"), src, out, "t6")
     assert res.ok, res.erro
     assert probe(out)["duracao"] < 2.5  # metade silenciosa removida
+
+
+def test_limpar_jobs_antigos_mantem_registro(tmp_path, capsys):
+    from minivideo_agents import cli, limpeza
+    ws = Workspace(str(tmp_path / "ws"))
+    velho = os.path.join(ws.jobs, "esp-velho")
+    os.makedirs(os.path.join(velho, "quadros"))
+    for nome, dados in (("job.json", b"{}"), ("c1.mp4", b"x" * 2048), ("quadros/00001.png", b"p" * 1024),
+                        ("cenas.csv", b"a,b")):
+        with open(os.path.join(velho, nome), "wb") as fh:
+            fh.write(dados)
+    novo = os.path.join(ws.jobs, "esp-novo")
+    os.makedirs(novo)
+    open(os.path.join(novo, "c1.mp4"), "wb").close()
+    antigo = time.time() - 10 * 86400
+    for raiz, dirs, arquivos in os.walk(velho):
+        for n in dirs + arquivos + [""]:
+            os.utime(os.path.join(raiz, n), (antigo, antigo))
+
+    assert cli.main(["--workspace", ws.root, "limpar", "--dias", "7"]) == 0
+    assert "Nada foi apagado" in capsys.readouterr().out
+    assert os.path.exists(os.path.join(velho, "c1.mp4"))
+    assert cli.main(["--workspace", ws.root, "limpar", "--dias", "7", "--confirmar"]) == 0
+    assert sorted(os.listdir(velho)) == ["cenas.csv", "job.json"]  # quadros/ vazia foi removida
+    assert os.path.exists(os.path.join(novo, "c1.mp4"))  # job recente intocado
+    assert limpeza.planejar(ws.jobs, 7) == []

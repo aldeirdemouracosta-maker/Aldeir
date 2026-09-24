@@ -14,7 +14,7 @@ mkdir -p "$W"
 say "início (kernel $(uname -r))"
 cat /etc/minivideo-release > /dev/console
 
-for b in minivideo-modelos minivideo-prompts minivideo-atualizar llama-bench ffmpeg ffprobe mpv auto-editor whisper-cli llama-server rife-ncnn-vulkan realesrgan-ncnn-vulkan \
+for b in minivideo-modelos minivideo-prompts minivideo-atualizar minivideo-diagnostico minivideo-preparar-disco minivideo-wifi wpa_supplicant iw llama-bench ffmpeg ffprobe mpv auto-editor whisper-cli llama-server rife-ncnn-vulkan realesrgan-ncnn-vulkan \
          vulkaninfo minivideo-ui minivideo-agentes minivideo-guard minivideo-audit; do
     command -v "$b" >/dev/null || fail "binário ausente: $b"
 done
@@ -66,6 +66,20 @@ ls "$W"/ws/Projetos/teste/prompts/*-wan2.2-ti2v-5b.json > /dev/null 2>&1 || fail
 minivideo-atualizar --workspace "$W/ws" caminhos > /dev/console 2>&1 || fail "minivideo-atualizar caminhos"
 python3 -c "from minivideo_atualizacoes import indice; assert len(indice.carregar_fontes()) >= 5" \
     || fail "fontes de atualização não carregam"
+# Relatório de hardware (na VM não há GPU: os testes de GPU saem AUSENTE/FALHOU, sem derrubar o comando)
+minivideo-diagnostico --relatorio --workspace "$W/ws" > /dev/console 2>&1 || fail "minivideo-diagnostico"
+ls "$W"/ws/Logs/diagnostico-*.txt > /dev/null 2>&1 || fail "relatório de diagnóstico não foi gravado"
+minivideo-preparar-disco listar > /dev/console 2>&1 || fail "minivideo-preparar-disco listar"
+minivideo-wifi estado > /dev/console 2>&1 || fail "minivideo-wifi estado"
+# Na CI há um disco SATA vazio só para isto (minivideo.autoteste.disco=sda): prepara de verdade e confere
+DISCO="$(sed -n 's/.*minivideo\.autoteste\.disco=\([a-z0-9]*\).*/\1/p' /proc/cmdline)"
+if [ -n "$DISCO" ]; then
+    minivideo-preparar-disco preparar "$DISCO" --confirmar "APAGAR $DISCO" > /dev/console 2>&1 \
+        || fail "minivideo-preparar-disco preparar $DISCO"
+    [ "$(findfs LABEL=MV_DADOS 2>/dev/null)" = "/dev/${DISCO}1" ] || fail "MV_DADOS não encontrada após preparar"
+    [ -d /data/minivideo/Ferramentas ] || fail "/data/minivideo não foi ativada"
+    say "disco $DISCO preparado como MV_DADOS"
+fi
 
 python3 -c "import curses, minivideo_ui.app" || fail "interface (curses) não importa"
 whisper-cli --help > /dev/null 2>&1 || fail "whisper-cli não executa"

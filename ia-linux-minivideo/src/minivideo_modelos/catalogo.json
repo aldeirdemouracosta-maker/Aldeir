@@ -20,7 +20,8 @@
       "licenca": "MIT",
       "pagina": "https://huggingface.co/ggerganov/whisper.cpp",
       "url_arquivo": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
-      "nota": "rápido; qualidade menor em português"
+      "nota": "rápido; qualidade menor em português",
+      "repo_hf": "ggerganov/whisper.cpp"
     },
     {
       "id": "whisper-small",
@@ -40,7 +41,8 @@
       "licenca": "MIT",
       "pagina": "https://huggingface.co/ggerganov/whisper.cpp",
       "url_arquivo": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin",
-      "nota": "equilíbrio recomendado para a RX 580"
+      "nota": "equilíbrio recomendado para a RX 580",
+      "repo_hf": "ggerganov/whisper.cpp"
     },
     {
       "id": "whisper-medium",
@@ -60,7 +62,8 @@
       "licenca": "MIT",
       "pagina": "https://huggingface.co/ggerganov/whisper.cpp",
       "url_arquivo": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin",
-      "nota": "melhor qualidade; lento na CPU do X79"
+      "nota": "melhor qualidade; lento na CPU do X79",
+      "repo_hf": "ggerganov/whisper.cpp"
     },
     {
       "id": "qwen3-0.6b",
@@ -80,7 +83,12 @@
       "licenca": "Apache-2.0 (conferir no card do modelo)",
       "pagina": "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF",
       "url_arquivo": null,
-      "nota": "mínimo para Diretor/Editor; escolha o arquivo .gguf na página"
+      "nota": "mínimo para Diretor/Editor; escolha o arquivo .gguf na página",
+      "repo_hf": "Qwen/Qwen3-0.6B-GGUF",
+      "preferir": [
+        "Q4_K_M",
+        "Q8_0"
+      ]
     },
     {
       "id": "qwen3-1.7b",
@@ -100,7 +108,12 @@
       "licenca": "Apache-2.0 (conferir no card do modelo)",
       "pagina": "https://huggingface.co/Qwen/Qwen3-1.7B-GGUF",
       "url_arquivo": null,
-      "nota": "recomendado para Diretor/Editor; cabe na RX 580 com folga"
+      "nota": "recomendado para Diretor/Editor; cabe na RX 580 com folga",
+      "repo_hf": "Qwen/Qwen3-1.7B-GGUF",
+      "preferir": [
+        "Q4_K_M",
+        "Q8_0"
+      ]
     },
     {
       "id": "rife-v4.6",

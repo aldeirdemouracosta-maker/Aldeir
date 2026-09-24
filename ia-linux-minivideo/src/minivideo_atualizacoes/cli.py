@@ -73,7 +73,11 @@ def main(argv=None) -> int:
         except (instalador.Recusado, forjas.ErroFonte) as exc:
             print(f"recusado: {exc}", file=sys.stderr)
             return 2
-        print(f"{args.id} {v} ativo (reverter: minivideo-atualizar reverter {args.id})")
+        if item["tipo"] == "sistema":
+            print(f"ISO conferido em {v}\nGrave num pendrive: sudo dd if={v} of=/dev/sdX bs=4M conv=fsync "
+                  "(confira /dev/sdX com lsblk; APAGA o pendrive)")
+        else:
+            print(f"{args.id} {v} ativo (reverter: minivideo-atualizar reverter {args.id})")
     elif args.cmd == "reverter":
         try:
             print(f"{args.id}: agora usando {instalador.reverter(ws.root, args.id)}")

@@ -2,7 +2,8 @@
 recomendação por hardware e calibração do llama.cpp.
 
 Regra: NENHUM download automático. ``instrucoes`` só imprime o que o
-usuário pode executar manualmente. Nada aqui abre conexões de rede.
+usuário pode executar manualmente; o download pedido pelo usuário fica em
+baixar.py. Nada aqui abre conexões de rede.
 """
 
 from __future__ import annotations
@@ -197,10 +198,12 @@ def instrucoes(modelo_id: str) -> str:
     linhas = [f"{m['id']} — agente {m['agente']} · motor {m['motor']} · requer {', '.join(m['requer'])}",
               f"Licença: {m['licenca']}  (leia antes de baixar)", f"Página oficial: {m['pagina']}",
               f"Destino: Modelos/{m['destino']}/"]
+    if m.get("repo_hf") and not m.get("embutido"):
+        linhas.append(f"Pela interface: tecla M → B. No shell: minivideo-modelos baixar {m['id']} --confirmar")
     if m.get("embutido"):
         linhas.append("Já vem no ISO em /usr/share/minivideo/modelos/ — nada a baixar.")
     elif m.get("url_arquivo"):
-        linhas += ["Para baixar manualmente (nada é baixado automaticamente):",
+        linhas += ["Ou manualmente:",
                    f"  mkdir -p \"$MINIVIDEO_HOME/Modelos/{m['destino']}\"",
                    f"  curl -L --fail -o \"$MINIVIDEO_HOME/Modelos/{m['destino']}/{m['arquivo']}\" \\",
                    f"       {m['url_arquivo']}",

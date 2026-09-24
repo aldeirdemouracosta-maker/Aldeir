@@ -208,7 +208,7 @@ class App:
         # barra de estado e atalhos
         status = self.job_status or self.msg
         if not self.ws.persistent:
-            status = (status + "  |  " if status else "") + "Sem partição MV_DADOS: arquivos em RAM somem ao desligar"
+            status = (status + "  |  " if status else "") + "Sem partição MV_DADOS: arquivos em RAM somem ao desligar (Q → [p] prepara um disco)"
             self.put(h - 2, 0, " " + status, self.c["warn"], w)
         else:
             self.put(h - 2, 0, " " + (status or "Pronto."), self.c["bar"], w)
@@ -416,7 +416,13 @@ class App:
             return f"Não foi possível ligar o LLM: {exc}"
         self.servidor = srv
         self.msg = ""
-        return f"LLM local ligado ({os.path.basename(gguf)}). As próximas falas usam o Qwen."
+        # O mesmo servidor atende o terminal T: Diretor e Editor passam a usar o Qwen (modo auto).
+        from minivideo_especialistas.llm import ENV_MODEL, ENV_TIMEOUT, ENV_URL
+        os.environ[ENV_URL] = srv.url
+        os.environ[ENV_MODEL] = "local"
+        os.environ.setdefault(ENV_TIMEOUT, "120")  # 1.7B na CPU pode passar de 30 s por resposta
+        return (f"LLM local ligado ({os.path.basename(gguf)}). As próximas falas usam o Qwen, e o terminal T "
+                "também (Diretor e Editor).")
 
     def _desenhar_assistente(self, conv, entrada: str, aviso: str) -> None:
         from minivideo_prompts import modelos, vocabulario as voc
@@ -608,10 +614,18 @@ class App:
                 if not it.get("novo"):
                     aviso = f"{it['id']}: nada novo para instalar."
                     continue
-                sem_hash = bool(it.get("arquivo")) and not it["arquivo"].get("sha256")
-                pergunta = f"Instalar {it['id']} {it['disponivel']}? (s/N)"
-                if sem_hash:
-                    pergunta = f"{it['id']}: a plataforma NÃO publicou sha256. Instalar mesmo assim? (s/N)"
+                if item["tipo"] == "sistema":
+                    from minivideo_atualizacoes.assinatura import chave_publica
+                    sem_hash = not (it.get("assinatura") and chave_publica())
+                    tam = (it.get("arquivo") or {}).get("tamanho") or 0
+                    pergunta = (f"Baixar o ISO {it['disponivel']} ({tam / 1048576:.0f} MiB) para Saidas/? (s/N)"
+                                if not sem_hash else f"ISO {it['disponivel']} SEM assinatura verificável (só sha256)."
+                                                     " Baixar mesmo assim? (s/N)")
+                else:
+                    sem_hash = bool(it.get("arquivo")) and not it["arquivo"].get("sha256")
+                    pergunta = f"Instalar {it['id']} {it['disponivel']}? (s/N)"
+                    if sem_hash:
+                        pergunta = f"{it['id']}: a plataforma NÃO publicou sha256. Instalar mesmo assim? (s/N)"
                 resp = self.ask(pergunta)
                 if not resp or resp.lower() not in ("s", "sim"):
                     aviso = "Cancelado."
@@ -620,9 +634,14 @@ class App:
                 self.scr.refresh()
                 try:
                     v = instalador.aplicar(self.ws.root, item, it, aceitar_sem_hash=sem_hash)
-                    instalador.ativar_path(self.ws.root)
-                    self._assign = None
-                    aviso = f"{it['id']} {v} ativo. R volta para a versão anterior."
+                    if item["tipo"] == "sistema":
+                        self.b.refresh()
+                        aviso = (f"ISO conferido: {os.path.relpath(v, self.ws.root)}. Grave num pendrive com dd "
+                                 "(tecla S; confira o disco com lsblk).")
+                    else:
+                        instalador.ativar_path(self.ws.root)
+                        self._assign = None
+                        aviso = f"{it['id']} {v} ativo. R volta para a versão anterior."
                 except (instalador.Recusado, forjas.ErroFonte) as exc:
                     aviso = f"Recusado: {exc}"
 
@@ -639,10 +658,44 @@ class App:
             linhas += [f"      - {p}" for p in it.problemas]
         if not itens:
             linhas.append("  (vazio)")
-        linhas += ["", "Catálogo (nada é baixado automaticamente; no shell: minivideo-modelos instrucoes <id>):"]
+        linhas += ["", "Catálogo (B baixa os marcados com *, com sha256 conferido; nada é baixado sozinho):"]
         for m in g.catalogo():
-            linhas.append(f"  {m['id']:<18} {m['agente']:<18} requer {'/'.join(m['requer'])} · {m['licenca']}")
-        self.text_view("Modelos", "\n".join(linhas))
+            marca = "*" if m.get("repo_hf") and not m.get("embutido") else " "
+            linhas.append(f" {marca}{m['id']:<18} {m['agente']:<18} requer {'/'.join(m['requer'])} · {m['licenca']}")
+        ch = self.text_view("Modelos", "\n".join(linhas), "B baixar · Esc/Enter fecha · Setas rolam", keys="b")
+        if ch == ord("b"):
+            self.baixar_modelo()
+
+    def baixar_modelo(self) -> None:
+        from minivideo_atualizacoes import forjas
+        from minivideo_modelos import baixar as bx
+        from minivideo_modelos import gerenciador as g
+        ids = [m["id"] for m in g.catalogo() if m.get("repo_hf") and not m.get("embutido")]
+        mid = self.ask("Baixar qual modelo? (" + ", ".join(ids) + ")")
+        if not mid:
+            return
+        self.msg = "Consultando o Hugging Face" + ELL
+        self.draw()
+        try:
+            cli = forjas.Cliente(timeout=60)
+            arq = bx.escolher(bx._entrada(mid), cli)
+        except (bx.Recusado, forjas.ErroFonte) as exc:
+            self.msg = f"Recusado: {exc}"
+            return
+        tam = f"{arq['tamanho'] / 1048576:.0f} MiB" if arq.get("tamanho") else "tamanho desconhecido"
+        aviso = "" if arq.get("sha256") else " SEM sha256 publicado!"
+        resp = self.ask(f"Baixar {arq['nome']} ({tam}){aviso}? (s/N)")
+        if not resp or resp.lower() not in ("s", "sim"):
+            self.msg = "Cancelado."
+            return
+        self.msg = f"Baixando {arq['nome']} ({tam}) e conferindo o sha256" + ELL
+        self.draw()
+        try:
+            final = bx.baixar(self.ws.path("Modelos"), mid, cli, arquivo=arq, aceitar_sem_hash=not arq.get("sha256"))
+            self.msg = f"Pronto: {os.path.relpath(final, self.ws.root)}"
+            self._assign = None
+        except (bx.Recusado, forjas.ErroFonte) as exc:
+            self.msg = f"Recusado: {exc}"
 
     def agents_view(self) -> None:
         lines = []
@@ -669,10 +722,25 @@ class App:
         self.text_view("GPU — somente leitura", "\n".join(out))
 
     def diag_view(self) -> None:
-        self.msg = "Coletando diagnóstico…"
+        self.msg = "Coletando diagnóstico" + ELL
         self.draw()
-        self.text_view("Diagnóstico", audit.render_text(audit.collect("/", self.ws.models_dirs)))
+        ch = self.text_view("Diagnóstico", audit.render_text(audit.collect("/", self.ws.models_dirs)),
+                            "R gera relatório completo para enviar (testa GPU e VA-API) · Esc fecha", keys="r")
         self.msg = ""
+        if ch == ord("r"):
+            from minivideo_diagnostico import relatorio
+            self.msg = "Gerando relatório (testes curtos de GPU, VA-API, RIFE e Real-ESRGAN)" + ELL
+            self.draw()
+            d = relatorio.montar()
+            base = os.path.join(self.ws.logs, time.strftime("diagnostico-%Y%m%d-%H%M%S"))
+            with open(base + ".txt", "w", encoding="utf-8") as fh:
+                fh.write(relatorio.texto(d))
+            import json as _json
+            with open(base + ".json", "w", encoding="utf-8") as fh:
+                _json.dump(d, fh, ensure_ascii=False, indent=2, default=str)
+            falhas = [t["teste"] for t in d["testes"] if t["resultado"] == relatorio.FALHOU]
+            self.msg = f"Relatório em Logs/{os.path.basename(base)}.txt · falhas: {', '.join(falhas) or 'nenhuma'}"
+            self.b.refresh()
 
     def new_folder(self) -> None:
         name = self.ask(f"Nova pasta em {self.b.relative_cwd}")

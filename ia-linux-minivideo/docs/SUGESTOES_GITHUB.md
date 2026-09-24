@@ -34,9 +34,9 @@ registrado · **próximo** = recomendado, ainda não integrado ·
    lado do Safety Guard (apenas leitura).
 5. **Modelos NCNN extras da mesma família**: Real-CUGAN, waifu2x e IFRNet
    (nihui/*-ncnn-vulkan). Mesmo formato de pacote dos atuais.
-6. **Variante `BR2_x86_ivybridge`** para quem tem só Xeon E5 **v2** (o seu
-   caso): liga F16C/RDRAND. O ISO padrão fica em sandybridge para rodar
-   também no E5 v1.
+6. ~~Variante `BR2_x86_ivybridge`~~ **feito na 0.4**: `build-iso.sh --variante
+   ivybridge` (F16C/RDRND, sem OpenBLAS). O ISO padrão continua corei7-avx
+   para rodar também no E5 v1.
 
 ## Experimentais
 

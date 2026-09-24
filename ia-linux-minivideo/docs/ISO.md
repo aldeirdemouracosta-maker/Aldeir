@@ -5,11 +5,11 @@ agentes de IA locais. Não inclui chat genérico, criação de aplicativos nem
 os serviços `ai-core`/`ia-shell` da base.
 
 > **Estado em 2026-09-24:** o ISO completo compila no GitHub Actions
-> (workflow `.github/workflows/minivideo-iso.yml`) e passa no autoteste de
-> boot no QEMU (run 36015350849: "AUTOTESTE: OK"). O boot **UEFI** foi
-> acrescentado depois desse run e testado aqui num ISO de teste com o mesmo
-> kernel e o mesmo `post-image.sh` (veja "O que foi testado"); no ISO
-> completo ele é validado pela CI. Nada foi testado na RX 580 ainda.
+> (workflow `.github/workflows/minivideo-iso.yml`) e passa no autoteste e
+> no boot BIOS e UEFI no QEMU (runs 36015350849, 36022545484 e 36030083147).
+> A versão 0.4 (squashfs, Wi-Fi, variante Ivy Bridge, OpenBLAS, release
+> assinado) foi testada aqui em partes (veja "O que foi testado") e é
+> validada inteira pela CI. Nada foi testado na RX 580 ainda.
 
 ## Arquitetura em camadas
 
@@ -31,7 +31,8 @@ os serviços `ai-core`/`ia-shell` da base.
 │ + linux-minivideo.fragment (aditivo: áudio, initrd, fbcon,  │
 │   rede, exFAT/NTFS, sensores, preparo APU/NVIDIA)           │
 ├─────────────────────────────────────────────────────────────┤
-│ ISO híbrido: isolinux (BIOS) + GRUB EFI (UEFI) · initramfs  │
+│ ISO híbrido: isolinux (BIOS) + GRUB EFI (UEFI)              │
+│ initramfs mínimo → live/rootfs.squashfs + overlay na RAM    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -41,24 +42,42 @@ os serviços `ai-core`/`ia-shell` da base.
 - **Camada 2, `IA_MINIVIDEO`:** `ia-linux-minivideo/image/`, com defconfig,
   pacotes, overlay e fragmento aditivo.
 
-### Por que ISO com initramfs resolve dois problemas da base
+### Sistema em squashfs + initramfs mínimo (versão 0.4)
 
-1. **Raiz do sistema:** a imagem de disco da base usa `root=UUID=` sem
-   initramfs, algo que o kernel não resolve sozinho. No ISO, a raiz é o
-   próprio initramfs e não existe `root=`.
-2. **Firmware da RX 580:** na base, o `amdgpu` é embutido (`=y`) e o
-   firmware fica no rootfs, que ainda não está montado quando o driver
-   sobe. No ISO, `/lib/firmware` já está no initramfs nesse momento.
+Até a 0.3, o sistema inteiro ia descompactado para a RAM (initramfs). Agora:
+
+1. `/boot/initrd` é um **initramfs mínimo**: busybox, firmware e
+   `board/minivideo/live-init`.
+2. O init acha o ISO (CD, pendrive, SATA, NVMe; espera até 30 s pelo USB),
+   monta `live/rootfs.squashfs` (zstd, somente leitura) com uma camada de
+   escrita **overlay em tmpfs** e faz `switch_root`.
+3. O initramfs, com o firmware, é apagado no `switch_root`, e a RAM volta a
+   ficar livre. Do sistema, só fica na RAM o que for lido (cache) ou
+   escrito.
+4. `minivideo.toram=1` (entrada "carregar tudo na RAM" do menu) copia o
+   squashfs para a RAM. Com isso, dá para tirar o pendrive depois do boot.
+5. Sem o ISO, o init avisa e abre um shell de recuperação, em vez de travar.
+
+Os dois problemas da base continuam resolvidos:
+- **Raiz sem `root=UUID=`:** o initramfs acha o sistema sozinho.
+- **Firmware do `amdgpu` embutido (`=y`):** está no initramfs quando o
+  driver sobe.
+
+As montagens ficam visíveis em `/live/{iso,sq,rw,ram}`.
 
 ## Pastas (partição de dados)
 
-O ISO roda da RAM. Para guardar o trabalho, crie **uma vez** uma partição
-ext4 com o rótulo `MV_DADOS`, num SSD, HD ou pendrive. Isso apaga a partição
-escolhida; confira o dispositivo com `lsblk` antes:
+O que é escrito fora de `/data` fica na RAM e some ao desligar. Para guardar
+o trabalho, prepare **uma vez** um disco com a partição de dados:
 
-```bash
-sudo mkfs.ext4 -L MV_DADOS /dev/sdXN
-```
+1. Na interface, tecla **Q**, depois **[p]**. Ou `minivideo-preparar-disco` como root.
+2. Ele lista os discos com modelo, tamanho e partições atuais.
+3. Recusa o disco de boot, discos com partição montada e discos com menos
+   de 8 GiB.
+4. Exige que você digite `APAGAR <disco>`.
+5. Cria GPT + ext4 com o rótulo `MV_DADOS` e monta na hora.
+
+**Isso apaga o disco escolhido.**
 
 No boot, `S30minivideo` monta essa partição em `/data` e cria
 `/data/minivideo/{Projetos,Midia,Modelos,Ferramentas,Saidas,Jobs,Logs}`. Sem ela, a
@@ -104,6 +123,7 @@ dar boot também em pendrive.
 | Entrada | Uso |
 |---|---|
 | IA-Linux MiniVideo (RX 580 / Vulkan) | normal |
+| IA-Linux MiniVideo - carregar tudo na RAM | `minivideo.toram=1`: dá para tirar o pendrive |
 | Recuperação: sem GPU (`nomodeset`) | tela preta ou travamento no `amdgpu` |
 | Diagnóstico: console serial + tela | logs completos (`loglevel=7`) |
 
@@ -122,12 +142,76 @@ cd ia-linux-minivideo/image
 ./scripts/testar-uefi.sh ~/minivideo-build/ia-linux-minivideo.iso disco   # boot UEFI (OVMF)
 ```
 
+Variante de CPU: `./scripts/build-iso.sh --variante ivybridge` (Xeon E5 **v2**
+ou mais nova; liga F16C, RDRND e FSGSBASE; **não** roda no E5 v1).
+
+- O Buildroot não oferece OpenBLAS para ivybridge, então essa variante fica
+  sem ele.
+- A padrão (corei7-avx) tem OpenBLAS e não tem F16C.
+- Qual é mais rápida no seu E5-2630L v2: medir com
+  `minivideo-modelos calibrar <gguf>` nas duas.
+- Na CI: "Run workflow" → variante.
+
 `scripts/validar-config.sh` compara cada linha do defconfig com o `.config`
 final. Opção inexistente, oculta ou com dependência faltando vira erro, em
 vez de sumir em silêncio.
 
 Gravar no pendrive: `sudo dd if=ia-linux-minivideo.iso of=/dev/sdX bs=4M conv=fsync`
 (confira `/dev/sdX` com `lsblk`; isso apaga o pendrive).
+
+## Wi-Fi
+
+Suporte embutido no kernel, com firmware:
+- Intel (7260 até AX210);
+- Qualcomm/Atheros (ath9k, ath10k);
+- Realtek (rtw88 PCIe e USB, rtl8xxxu);
+- MediaTek (MT7921/7922, MT7601U).
+
+Para conectar: tecla **Q** → **[w]** (ou `minivideo-wifi redes` e
+`minivideo-wifi conectar "SSID"` como root).
+
+- A senha **não** é gravada: vai só a PSK derivada (PBKDF2, como o
+  `wpa_passphrase`), em `Ferramentas/_rede/wifi.conf`, com permissão 600.
+- No boot, o `S35wifi` reconecta sozinho.
+- Redes que são só WPA3 (SAE) ainda não são suportadas.
+- Sem teste em placa real.
+
+## Diagnóstico para enviar
+
+`minivideo-diagnostico --relatorio`, ou a tecla **D** e depois **R**, grava
+`Logs/diagnostico-<data>.txt` e `.json`. Somente leitura, sem root. Inclui:
+- modo de boot, instruções da CPU, placa/BIOS;
+- `lspci`, `vulkaninfo`, `vainfo`, `aplay -l`, discos, rede, sensores da GPU;
+- testes curtos: libx264, VA-API h264 sem B-frames, RIFE e Real-ESRGAN em
+  Vulkan. Com `--completo`, também `llama-bench`.
+
+É o primeiro passo na RX 580: copie os dois arquivos para um pendrive e envie.
+
+## Release assinado
+
+Criar a tag `minivideo-vX.Y.Z` faz a CI compilar as duas variantes e publicar
+um GitHub Release com os dois ISOs, o `SHA256SUMS` e o `SHA256SUMS.sig`.
+A tecla U mostra a versão nova. O **Enter** baixa o ISO da mesma variante para
+`Saidas/` e só aceita o arquivo depois de conferir:
+- a assinatura Ed25519 do `SHA256SUMS`;
+- o sha256 do ISO.
+
+Depois é só gravar com `dd`. O sistema em uso não muda.
+
+Configurar a chave (uma vez, na sua máquina; a privada **nunca** vai para o
+repositório):
+
+```bash
+openssl genpkey -algorithm ed25519 -out minivideo-assinatura.pem
+openssl pkey -in minivideo-assinatura.pem -pubout \
+    -out ia-linux-minivideo/image/rootfs-overlay/usr/share/minivideo/chave-publica.pem
+git add ia-linux-minivideo/image/rootfs-overlay/usr/share/minivideo/chave-publica.pem
+# GitHub → Settings → Secrets and variables → Actions → New repository secret:
+#   nome MINIVIDEO_ASSINATURA_CHAVE, valor = conteúdo de minivideo-assinatura.pem
+```
+
+Sem a chave, o release sai só com `SHA256SUMS`, e a tecla U avisa e pede
+confirmação.
 
 ## O que foi testado nesta sessão
 
@@ -143,7 +227,12 @@ Gravar no pendrive: `sudo dd if=ia-linux-minivideo.iso of=/dev/sdX bs=4M conv=fs
 | Assistente de prompts (C) e Atualizações (U) | diálogo, ficha, prompt por modelo, salvar; índice, sha256, troca atômica, reversão | pty + `pyte`; APIs e LLM simulados em servidor local (ver `ASSISTENTE_E_ATUALIZACOES.md`) |
 | ISO completo: compilação + boot BIOS no QEMU + autoteste | **OK** | CI, run 36015350849 |
 | Boot UEFI: kernel 6.18.52 com o fragmento (EFI + simpledrm) + `post-image.sh` + GRUB EFI | **OK** em OVMF como pendrive e como CD; BIOS continua OK (CD e pendrive); o ISO antigo falha em UEFI (`BdsDxe: failed to load`), como esperado | ISO de teste com initramfs mínimo (busybox), GRUB 2.12 do host; `scripts/testar-uefi.sh` |
-| Boot UEFI do ISO completo (GRUB 2.14 do Buildroot) | pendente | CI (passo "Boot UEFI") |
+| Boot UEFI do ISO completo (GRUB 2.14 do Buildroot) | **OK** como pendrive e como CD | CI, runs 36022545484 e 36030083147 |
+| Squashfs + initramfs mínimo (`live-init`, `post-image.sh`) | **OK**: UEFI (CD e pendrive USB), BIOS (CD e pendrive USB), disco SATA, `toram` e falta do ISO (abre o shell de recuperação); raiz = overlay | kernel 6.18.52 recompilado com o fragmento; sistema de teste mínimo; QEMU/OVMF |
+| Kernel com Wi-Fi + squashfs/overlay/iso9660/loop | todas as opções do fragmento aplicadas; `bzImage` compilado | árvore 6.18.52 real |
+| Preparar disco MV_DADOS | lógica de proteção testada; preparo real num disco SATA virtual no autoteste da CI | `tests/test_disco.py`; CI |
+| OpenBLAS no llama.cpp | erro da CI reproduzido (`sgemm_ not found` com OpenBLAS só CBLAS) e corrigido; build completo só na CI | CMake 3.28 com uma libopenblas só CBLAS |
+| Download de modelos (M → B), ISO assinado, ETag, Wi-Fi (PSK), diagnóstico, limpeza de Jobs, quadros na RAM | testados | `pytest` (servidores locais; RIFE real com quadros em `/dev/shm`) |
 | RX 580, VA-API, áudio, sensores, UEFI em placa real | **não testado** | pendente (hardware) |
 
 ## Defeitos encontrados na base (IA Linux Minimal), não corrigidos lá
@@ -167,7 +256,7 @@ Gravar no pendrive: `sudo dd if=ia-linux-minivideo.iso of=/dev/sdX bs=4M conv=fs
 
 | Achado | Aplicado |
 |---|---|
-| OpenBLAS com `TARGET=SANDYBRIDGE` acelera o llama.cpp na CPU AVX1 | **tentado e revertido**: no build real da CI o CMake do llama.cpp b8117 não achou a BLAS em compilação cruzada (`Could NOT find BLAS`). Pendente. A variante `BR2_x86_corei7_avx` ficou (mesmo ISA do Sandy Bridge) |
+| OpenBLAS com `TARGET=SANDYBRIDGE` acelera o llama.cpp na CPU AVX1 | **ativo** na variante padrão. A falha do run 35984047266 era do toolchain sem Fortran: o OpenBLAS sai só com CBLAS, sem o `sgemm_` que o FindBLAS testa. O `external.mk` corrige isso |
 | `llama-bench` para achar threads e camadas na GPU | `minivideo-modelos calibrar <gguf>` grava `Modelos/llm/calibracao.json` |
 | RADV/Mesa é a rota da RX 580; AMDVLK é legado; ROCm gfx803 só em laboratório | mantido: só RADV no ISO |
 | NVIDIA/CUDA e AMD/Vulkan como workers independentes com roteador | roteador de agentes por dispositivo; nada é dividido entre GPUs |
@@ -185,5 +274,29 @@ e o `minivideo-modelos catalogo`.
 |---|---|---|
 | **APU AMD** (Ryzen com gráficos integrados) | amdgpu + firmware, RADV, `CPU_SUP_AMD`, `AMD_IOMMU`, `k10temp`; agentes classificam `vulkan-apu` (memória compartilhada, sem barrar por VRAM) | teste em hardware; limite de GTT no Safety Guard |
 | **NVIDIA/CUDA** (16 GB alvo, 12 GB mínimo) | `nouveau` desligado, `MODULES=y`; agentes classificam `cuda` e exigem ≥12 GB; backend NVIDIA do Guard (`nvidia-smi`) | pacote próprio com os módulos abertos da NVIDIA e o espaço de usuário CUDA (o `nvidia-driver` do Buildroot é o legado 390.151); PyTorch/diffusers para Wan/LTX; partição de dados maior |
-| **UEFI sem CSM** (placas novas) | GRUB EFI no mesmo ISO, kernel com stub EFI e simpledrm | teste em placa real; Secure Boot (shim assinado) |
+| **UEFI sem CSM** (placas novas) | GRUB EFI no mesmo ISO, kernel com stub EFI e simpledrm | teste em placa real; Secure Boot (ver abaixo) |
 | **GPUs mistas** | cada GPU é um dispositivo independente; roteamento dGPU → APU → CUDA | escalonador por dispositivo com limite de memória |
+
+## Avaliado e não feito nesta versão
+
+- **Secure Boot.** Caminho viável:
+  1. Usar o `shim` assinado pela Microsoft de uma distribuição.
+  2. Assinar GRUB e kernel com uma chave própria (`sbsign`, com seção SBAT no GRUB).
+  3. No primeiro boot, o usuário registra a chave no MokManager.
+
+  Motivos para não fazer agora:
+  - exige guardar mais uma chave privada na CI;
+  - acrescenta um passo manual no primeiro boot;
+  - placas X79 não têm Secure Boot.
+
+  Para placas novas, basta desligá-lo no firmware. Dá para testar no QEMU
+  com `OVMF_CODE_4M.secboot.fd` + `OVMF_VARS_4M.ms.fd` quando for implementado.
+- **CUDA.** Exige:
+  - um pacote próprio com os módulos abertos da NVIDIA
+    (`open-gpu-kernel-modules`) e o espaço de usuário do driver, com vários GB;
+  - PyTorch com CUDA num ambiente Python na partição de dados.
+
+  Sem uma GPU NVIDIA para testar, qualquer pacote seria entregue sem
+  validação. O ISO já está pronto do lado do sistema: `MODULES=y`, nouveau
+  desligado, agentes e Safety Guard com classe `cuda`. Os prompts do
+  assistente (tecla C) já saem no formato de Wan e LTX.

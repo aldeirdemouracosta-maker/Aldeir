@@ -73,6 +73,10 @@ LIMITES_PADRAO = {
     "memoria_max_mib": 12 * 1024.0,     # 16 GB na máquina X79: deixa folga ao sistema
     "disco_reserva_mib": 2048.0,
     "altura_max_gpu_vulkan_sw": 480,
+    # Quadros intermediários (RIFE/Real-ESRGAN) vão para a RAM (/dev/shm) quando a estimativa
+    # cabe nesta fração da memória disponível: menos escrita no disco e etapas mais rápidas.
+    # 0 desliga (sempre em Jobs/).
+    "quadros_ram_fracao": 0.4,
 }
 
 
@@ -97,6 +101,25 @@ def tree_rss_mib(pid: int) -> float:
         total += rss.get(p, 0)
         stack.extend(children.get(p, []))
     return total * os.sysconf("SC_PAGE_SIZE") / 1048576
+
+
+def mem_disponivel_mib() -> float:
+    try:
+        with open("/proc/meminfo") as fh:
+            for linha in fh:
+                if linha.startswith("MemAvailable:"):
+                    return int(linha.split()[1]) / 1024
+    except (OSError, ValueError, IndexError):
+        pass
+    return 0.0
+
+
+def estimar_quadros_mib(info: Dict, multiplicador_saida: float) -> float:
+    """PNG de entrada + saída, estimado como ~60% do tamanho bruto RGB."""
+    v = info.get("video") or {}
+    w, h = int(v.get("width") or 0), int(v.get("height") or 0)
+    n = (info.get("duracao") or 0) * (info.get("fps") or 30.0)
+    return w * h * 3 * n * (1 + multiplicador_saida) * 0.6 / 1048576
 
 
 def free_mib(path: str) -> float:
@@ -187,8 +210,23 @@ class Executor:
     def _out(self, n: int, name: str) -> str:
         return os.path.join(self.job_dir, f"{n:02d}_{name}.mp4")
 
-    def _frames(self, src: str, name: str) -> str:
-        d = os.path.join(self.job_dir, name)
+    def _base_quadros(self, info: Dict, multiplicador_saida: float, etapa: str) -> str:
+        """Pasta dos quadros desta etapa: /dev/shm se couber na RAM, senão Jobs/<job>/."""
+        fracao = self.limites.get("quadros_ram_fracao", 0)
+        est = estimar_quadros_mib(info, multiplicador_saida)
+        disp = mem_disponivel_mib()
+        if fracao > 0 and est > 0 and os.path.isdir("/dev/shm") and os.access("/dev/shm", os.W_OK) \
+                and est < disp * fracao:
+            base = os.path.join("/dev/shm", f"minivideo-{self.job_id}")
+            os.makedirs(base, mode=0o700, exist_ok=True)
+            self._pastas_ram.append(base)
+            self.log.write("quadros", etapa=etapa, onde="ram", estimativa_mib=round(est), disponivel_mib=round(disp))
+            return base
+        self.log.write("quadros", etapa=etapa, onde="disco", estimativa_mib=round(est), disponivel_mib=round(disp))
+        return self.job_dir
+
+    def _frames(self, src: str, name: str, base: Optional[str] = None) -> str:
+        d = os.path.join(base or self.job_dir, name)
         os.makedirs(d, exist_ok=True)
         self._run(["ffmpeg", "-y", "-v", "error", "-i", src, "-fps_mode", "passthrough", os.path.join(d, "%08d.png")],
                   f"extrair_{name}", None)
@@ -282,9 +320,10 @@ class Executor:
         fator = int(step.params.get("fator", 2))
         weights = find_weights(self.assignments["interpolador"].agent, self.ws.models_dirs)
         model_dir = os.path.dirname(weights[0])
-        frames_in = self._frames(src, "quadros_rife_in")
+        base = self._base_quadros(ctx["info"], fator, "interpolador")
+        frames_in = self._frames(src, "quadros_rife_in", base)
         total = len(os.listdir(frames_in))
-        frames_out = os.path.join(self.job_dir, "quadros_rife_out")
+        frames_out = os.path.join(base, "quadros_rife_out")
         os.makedirs(frames_out, exist_ok=True)
         self._run([self._tool("interpolador"), "-i", frames_in, "-o", frames_out, "-m", model_dir,
                    "-n", str(total * fator), "-f", "%08d.png"], "interpolador", self._device("interpolador"))
@@ -304,8 +343,9 @@ class Executor:
         names = {os.path.basename(w)[:-6] for w in weights}
         modelo = "realesr-animevideov3-x2" if "realesr-animevideov3-x2" in names else sorted(names)[0]
         escala = int(re.search(r"x(\d)", modelo).group(1)) if re.search(r"x(\d)", modelo) else 4
-        frames_in = self._frames(src, "quadros_esrgan_in")
-        frames_out = os.path.join(self.job_dir, "quadros_esrgan_out")
+        base = self._base_quadros(ctx["info"], escala * escala, "upscaler")
+        frames_in = self._frames(src, "quadros_esrgan_in", base)
+        frames_out = os.path.join(base, "quadros_esrgan_out")
         os.makedirs(frames_out, exist_ok=True)
         self._run([self._tool("upscaler"), "-i", frames_in, "-o", frames_out, "-m", model_dir,
                    "-n", modelo.replace(f"-x{escala}", "") if modelo.startswith("realesr-animevideov3") else modelo,
@@ -371,6 +411,7 @@ class Executor:
         os.makedirs(self.job_dir, exist_ok=True)
         self.deadline = time.time() + self.limites["tempo_max_job_s"]
         self.log = JobLog(self.ws.logs, self.job_id, suffix="agentes")
+        self._pastas_ram: List[str] = []
         result = JobResult(self.job_id, None, False)
         blocked = first_unavailable(plan, self.assignments)
         if blocked:
@@ -397,6 +438,8 @@ class Executor:
         except (JobError, OSError, KeyError, IndexError) as exc:
             result.erro = str(exc)
         finally:
+            for base in self._pastas_ram:  # RAM sempre é liberada, mesmo com limpar_quadros=False
+                shutil.rmtree(base, ignore_errors=True)
             if limpar_quadros:
                 for d in os.listdir(self.job_dir):
                     if d.startswith("quadros_"):

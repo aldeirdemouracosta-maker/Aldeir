@@ -86,6 +86,30 @@ def cmd_instrucoes(args) -> int:
     return 0
 
 
+def cmd_baixar(args) -> int:
+    from . import baixar as b
+    from minivideo_atualizacoes import forjas
+    ws = Workspace(args.workspace)
+    try:
+        cli = forjas.Cliente(timeout=60)
+        arq = b.escolher(b._entrada(args.modelo), cli)
+    except (b.Recusado, forjas.ErroFonte) as exc:
+        print(f"recusado: {exc}", file=sys.stderr)
+        return 2
+    tam = f"{arq['tamanho'] / 1048576:.0f} MiB" if arq.get("tamanho") else "tamanho desconhecido"
+    print(f"{arq['nome']} ({tam}) · sha256 {arq['sha256'] or 'NÃO publicado'}\n  {arq['url']}")
+    if not args.confirmar:
+        print("Nada foi baixado. Use --confirmar para baixar.")
+        return 0
+    try:
+        final = b.baixar(ws.path("Modelos"), args.modelo, cli, arquivo=arq, aceitar_sem_hash=args.aceitar_sem_hash)
+    except (b.Recusado, forjas.ErroFonte) as exc:
+        print(f"recusado: {exc}", file=sys.stderr)
+        return 2
+    print(f"Baixado e conferido: {final}")
+    return 0
+
+
 def cmd_calibrar(args) -> int:
     ws = Workspace(args.workspace)
     destino = args.saida or os.path.join(ws.path("Modelos"), "llm", "calibracao.json")
@@ -103,7 +127,7 @@ def cmd_calibrar(args) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="minivideo-modelos",
-                                description="Catálogo, organização e verificação de modelos (sem downloads automáticos).")
+                                description="Catálogo, organização, verificação e download (só quando pedido) de modelos.")
     p.add_argument("--workspace")
     sub = p.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("catalogo", help="modelos conhecidos, requisitos, licença e se estão instalados")
@@ -120,6 +144,11 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("instrucoes", help="como obter um modelo manualmente")
     s.add_argument("modelo")
     s.set_defaults(func=cmd_instrucoes)
+    s = sub.add_parser("baixar", help="baixa um modelo do Hugging Face com sha256 conferido (pede --confirmar)")
+    s.add_argument("modelo")
+    s.add_argument("--confirmar", action="store_true", help="sem isso, só mostra o arquivo escolhido")
+    s.add_argument("--aceitar-sem-hash", action="store_true")
+    s.set_defaults(func=cmd_baixar)
     s = sub.add_parser("calibrar", help="llama-bench: melhores threads e camadas na GPU para um GGUF")
     s.add_argument("modelo")
     s.add_argument("--llama-bench", default="llama-bench")

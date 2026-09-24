@@ -20,6 +20,9 @@ minivideo-ui = "minivideo_ui.app:main"
 minivideo-modelos = "minivideo_modelos.cli:main"
 minivideo-prompts = "minivideo_prompts.cli:main"
 minivideo-atualizar = "minivideo_atualizacoes.cli:main"
+minivideo-diagnostico = "minivideo_diagnostico.relatorio:main"
+minivideo-preparar-disco = "minivideo_disco.preparar:main"
+minivideo-wifi = "minivideo_rede.wifi:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

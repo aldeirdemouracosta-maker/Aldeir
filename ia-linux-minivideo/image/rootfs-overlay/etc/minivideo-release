@@ -1,4 +1,4 @@
 NAME="IA-Linux MiniVideo"
-VERSION="0.2.0-teste"
+VERSION="0.4.0"
 BASE="IA Linux Minimal (kernel 6.18.52, commit cd7c721)"
-ESTADO="protótipo não inicializado em hardware; ver docs/ISO.md"
+ESTADO="testado em QEMU (BIOS e UEFI); validação na RX 580 pendente; ver docs/ISO.md"

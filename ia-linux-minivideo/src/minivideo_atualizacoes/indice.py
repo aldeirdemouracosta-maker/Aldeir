@@ -37,8 +37,26 @@ def carregar_fontes(ws_root: Optional[str] = None) -> List[Dict]:
     return itens
 
 
+RELEASE = "/etc/minivideo-release"
+
+
+def ler_release(caminho: str = RELEASE) -> Dict[str, str]:
+    out = {}
+    try:
+        with open(caminho, encoding="utf-8") as fh:
+            for linha in fh:
+                k, _, v = linha.strip().partition("=")
+                if k:
+                    out[k] = v.strip().strip('"')
+    except OSError:
+        pass
+    return out
+
+
 def versao_atual(ws_root: str, item: Dict) -> Optional[str]:
     """Versão ativa na partição de dados (Ferramentas/<id>/atual) ou a do ISO."""
+    if item["tipo"] == "sistema":
+        return ler_release(os.environ.get("MINIVIDEO_RELEASE", RELEASE)).get("VERSION") or item.get("instalada")
     link = os.path.join(ws_root, "Ferramentas", item["id"], "atual")
     if os.path.islink(link):
         return os.path.basename(os.readlink(link))
@@ -47,6 +65,9 @@ def versao_atual(ws_root: str, item: Dict) -> Optional[str]:
 
 def _escolher_arquivo(item: Dict, lanc: forjas.Lancamento) -> Optional[forjas.Arquivo]:
     padrao = item.get("arquivo")
+    cpu = ler_release(os.environ.get("MINIVIDEO_RELEASE", RELEASE)).get("CPU", "")
+    if cpu and item.get(f"arquivo_{cpu}"):
+        padrao = item[f"arquivo_{cpu}"]  # ISO da mesma variante de CPU que está rodando
     if not padrao:
         return None
     for a in lanc.arquivos:
@@ -73,7 +94,12 @@ def _uma(cli: forjas.Cliente, ws_root: str, item: Dict) -> Dict:
     arq = _escolher_arquivo(item, lanc)
     if arq:
         linha["arquivo"] = {"nome": arq.nome, "url": arq.url, "tamanho": arq.tamanho, "sha256": arq.sha256}
-    elif item["tipo"] == "ferramenta":
+        extras = {"somas": item.get("somas"), "assinatura": item.get("assinatura")}
+        for chave, nome in extras.items():
+            achado = next((a for a in lanc.arquivos if nome and a.nome == nome), None)
+            if achado:
+                linha[chave] = {"nome": achado.nome, "url": achado.url, "tamanho": achado.tamanho}
+    elif item["tipo"] in ("ferramenta", "sistema"):
         linha["erro"] = "lançamento sem arquivo para Linux x86_64 com o nome esperado"
     return linha
 
@@ -82,9 +108,13 @@ def atualizar_indice(ws_root: str, cli: Optional[forjas.Cliente] = None,
                      fontes: Optional[List[Dict]] = None) -> Dict:
     cli = cli or forjas.Cliente()
     fontes = fontes if fontes is not None else carregar_fontes(ws_root)
+    etags = os.path.join(pasta(ws_root), "etags.json")
+    cli.carregar_etags(etags)
     with ThreadPoolExecutor(max_workers=6) as ex:
         linhas = list(ex.map(lambda it: _uma(cli, ws_root, it), fontes))
-    doc = {"formato": "minivideo-indice/1", "consultado_em": time.strftime("%Y-%m-%dT%H:%M:%S"), "itens": linhas}
+    cli.salvar_etags(etags)
+    doc = {"formato": "minivideo-indice/1", "consultado_em": time.strftime("%Y-%m-%dT%H:%M:%S"),
+           "sem_mudanca_304": cli.respostas_304, "itens": linhas}
     caminho = os.path.join(pasta(ws_root), "indice.json")
     tmp = caminho + ".tmp"
     with open(tmp, "w", encoding="utf-8") as fh:

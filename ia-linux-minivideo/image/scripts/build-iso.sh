@@ -1,5 +1,11 @@
 #!/bin/sh
-# build-iso.sh [--so-configurar] — gera o ISO do IA-Linux MiniVideo.
+# build-iso.sh [--so-configurar] [--variante padrao|ivybridge] — gera o ISO do IA-Linux MiniVideo.
+#
+# Variantes de CPU:
+#   padrao    corei7-avx (Sandy Bridge): roda no Xeon E5 v1 e v2 e em qualquer x86-64 mais nova
+#   ivybridge Xeon E5 v2 ou mais nova: liga F16C (conversões fp16 do ggml), RDRND e FSGSBASE,
+#             mas fica sem OpenBLAS (o Buildroot não o oferece para ivybridge).
+#             NÃO roda no E5 v1 (Sandy Bridge). Qual é mais rápida: medir com llama-bench.
 #
 # Camadas (BR2_EXTERNAL):
 #   1. IA Linux Minimal, fixado no commit IA_LINUX_MINIMAL_REF (kernel 6.18.52)
@@ -15,6 +21,17 @@ BR_VERSION="${BUILDROOT_VERSION:-2026.08}"
 BR_URL="${BUILDROOT_GIT:-https://github.com/buildroot/buildroot}"
 BASE_REF="${IA_LINUX_MINIMAL_REF:-cd7c7218dce738a68d16e0d225651e5116c94f79}"
 DEFCONFIG=ia_minivideo_iso_x86_64_defconfig
+SO_CONFIGURAR=0
+VARIANTE="${MINIVIDEO_VARIANTE:-padrao}"
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --so-configurar) SO_CONFIGURAR=1 ;;
+        --variante) shift; VARIANTE="${1:?--variante precisa de um valor}" ;;
+        *) echo "build-iso: opção desconhecida: $1" >&2; exit 2 ;;
+    esac
+    shift
+done
+case "$VARIANTE" in padrao|ivybridge) ;; *) echo "build-iso: variante inválida: $VARIANTE" >&2; exit 2 ;; esac
 
 # ---- ferramentas do host ----
 missing=""
@@ -49,11 +66,25 @@ if [ ! -d "$BR" ]; then
     git clone --depth 1 --branch "$BR_VERSION" "$BR_URL" "$BR"
 fi
 
-OUT="${WORK}/output"
-make -C "$BR" O="$OUT" BR2_EXTERNAL="${BASE}:${IMG}" "$DEFCONFIG"
-"${IMG}/scripts/validar-config.sh" "${OUT}/.config" "${IMG}/configs/${DEFCONFIG}"
+if [ "$VARIANTE" = padrao ]; then
+    OUT="${WORK}/output"
+    SUFIXO=""
+    DEF="${IMG}/configs/${DEFCONFIG}"
+else
+    # mesma configuração, só muda a variante de CPU (um defconfig gerado, sem cópia manual)
+    OUT="${WORK}/output-${VARIANTE}"
+    SUFIXO="-${VARIANTE}"
+    mkdir -p "$OUT"
+    DEF="${OUT}/${VARIANTE}_defconfig"
+    # O Buildroot não oferece OpenBLAS para ivybridge: essa variante troca OpenBLAS por F16C
+    sed -e "s/^BR2_x86_corei7_avx=y$/BR2_x86_${VARIANTE}=y/" -e "/^BR2_PACKAGE_OPENBLAS=y$/d" \
+        "${IMG}/configs/${DEFCONFIG}" > "$DEF"
+    grep -q "^BR2_x86_${VARIANTE}=y$" "$DEF"
+fi
+make -C "$BR" O="$OUT" BR2_EXTERNAL="${BASE}:${IMG}" BR2_DEFCONFIG="$DEF" defconfig
+"${IMG}/scripts/validar-config.sh" "${OUT}/.config" "$DEF"
 
-if [ "${1:-}" = "--so-configurar" ]; then
+if [ "$SO_CONFIGURAR" = 1 ]; then
     echo "build-iso: configurado em ${OUT} (sem compilar)"
     exit 0
 fi
@@ -61,7 +92,8 @@ fi
 make -C "$BR" O="$OUT"
 ISO="${OUT}/images/rootfs.iso9660"
 test -f "$ISO"
-cp "$ISO" "${WORK}/ia-linux-minivideo.iso"
-( cd "$WORK" && sha256sum ia-linux-minivideo.iso > ia-linux-minivideo.iso.sha256 )
-echo "build-iso: pronto — ${WORK}/ia-linux-minivideo.iso"
+NOME="ia-linux-minivideo${SUFIXO}.iso"
+cp "$ISO" "${WORK}/${NOME}"
+( cd "$WORK" && sha256sum "$NOME" > "${NOME}.sha256" )
+echo "build-iso: pronto — ${WORK}/${NOME}"
 echo "  Teste antes em VM:  scripts/testar-qemu.sh"

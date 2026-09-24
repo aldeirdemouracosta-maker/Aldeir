@@ -1,7 +1,7 @@
 #!/bin/sh
 # testar-uefi.sh <iso> [cd|disco] [log] — dá boot no ISO no QEMU com firmware
 # UEFI (OVMF), escolhe a entrada "Diagnostico: console serial" do GRUB e
-# confere pelo serial que o kernel subiu por EFI e chegou ao init.
+# confere pelo serial que o kernel subiu por EFI e que o sistema (squashfs) foi montado.
 # "disco" simula o pendrive (o ISO gravado com dd).
 # Requer: qemu-system-x86_64 e OVMF (Debian/Ubuntu: apt install qemu-system-x86 ovmf).
 set -eu
@@ -48,9 +48,10 @@ if ! espera "executed automatically" "${ESPERA_GRUB:-120}"; then
     exit 1
 fi
 tecla down; tecla down; tecla ret
-if espera "Run /init as init process" "${ESPERA_KERNEL:-300}" \
+# "minivideo-live: raiz" = o initramfs achou o ISO, montou o squashfs com overlay e fez switch_root
+if espera "${MARCA_FINAL:-minivideo-live: raiz}" "${ESPERA_KERNEL:-300}" \
    && grep -a -q -E "efi: EFI v" "$LOG"; then
-    echo "testar-uefi: OK ($MODO): GRUB EFI -> kernel (stub EFI) -> init"
+    echo "testar-uefi: OK ($MODO): GRUB EFI -> kernel (stub EFI) -> initramfs -> squashfs + overlay"
     exit 0
 fi
 echo "testar-uefi: kernel não chegou ao init por UEFI ($MODO); ver $LOG" >&2

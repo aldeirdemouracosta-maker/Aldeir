@@ -65,9 +65,10 @@ def test_recommend_by_hardware():
 def test_instructions_never_download(capsys):
     assert cli.main(["instrucoes", "whisper-small"]) == 0
     out = capsys.readouterr().out
-    assert "curl -L --fail" in out and "nada é baixado automaticamente" in out
+    assert "curl -L --fail" in out and "tecla M → B" in out
     assert cli.main(["instrucoes", "qwen3-1.7b"]) == 0
-    assert "curl" not in capsys.readouterr().out  # sem URL de arquivo conferida: só a página
+    out = capsys.readouterr().out
+    assert "curl" not in out and "baixar qwen3-1.7b --confirmar" in out  # nome escolhido pela lista do repo
     assert cli.main(["instrucoes", "rife-v4.6"]) == 0
     assert "Já vem no ISO" in capsys.readouterr().out
     assert cli.main(["instrucoes", "inexistente"]) == 2
@@ -90,3 +91,52 @@ def test_calibrate_with_fake_llama_bench(tmp_path):
     assert json.load(open(tmp_path / "cal.json"))["melhor"]["ngl"] == 99
     with pytest.raises(ValueError):
         g.calibrar(w(str(tmp_path / "x.gguf"), b"nao gguf!!"), str(bench))
+
+
+def test_baixar_modelo_escolhe_pela_lista_e_confere_sha256(tmp_path):
+    import hashlib
+    import http.server
+    import json as _json
+    import threading
+    from minivideo_atualizacoes import forjas
+    from minivideo_modelos import baixar as bx
+
+    q4, q8 = b"GGUF" + b"4" * 300, b"GGUF" + b"8" * 600
+    rotas = {"/api/models/Qwen/Qwen3-1.7B-GGUF/tree/main": _json.dumps([
+        {"type": "file", "path": "README.md", "size": 10},
+        {"type": "file", "path": "Qwen3-1.7B-Q8_0.gguf", "size": 1, "lfs": {"oid": hashlib.sha256(q8).hexdigest(), "size": len(q8)}},
+        {"type": "file", "path": "Qwen3-1.7B-Q4_K_M.gguf", "size": 1, "lfs": {"oid": hashlib.sha256(q4).hexdigest(), "size": len(q4)}},
+    ]).encode(), "/Qwen/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf": q4}
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            corpo = rotas.get(self.path)
+            self.send_response(200 if corpo is not None else 404)
+            self.send_header("Content-Length", str(len(corpo or b"")))
+            self.end_headers()
+            self.wfile.write(corpo or b"")
+
+        def log_message(self, *a):
+            pass
+
+    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    host = f"http://127.0.0.1:{httpd.server_address[1]}"
+    cli = forjas.Cliente(timeout=5, permitir_http_local=True)
+    modelos = str(tmp_path / "Modelos")
+    try:
+        final = bx.baixar(modelos, "qwen3-1.7b", cli, host=host)
+        assert final.endswith("llm/Qwen3-1.7B-Q4_K_M.gguf") and open(final, "rb").read() == q4
+        with pytest.raises(bx.Recusado, match="já existe"):
+            bx.baixar(modelos, "qwen3-1.7b", cli, host=host)
+        os.unlink(final)
+        rotas["/Qwen/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf"] = b"GGUF" + b"x" * 300  # adulterado
+        with pytest.raises(bx.Recusado, match="sha256 não confere"):
+            bx.baixar(modelos, "qwen3-1.7b", cli, host=host)
+        assert os.listdir(os.path.join(modelos, "llm")) == []  # nada parcial fica para trás
+        with pytest.raises(bx.Recusado, match="CUDA"):
+            bx.baixar(modelos, "wan2.2-ti2v-5b", cli, host=host)
+        with pytest.raises(bx.Recusado, match="já vem no ISO"):
+            bx.baixar(modelos, "rife-v4.6", cli, host=host)
+    finally:
+        httpd.shutdown()

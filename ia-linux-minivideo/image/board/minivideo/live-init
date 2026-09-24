@@ -1,0 +1,73 @@
+#!/bin/busybox sh
+# /init do initramfs mínimo do IA-Linux MiniVideo.
+#
+# Acha o ISO (CD, pendrive, disco), monta live/rootfs.squashfs (somente
+# leitura, comprimido) com uma camada de escrita na RAM (overlay em tmpfs) e
+# passa o controle ao sistema com switch_root. O conteúdo deste initramfs
+# (firmware incluído) é apagado no switch_root: a RAM volta a ficar livre.
+#   minivideo.toram=1   copia o squashfs para a RAM (dá para tirar o pendrive)
+/bin/busybox --install -s /bin
+export PATH=/bin
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs dev /dev
+
+msg() { echo "minivideo-live: $*" > /dev/kmsg 2>/dev/null; echo "minivideo-live: $*"; }
+socorro() {
+    msg "FALHA: $*"
+    msg "abrindo um shell de recuperação (exit reinicia)"
+    setsid sh -c 'exec sh </dev/console >/dev/console 2>&1'
+    reboot -f
+}
+
+TORAM=0
+grep -q "minivideo.toram=1" /proc/cmdline && TORAM=1
+
+achar() {
+    for d in /dev/sr* /dev/sd* /dev/vd* /dev/nvme*n* /dev/mmcblk*; do
+        [ -b "$d" ] || continue
+        mount -t iso9660 -o ro "$d" /mnt/iso 2>/dev/null || continue
+        if [ -f /mnt/iso/live/rootfs.squashfs ] && [ -f /mnt/iso/boot/minivideo-uefi.id ]; then
+            ISO_DEV="$d"
+            return 0
+        fi
+        umount /mnt/iso
+    done
+    return 1
+}
+
+ISO_DEV=""
+i=0
+until achar; do  # pendrive USB pode levar alguns segundos para aparecer
+    i=$((i + 1))
+    [ "$i" -ge 30 ] && break
+    sleep 1
+done
+[ -n "$ISO_DEV" ] || socorro "não achei o ISO do MiniVideo (live/rootfs.squashfs) em nenhum disco"
+msg "sistema encontrado em $ISO_DEV"
+
+SQ=/mnt/iso/live/rootfs.squashfs
+if [ "$TORAM" = 1 ]; then
+    kib=$(( $(stat -c %s "$SQ") / 1024 + 65536 ))
+    mount -t tmpfs -o size=${kib}k,mode=0755 tmpfs /mnt/ram || socorro "sem RAM para minivideo.toram"
+    msg "copiando o sistema para a RAM ($((kib / 1024)) MiB)"
+    cp "$SQ" /mnt/ram/rootfs.squashfs || socorro "cópia para a RAM falhou"
+    umount /mnt/iso
+    SQ=/mnt/ram/rootfs.squashfs
+fi
+
+mount -t squashfs -o ro,loop "$SQ" /mnt/sq || socorro "não montou $SQ"
+mount -t tmpfs -o mode=0755 tmpfs /mnt/rw || socorro "tmpfs da camada de escrita"
+mkdir -p /mnt/rw/upper /mnt/rw/work
+mount -t overlay overlay -o lowerdir=/mnt/sq,upperdir=/mnt/rw/upper,workdir=/mnt/rw/work /newroot \
+    || socorro "overlay falhou"
+
+# pontos de montagem ficam visíveis no sistema em /live (fora de /run, que o fstab cobre com tmpfs)
+mkdir -p /newroot/live/iso /newroot/live/ram /newroot/live/sq /newroot/live/rw
+mount --move /mnt/sq /newroot/live/sq
+mount --move /mnt/rw /newroot/live/rw
+if [ "$TORAM" = 1 ]; then mount --move /mnt/ram /newroot/live/ram; else mount --move /mnt/iso /newroot/live/iso; fi
+msg "raiz: squashfs + overlay em RAM; iniciando o sistema"
+umount /proc /sys
+mount --move /dev /newroot/dev
+exec switch_root /newroot /sbin/init

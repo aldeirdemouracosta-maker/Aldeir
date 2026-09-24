@@ -1,0 +1,11 @@
+#!/bin/sh
+# S35wifi — reconecta a rede Wi-Fi guardada por "minivideo-wifi conectar" (se houver).
+# Roda depois do S30minivideo (que monta MV_DADOS). Sem rede guardada, não faz nada.
+[ "$1" = "start" ] || exit 0
+[ -r /run/minivideo.env ] && . /run/minivideo.env
+[ -n "$MINIVIDEO_HOME" ] || exit 0
+[ -f "$MINIVIDEO_HOME/Ferramentas/_rede/wifi.conf" ] || exit 0
+mkdir -p /run/wpa_supplicant
+# em segundo plano: não atrasa o boot se a rede estiver fora do alcance
+( minivideo-wifi --workspace "$MINIVIDEO_HOME" reconectar > /dev/null 2>&1 & )
+exit 0

@@ -1,30 +1,61 @@
 name: MiniVideo - ISO
 
 # Compila o ISO do IA-Linux MiniVideo (Buildroot 2026.08 + kernel do IA Linux
-# Minimal) e dá boot nele no QEMU, em BIOS e em UEFI (OVMF, como CD e como
-# pendrive). QEMU valida boot, initramfs, init,
-# interface e FFmpeg — NÃO valida RX 580, Vulkan RADV, VA-API nem sensores.
+# Minimal) e dá boot nele no QEMU: autoteste pelo initramfs mínimo + squashfs
+# (com um disco SATA vazio que vira MV_DADOS), isolinux (BIOS, captura de tela)
+# e GRUB EFI (OVMF, como pendrive e como CD). QEMU NÃO valida RX 580, Vulkan
+# RADV, VA-API nem sensores.
+#
+# Tag minivideo-vX.Y.Z: compila as duas variantes de CPU e publica um Release
+# com SHA256SUMS assinado (Ed25519) quando o secret MINIVIDEO_ASSINATURA_CHAVE existe.
 on:
   workflow_dispatch:
+    inputs:
+      variante:
+        description: "CPU: padrao (corei7-avx, E5 v1/v2) ou ivybridge (E5 v2+, F16C)"
+        type: choice
+        options: [padrao, ivybridge]
+        default: padrao
   push:
+    branches: ["**"]
+    tags: ["minivideo-v*"]   # o GitHub não aplica o filtro de caminhos a tags
     paths:
       - "ia-linux-minivideo/image/**"
+      - "ia-linux-minivideo/src/**"
       - ".github/workflows/minivideo-iso.yml"
+
+permissions:
+  contents: read
 
 jobs:
   iso:
     runs-on: ubuntu-24.04
     timeout-minutes: 355
+    strategy:
+      fail-fast: false
+      matrix:
+        variante: ${{ fromJSON(startsWith(github.ref, 'refs/tags/minivideo-v') && '["padrao","ivybridge"]' || format('["{0}"]', inputs.variante || 'padrao')) }}
     defaults:
       run:
         shell: bash   # bash -eo pipefail: falha no meio de um pipe derruba o passo
     env:
       MINIVIDEO_WORK: /mnt/minivideo
       BR2_DL_DIR: /mnt/minivideo/dl
+      MINIVIDEO_VARIANTE: ${{ matrix.variante }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0   # precisa do commit do IA Linux Minimal (outro branch)
+
+      - name: Caminhos da variante
+        run: |
+          if [ "$MINIVIDEO_VARIANTE" = padrao ]; then SUF=""; OUTD=output; CPU=SandyBridge
+          else SUF="-$MINIVIDEO_VARIANTE"; OUTD="output-$MINIVIDEO_VARIANTE"; CPU=IvyBridge; fi
+          {
+            echo "IMG=$MINIVIDEO_WORK/$OUTD/images"
+            echo "ISO=$MINIVIDEO_WORK/ia-linux-minivideo$SUF.iso"
+            echo "QEMU_CPU=$CPU"
+          } >> "$GITHUB_ENV"
 
       - name: Espaço em disco e dependências do host
         run: |
@@ -41,8 +72,10 @@ jobs:
           path: |
             /mnt/minivideo/dl
             ~/.buildroot-ccache
-          key: br-${{ github.run_id }}
-          restore-keys: br-
+          key: br-${{ matrix.variante }}-${{ github.run_id }}
+          restore-keys: |
+            br-${{ matrix.variante }}-
+            br-
 
       - name: Configurar e validar opções
         run: ia-linux-minivideo/image/scripts/build-iso.sh --so-configurar
@@ -52,6 +85,7 @@ jobs:
           ia-linux-minivideo/image/scripts/build-iso.sh > "$MINIVIDEO_WORK/build.log" 2>&1 \
             || { tail -300 "$MINIVIDEO_WORK/build.log"; exit 1; }
           tail -20 "$MINIVIDEO_WORK/build.log"
+          ls -la "$IMG" "$ISO"
 
       - name: Salvar cache (mesmo se o build falhar)
         if: always()
@@ -60,21 +94,26 @@ jobs:
           path: |
             /mnt/minivideo/dl
             ~/.buildroot-ccache
-          key: br-${{ github.run_id }}
+          key: br-${{ matrix.variante }}-${{ github.run_id }}
 
-      - name: Boot no QEMU com autoteste (serial)
+      - name: Boot no QEMU com autoteste (initramfs mínimo → squashfs do ISO)
         run: |
-          IMG="$MINIVIDEO_WORK/output/images"
           ACCEL=""; [ -w /dev/kvm ] && ACCEL="-enable-kvm"
-          timeout 1500 qemu-system-x86_64 $ACCEL -m 6G -smp 2 -cpu SandyBridge -nographic -no-reboot \
-            -kernel "$IMG/bzImage" -initrd "$IMG/rootfs.cpio.gz" \
-            -append "console=ttyS0,115200 minivideo.autoteste=1" | tee "$MINIVIDEO_WORK/serial.log" || true
+          # disco SATA vazio: o autoteste prepara a partição MV_DADOS de verdade nele
+          truncate -s 9G "$MINIVIDEO_WORK/disco-teste.img"
+          timeout 1500 qemu-system-x86_64 $ACCEL -m 6G -smp 2 -cpu "$QEMU_CPU" -machine q35 -nographic -no-reboot \
+            -kernel "$IMG/bzImage" -initrd "$IMG/initrd-live.img" -cdrom "$ISO" \
+            -drive file="$MINIVIDEO_WORK/disco-teste.img",if=none,id=d0,format=raw -device ide-hd,drive=d0,bus=ide.0 \
+            -append "console=ttyS0,115200 minivideo.autoteste=1 minivideo.autoteste.disco=sda" \
+            | tee "$MINIVIDEO_WORK/serial.log" || true
+          rm -f "$MINIVIDEO_WORK/disco-teste.img"
+          grep -q "minivideo-live: raiz" "$MINIVIDEO_WORK/serial.log"
           grep -q "AUTOTESTE: OK" "$MINIVIDEO_WORK/serial.log"
 
       - name: Boot do ISO pelo isolinux (captura de tela)
         run: |
           ACCEL=""; [ -w /dev/kvm ] && ACCEL="-enable-kvm"
-          qemu-system-x86_64 $ACCEL -m 6G -smp 2 -cpu SandyBridge -cdrom "$MINIVIDEO_WORK/ia-linux-minivideo.iso" \
+          qemu-system-x86_64 $ACCEL -m 6G -smp 2 -cpu "$QEMU_CPU" -cdrom "$ISO" \
             -boot d -vga std -display none -monitor unix:/tmp/qmon,server,nowait &
           for t in 8 120; do
             sleep "$t"
@@ -94,19 +133,67 @@ jobs:
           MEM: 6G
         run: |
           S=ia-linux-minivideo/image/scripts/testar-uefi.sh
-          "$S" "$MINIVIDEO_WORK/ia-linux-minivideo.iso" disco "$MINIVIDEO_WORK/uefi-disco.log"
-          "$S" "$MINIVIDEO_WORK/ia-linux-minivideo.iso" cd "$MINIVIDEO_WORK/uefi-cd.log"
+          "$S" "$ISO" disco "$MINIVIDEO_WORK/uefi-disco.log"
+          "$S" "$ISO" cd "$MINIVIDEO_WORK/uefi-cd.log"
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ia-linux-minivideo-iso
+          name: ia-linux-minivideo-iso-${{ matrix.variante }}
           path: |
-            /mnt/minivideo/ia-linux-minivideo.iso
-            /mnt/minivideo/ia-linux-minivideo.iso.sha256
+            /mnt/minivideo/ia-linux-minivideo*.iso
+            /mnt/minivideo/ia-linux-minivideo*.iso.sha256
             /mnt/minivideo/serial.log
             /mnt/minivideo/uefi-*.log
             /mnt/minivideo/build.log
             /mnt/minivideo/tela-*.png
-            /mnt/minivideo/output/.config
+            /mnt/minivideo/output*/.config
           if-no-files-found: warn
+
+  release:
+    needs: iso
+    if: startsWith(github.ref, 'refs/tags/minivideo-v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ia-linux-minivideo-iso-*
+          merge-multiple: true
+          path: dist
+      - name: SHA256SUMS assinado
+        env:
+          CHAVE: ${{ secrets.MINIVIDEO_ASSINATURA_CHAVE }}
+        run: |
+          cd dist
+          ls -la
+          sha256sum ia-linux-minivideo*.iso > SHA256SUMS
+          cat SHA256SUMS
+          if [ -n "$CHAVE" ]; then
+            umask 077
+            printf '%s\n' "$CHAVE" > "$RUNNER_TEMP/chave.pem"
+            openssl pkeyutl -sign -inkey "$RUNNER_TEMP/chave.pem" -rawin -in SHA256SUMS -out SHA256SUMS.sig
+            rm -f "$RUNNER_TEMP/chave.pem"
+            PUB=../ia-linux-minivideo/image/rootfs-overlay/usr/share/minivideo/chave-publica.pem
+            if [ -f "$PUB" ]; then
+              openssl pkeyutl -verify -pubin -inkey "$PUB" -rawin -in SHA256SUMS -sigfile SHA256SUMS.sig
+            else
+              echo "::warning::chave pública não está no repositório: o ISO não consegue conferir a assinatura"
+            fi
+          else
+            echo "::warning::secret MINIVIDEO_ASSINATURA_CHAVE ausente: release sem assinatura"
+          fi
+      - name: Publicar release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd dist
+          ARQS=(ia-linux-minivideo*.iso SHA256SUMS)
+          [ -f SHA256SUMS.sig ] && ARQS+=(SHA256SUMS.sig)
+          gh release create "$GITHUB_REF_NAME" "${ARQS[@]}" --title "IA-Linux MiniVideo ${GITHUB_REF_NAME#minivideo-v}" \
+            --notes "ISO híbrido BIOS + UEFI (CD e pendrive). ia-linux-minivideo.iso: Xeon E5 v1/v2 e mais novas. ia-linux-minivideo-ivybridge.iso: E5 v2 ou mais nova (F16C). Conferir: sha256sum -c SHA256SUMS. Validação física na RX 580: ver docs/ISO.md."

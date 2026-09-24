@@ -1,28 +1,124 @@
 {
   "formato": "minivideo-fontes/1",
-  "nota": "Repositórios acompanhados. 'instalada' é a versão que vem no ISO. tipo: ferramenta (pode ser atualizada na partição MV_DADOS), compilado (entra só com um ISO novo), modelo (só avisa; baixar com minivideo-modelos), sistema (ISO novo). Fontes extras: Ferramentas/_atualizacoes/fontes.json no mesmo formato.",
+  "nota": "Repositórios acompanhados. 'instalada' é a versão que vem no ISO. tipo: ferramenta (pode ser atualizada na partição MV_DADOS), compilado (entra só com um ISO novo), modelo (só avisa; baixar com minivideo-modelos), sistema (baixa o ISO novo para Saidas/, com assinatura e sha256 conferidos; gravar com dd). Fontes extras: Ferramentas/_atualizacoes/fontes.json no mesmo formato.",
   "itens": [
-    {"id": "auto-editor", "tipo": "ferramenta", "instalada": "31.6.0",
-     "fonte": {"forja": "github", "repo": "WyattBlue/auto-editor"},
-     "arquivo": "^auto-editor-linux-x86_64$", "formato": "binario", "binario": "auto-editor",
-     "teste": ["--version"], "requer": {"glibc": "2.38"}, "licenca": "Unlicense"},
-    {"id": "rife-ncnn-vulkan", "tipo": "ferramenta", "instalada": "20221029",
-     "fonte": {"forja": "github", "repo": "nihui/rife-ncnn-vulkan"},
-     "arquivo": "^rife-ncnn-vulkan-.*-ubuntu\\.zip$", "formato": "zip", "binario": "rife-ncnn-vulkan",
-     "teste": ["-h"], "requer": {"vulkan": true}, "licenca": "MIT"},
-    {"id": "realesrgan-ncnn-vulkan", "tipo": "ferramenta", "instalada": "v0.2.5.0",
-     "fonte": {"forja": "github", "repo": "xinntao/Real-ESRGAN"},
-     "arquivo": "^realesrgan-ncnn-vulkan-.*-ubuntu\\.zip$", "formato": "zip", "binario": "realesrgan-ncnn-vulkan",
-     "teste": ["-h"], "requer": {"vulkan": true}, "licenca": "BSD-3-Clause"},
-    {"id": "whisper.cpp", "tipo": "compilado", "instalada": "v1.9.4",
-     "fonte": {"forja": "github", "repo": "ggml-org/whisper.cpp"}, "licenca": "MIT"},
-    {"id": "llama.cpp", "tipo": "compilado", "instalada": "b8117",
-     "fonte": {"forja": "github", "repo": "ggml-org/llama.cpp"}, "licenca": "MIT"},
-    {"id": "whisper (modelos ggml)", "tipo": "modelo",
-     "fonte": {"forja": "huggingface", "repo": "ggerganov/whisper.cpp"}, "licenca": "MIT"},
-    {"id": "qwen3-1.7b-gguf", "tipo": "modelo",
-     "fonte": {"forja": "huggingface", "repo": "Qwen/Qwen3-1.7B-GGUF"}, "licenca": "Apache-2.0"},
-    {"id": "wan2.2-ti2v-5b", "tipo": "modelo",
-     "fonte": {"forja": "huggingface", "repo": "Wan-AI/Wan2.2-TI2V-5B"}, "licenca": "Apache-2.0"}
+    {
+      "id": "sistema (ISO)",
+      "tipo": "sistema",
+      "fonte": {
+        "forja": "github",
+        "repo": "aldeirdemouracosta-maker/Aldeir",
+        "tag_prefixo": "minivideo-v"
+      },
+      "arquivo": "^ia-linux-minivideo\\.iso$",
+      "arquivo_ivybridge": "^ia-linux-minivideo-ivybridge\\.iso$",
+      "somas": "SHA256SUMS",
+      "assinatura": "SHA256SUMS.sig",
+      "licenca": "GPL-2.0 (kernel) + licenças dos pacotes"
+    },
+    {
+      "id": "auto-editor",
+      "tipo": "ferramenta",
+      "instalada": "31.6.0",
+      "fonte": {
+        "forja": "github",
+        "repo": "WyattBlue/auto-editor"
+      },
+      "arquivo": "^auto-editor-linux-x86_64$",
+      "formato": "binario",
+      "binario": "auto-editor",
+      "teste": [
+        "--version"
+      ],
+      "requer": {
+        "glibc": "2.38"
+      },
+      "licenca": "Unlicense"
+    },
+    {
+      "id": "rife-ncnn-vulkan",
+      "tipo": "ferramenta",
+      "instalada": "20221029",
+      "fonte": {
+        "forja": "github",
+        "repo": "nihui/rife-ncnn-vulkan"
+      },
+      "arquivo": "^rife-ncnn-vulkan-.*-ubuntu\\.zip$",
+      "formato": "zip",
+      "binario": "rife-ncnn-vulkan",
+      "teste": [
+        "-h"
+      ],
+      "requer": {
+        "vulkan": true
+      },
+      "licenca": "MIT"
+    },
+    {
+      "id": "realesrgan-ncnn-vulkan",
+      "tipo": "ferramenta",
+      "instalada": "v0.2.5.0",
+      "fonte": {
+        "forja": "github",
+        "repo": "xinntao/Real-ESRGAN"
+      },
+      "arquivo": "^realesrgan-ncnn-vulkan-.*-ubuntu\\.zip$",
+      "formato": "zip",
+      "binario": "realesrgan-ncnn-vulkan",
+      "teste": [
+        "-h"
+      ],
+      "requer": {
+        "vulkan": true
+      },
+      "licenca": "BSD-3-Clause"
+    },
+    {
+      "id": "whisper.cpp",
+      "tipo": "compilado",
+      "instalada": "v1.9.4",
+      "fonte": {
+        "forja": "github",
+        "repo": "ggml-org/whisper.cpp"
+      },
+      "licenca": "MIT"
+    },
+    {
+      "id": "llama.cpp",
+      "tipo": "compilado",
+      "instalada": "b8117",
+      "fonte": {
+        "forja": "github",
+        "repo": "ggml-org/llama.cpp"
+      },
+      "licenca": "MIT"
+    },
+    {
+      "id": "whisper (modelos ggml)",
+      "tipo": "modelo",
+      "fonte": {
+        "forja": "huggingface",
+        "repo": "ggerganov/whisper.cpp"
+      },
+      "licenca": "MIT"
+    },
+    {
+      "id": "qwen3-1.7b-gguf",
+      "tipo": "modelo",
+      "fonte": {
+        "forja": "huggingface",
+        "repo": "Qwen/Qwen3-1.7B-GGUF"
+      },
+      "licenca": "Apache-2.0"
+    },
+    {
+      "id": "wan2.2-ti2v-5b",
+      "tipo": "modelo",
+      "fonte": {
+        "forja": "huggingface",
+        "repo": "Wan-AI/Wan2.2-TI2V-5B"
+      },
+      "licenca": "Apache-2.0"
+    }
   ]
 }

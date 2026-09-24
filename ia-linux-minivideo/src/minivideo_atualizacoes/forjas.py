@@ -16,7 +16,10 @@ biblioteca padrão do Python.
 from __future__ import annotations
 
 import json
+import os
 import re
+import threading
+import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
@@ -55,6 +58,24 @@ class Cliente:
     def __init__(self, timeout: float = 10, permitir_http_local: bool = False):
         self.timeout = timeout
         self.permitir_http_local = permitir_http_local
+        # ETag por URL: a consulta seguinte manda If-None-Match e, sem mudança, o servidor
+        # responde 304 sem corpo (economiza rede e não gasta o limite da API do GitHub).
+        self.etags: Dict[str, Dict] = {}
+        self.respostas_304 = 0
+        self._trava = threading.Lock()  # o índice consulta as fontes em paralelo
+
+    def carregar_etags(self, caminho: str) -> None:
+        try:
+            with open(caminho, encoding="utf-8") as fh:
+                self.etags = json.load(fh)
+        except (OSError, ValueError):
+            self.etags = {}
+
+    def salvar_etags(self, caminho: str) -> None:
+        tmp = caminho + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(self.etags, fh)
+        os.replace(tmp, caminho)
 
     def conferir_url(self, url: str) -> None:
         u = urllib.parse.urlparse(url)
@@ -64,20 +85,34 @@ class Cliente:
             return
         raise ErroFonte(f"só HTTPS é aceito: {url}")
 
-    def abrir(self, url: str):
+    def abrir(self, url: str, cabecalhos: Optional[Dict[str, str]] = None):
         self.conferir_url(url)
-        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json",
+                                                   **(cabecalhos or {})})
         resp = urllib.request.urlopen(req, timeout=self.timeout)
         self.conferir_url(resp.geturl())  # redirecionamento também precisa ser HTTPS
         return resp
 
     def json(self, url: str):
+        guardado = self.etags.get(url)
+        cab = {"If-None-Match": guardado["etag"]} if guardado else None
         try:
-            with self.abrir(url) as r:
-                return json.loads(r.read(4 * 1024 * 1024).decode("utf-8"))
+            with self.abrir(url, cab) as r:
+                dados = json.loads(r.read(4 * 1024 * 1024).decode("utf-8"))
+                etag = r.headers.get("ETag")
+                if etag:
+                    with self._trava:
+                        self.etags[url] = {"etag": etag, "dados": dados}
+                return dados
+        except urllib.error.HTTPError as exc:
+            if exc.code == 304 and guardado:
+                with self._trava:
+                    self.respostas_304 += 1
+                return guardado["dados"]
+            raise ErroFonte(f"HTTP {exc.code}: {exc.reason}") from exc
         except ErroFonte:
             raise
-        except Exception as exc:  # rede, HTTP 4xx/5xx, JSON inválido
+        except Exception as exc:  # rede, JSON inválido
             raise ErroFonte(f"{type(exc).__name__}: {exc}") from exc
 
     def texto(self, url: str, limite: int = 256 * 1024) -> str:
@@ -114,8 +149,15 @@ def _completar_somas(cli: Cliente, lanc: Lancamento) -> None:
             return
 
 
-def github(cli: Cliente, repo: str, host: str) -> Lancamento:
-    d = cli.json(f"{host}/repos/{repo}/releases/latest")
+def github(cli: Cliente, repo: str, host: str, tag_prefixo: str = "") -> Lancamento:
+    if tag_prefixo:  # repositório com vários projetos: o mais recente com esse prefixo
+        lista = cli.json(f"{host}/repos/{repo}/releases?per_page=30")
+        d = next((r for r in lista if r.get("tag_name", "").startswith(tag_prefixo)
+                  and not r.get("draft") and not r.get("prerelease")), None)
+        if d is None:
+            raise ErroFonte(f"nenhum lançamento com tag {tag_prefixo}*")
+    else:
+        d = cli.json(f"{host}/repos/{repo}/releases/latest")
     return Lancamento(d["tag_name"], d.get("published_at") or "", d.get("html_url", ""), d.get("body") or "",
                       [Arquivo(a["name"], a["browser_download_url"], a.get("size"), _sha(a.get("digest")))
                        for a in d.get("assets", [])])
@@ -162,7 +204,11 @@ def consultar(cli: Cliente, fonte: Dict) -> Lancamento:
         raise ErroFonte(f"plataforma desconhecida: {tipo}")
     padrao = HOSTS_PADRAO["gitea" if tipo in ("forgejo", "codeberg") else tipo]
     host = fonte.get("host", padrao).rstrip("/")
-    lanc = FORJAS[tipo](cli, fonte["repo"], host)
+    if tipo == "github" and fonte.get("tag_prefixo"):
+        lanc = github(cli, fonte["repo"], host, fonte["tag_prefixo"])
+        lanc.versao = lanc.versao[len(fonte["tag_prefixo"]):]
+    else:
+        lanc = FORJAS[tipo](cli, fonte["repo"], host)
     _completar_somas(cli, lanc)
     return lanc
 

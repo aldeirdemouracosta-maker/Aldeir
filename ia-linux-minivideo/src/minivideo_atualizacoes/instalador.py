@@ -159,10 +159,11 @@ def aplicar(ws_root: str, item: Dict, linha: Dict, cli: Optional[forjas.Cliente]
             aceitar_sem_hash: bool = False) -> str:
     """Instala a versão do índice (``linha``) do ``item``. Devolve a versão ativada."""
     cli = cli or forjas.Cliente(timeout=60)
+    if item["tipo"] == "sistema":
+        return baixar_iso(ws_root, item, linha, cli, aceitar_sem_hash)
     if item["tipo"] != "ferramenta":
         raise Recusado({"compilado": "compilado dentro do ISO: chega com a próxima versão do ISO",
-                        "modelo": "modelos não são baixados aqui: use minivideo-modelos instrucoes <id>",
-                        "sistema": "o sistema roda da RAM: grave o ISO novo no pendrive"}.get(
+                        "modelo": "modelos não são baixados aqui: use a tecla M (B baixa)"}.get(
                             item["tipo"], f"tipo {item['tipo']} não é instalável"))
     arq, versao = linha.get("arquivo"), linha.get("disponivel")
     if not arq or not versao:
@@ -258,3 +259,53 @@ def ativar_path(ws_root: str) -> None:
     extras = [p for p in caminhos(ws_root) if p not in os.environ.get("PATH", "").split(":")]
     if extras:
         os.environ["PATH"] = ":".join(extras + [os.environ.get("PATH", "")])
+
+
+def baixar_iso(ws_root: str, item: Dict, linha: Dict, cli: forjas.Cliente,
+               aceitar_sem_assinatura: bool = False) -> str:
+    """ISO novo → Saidas/, conferido por SHA256SUMS assinado. O sistema em uso não muda:
+    grave o arquivo no pendrive (dd) e dê boot nele. Devolve o caminho do ISO."""
+    from . import assinatura as sig
+    arq, versao = linha.get("arquivo"), linha.get("disponivel")
+    if not arq or not versao:
+        raise Recusado(linha.get("erro") or "índice sem ISO para esta variante; rode 'verificar' antes")
+    if not all(c.isalnum() or c in "._-+" for c in versao):
+        raise Recusado(f"versão com caracteres inválidos: {versao!r}")
+    if not linha.get("somas"):
+        raise Recusado("o lançamento não publicou SHA256SUMS: download recusado")
+    cache = os.path.join(indice.pasta(ws_root), "cache")
+    os.makedirs(cache, exist_ok=True)
+    somas_arq = os.path.join(cache, "SHA256SUMS")
+    baixar(cli, linha["somas"], somas_arq, limite_mib=1)
+    chave = sig.chave_publica()
+    assinado = False
+    if linha.get("assinatura") and chave:
+        sig_arq = os.path.join(cache, "SHA256SUMS.sig")
+        baixar(cli, linha["assinatura"], sig_arq, limite_mib=1)
+        if not sig.verificar(somas_arq, sig_arq, chave):
+            raise Recusado("ASSINATURA INVÁLIDA no SHA256SUMS: o ISO não foi baixado")
+        assinado = True
+    elif not aceitar_sem_assinatura:
+        motivo = "o lançamento não tem SHA256SUMS.sig" if chave else "este ISO não tem chave pública para conferir"
+        raise Recusado(f"{motivo}; confirme para baixar só com o sha256")
+    with open(somas_arq, encoding="utf-8") as fh:
+        esperado = sig.ler_somas(fh.read()).get(arq["nome"])
+    if not esperado:
+        raise Recusado(f"{arq['nome']} não está no SHA256SUMS")
+    if arq.get("sha256") and arq["sha256"] != esperado:
+        raise Recusado("sha256 do GitHub difere do SHA256SUMS do lançamento")
+    saidas = os.path.join(ws_root, "Saidas")
+    os.makedirs(saidas, exist_ok=True)
+    tamanho_mib = (arq.get("tamanho") or 0) / 1048576
+    if tamanho_mib and shutil.disk_usage(saidas).free / 1048576 - tamanho_mib < 1024:
+        raise Recusado(f"espaço insuficiente em Saidas/ para {tamanho_mib:.0f} MiB")
+    final = os.path.join(saidas, arq["nome"].replace(".iso", f"-{versao}.iso"))
+    temp = final + ".baixando"
+    sha = baixar(cli, arq, temp, limite_mib=int(tamanho_mib * 1.05) + 16 if tamanho_mib else 4096)
+    if sha != esperado:
+        os.unlink(temp)
+        raise Recusado("sha256 do ISO não confere com o SHA256SUMS")
+    os.replace(temp, final)
+    _registrar(ws_root, {"acao": "baixar_iso", "id": item["id"], "versao": versao, "sha256": sha,
+                         "assinatura_conferida": assinado, "arquivo": final})
+    return final

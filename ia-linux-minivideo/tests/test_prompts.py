@@ -167,3 +167,45 @@ def test_schemas_do_assistente_usam_so_palavras_suportadas():
     from minivideo_prompts.conversa import SCHEMAS
     for n in ("conversa", "refino", "prompt"):
         assert schema.load(n, SCHEMAS)["title"] == n
+
+
+def test_servidor_local_sobe_so_em_localhost_e_para(tmp_path, monkeypatch):
+    import os
+    import sys
+    from minivideo_prompts.servidor import ServidorLocal, achar_gguf
+    llm = tmp_path / "Modelos" / "llm"
+    llm.mkdir(parents=True)
+    (llm / "grande.gguf").write_bytes(b"GGUF" + b"0" * 2000)
+    (llm / "pequeno.gguf").write_bytes(b"GGUF" + b"0" * 10)
+    assert achar_gguf(str(tmp_path / "Modelos")).endswith("pequeno.gguf")
+
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    falso = bindir / "llama-server"
+    falso.write_text(f"""#!{sys.executable}
+import http.server, json, sys
+a = sys.argv
+assert a[a.index("--host") + 1] == "127.0.0.1"
+porta = int(a[a.index("--port") + 1])
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        corpo = json.dumps({{"status": "ok"}}).encode()
+        self.send_response(200); self.send_header("Content-Length", str(len(corpo))); self.end_headers()
+        self.wfile.write(corpo)
+    def log_message(self, *x): pass
+http.server.HTTPServer(("127.0.0.1", porta), H).serve_forever()
+""")
+    falso.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
+    import socket
+    with socket.socket() as s_:
+        s_.bind(("127.0.0.1", 0))
+        porta = s_.getsockname()[1]
+    srv = ServidorLocal(str(llm / "pequeno.gguf"), porta=porta)
+    srv.iniciar(str(tmp_path / "llama.log"), espera_s=20)
+    try:
+        assert srv.url == f"http://127.0.0.1:{porta}/v1" and srv.proc.poll() is None
+        assert ClienteLLM(url=srv.url).configurado
+    finally:
+        srv.parar()
+    assert srv.proc is None

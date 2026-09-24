@@ -6,8 +6,21 @@ export MINIVIDEO_HOME LANG=C.UTF-8 TERM=linux
 su -s /bin/sh minivideo -c "MINIVIDEO_HOME='$MINIVIDEO_HOME' LANG=C.UTF-8 TERM=linux minivideo-ui"
 echo
 echo "IA-Linux MiniVideo — [Enter] reabrir a interface · [d] desligar · [r] reiniciar"
+echo "                     [w] Wi-Fi · [p] preparar disco de dados MV_DADOS (APAGA o disco escolhido)"
 read -r op
 case "$op" in
     d|D) poweroff ;;
     r|R) reboot ;;
+    w|W)
+        minivideo-wifi --workspace "$MINIVIDEO_HOME" redes
+        printf "Nome da rede (SSID; Enter cancela): "
+        read -r ssid
+        [ -n "$ssid" ] && minivideo-wifi --workspace "$MINIVIDEO_HOME" conectar "$ssid"
+        printf "Enter para voltar " ; read -r _ ;;
+    p|P)
+        minivideo-preparar-disco listar
+        printf "Disco a preparar (ex.: sdb; Enter cancela): "
+        read -r disco
+        [ -n "$disco" ] && minivideo-preparar-disco preparar "$disco"
+        printf "Enter para voltar " ; read -r _ ;;
 esac

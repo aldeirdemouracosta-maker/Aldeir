@@ -5,6 +5,7 @@ import http.server
 import io
 import json
 import os
+import shutil
 import threading
 import zipfile
 
@@ -30,7 +31,9 @@ def _zip(membros):
 class Servidor:
     def __init__(self):
         self.rotas = {}
+        self.pedidos = []
         rotas = self.rotas
+        dono = self
 
         class H(http.server.BaseHTTPRequestHandler):
             def do_GET(self):
@@ -41,7 +44,14 @@ class Servidor:
                     return
                 if not isinstance(corpo, bytes):
                     corpo = json.dumps(corpo).encode()
+                etag = '"' + hashlib.sha256(corpo).hexdigest()[:16] + '"'
+                dono.pedidos.append((self.path, self.headers.get("If-None-Match")))
+                if self.headers.get("If-None-Match") == etag:
+                    self.send_response(304)
+                    self.end_headers()
+                    return
                 self.send_response(200)
+                self.send_header("ETag", etag)
                 self.send_header("Content-Length", str(len(corpo)))
                 self.end_headers()
                 self.wfile.write(corpo)
@@ -217,3 +227,72 @@ def test_fontes_padrao_sao_validas():
         assert i["fonte"]["forja"] in forjas.FORJAS
         if i["tipo"] == "ferramenta":
             assert i["formato"] in ("binario", "zip") and i["binario"] and i["arquivo"]
+
+
+def test_etag_evita_baixar_de_novo_o_que_nao_mudou(tmp_path, srv):
+    ws = str(tmp_path)
+    srv.github("o/ferr", "2.0.0", {"ferr-linux": SCRIPT_V2})
+    item = item_binario(srv)
+    primeiro = indice.atualizar_indice(ws, forjas.Cliente(timeout=5, permitir_http_local=True), [item])
+    assert primeiro["sem_mudanca_304"] == 0
+    segundo = indice.atualizar_indice(ws, forjas.Cliente(timeout=5, permitir_http_local=True), [item])
+    assert segundo["sem_mudanca_304"] == 1 and segundo["itens"][0]["disponivel"] == "2.0.0"
+    api = [h for p, h in srv.pedidos if p == "/repos/o/ferr/releases/latest"]
+    assert api[0] is None and api[1]  # a segunda consulta mandou If-None-Match
+    srv.github("o/ferr", "3.0.0", {"ferr-linux": SCRIPT_V3})
+    terceiro = indice.atualizar_indice(ws, forjas.Cliente(timeout=5, permitir_http_local=True), [item])
+    assert terceiro["sem_mudanca_304"] == 0 and terceiro["itens"][0]["disponivel"] == "3.0.0"
+
+
+@pytest.mark.skipif(not shutil.which("openssl"), reason="openssl ausente")
+def test_iso_novo_com_sha256sums_assinado(tmp_path, srv, cli, monkeypatch):
+    import subprocess
+    ws = str(tmp_path / "ws")
+    chave, pub = tmp_path / "priv.pem", tmp_path / "pub.pem"
+    subprocess.run(["openssl", "genpkey", "-algorithm", "ed25519", "-out", str(chave)], check=True)
+    subprocess.run(["openssl", "pkey", "-in", str(chave), "-pubout", "-out", str(pub)], check=True)
+    release = tmp_path / "minivideo-release"
+    release.write_text('VERSION="0.4.0"\nCPU="ivybridge"\n')
+    monkeypatch.setenv("MINIVIDEO_RELEASE", str(release))
+    monkeypatch.setenv("MINIVIDEO_CHAVE_PUBLICA", str(pub))
+
+    iso_ivy, iso_pad = b"ISO-IVY" * 1000, b"ISO-PADRAO" * 1000
+    somas = (f"{hashlib.sha256(iso_pad).hexdigest()}  ia-linux-minivideo.iso\n"
+             f"{hashlib.sha256(iso_ivy).hexdigest()}  ia-linux-minivideo-ivybridge.iso\n").encode()
+    (tmp_path / "SHA256SUMS").write_bytes(somas)
+    subprocess.run(["openssl", "pkeyutl", "-sign", "-inkey", str(chave), "-rawin", "-in", str(tmp_path / "SHA256SUMS"),
+                    "-out", str(tmp_path / "SHA256SUMS.sig")], check=True)
+    arquivos = {"ia-linux-minivideo.iso": iso_pad, "ia-linux-minivideo-ivybridge.iso": iso_ivy,
+                "SHA256SUMS": somas, "SHA256SUMS.sig": (tmp_path / "SHA256SUMS.sig").read_bytes()}
+    srv.rotas["/repos/o/Aldeir/releases?per_page=30"] = [
+        {"tag_name": "fabrica-v9.0", "assets": []},  # outro projeto do mesmo repositório: ignorado
+        {"tag_name": "minivideo-v0.5.0", "html_url": "p", "published_at": "", "body": "",
+         "assets": [{"name": n, "browser_download_url": f"{srv.url}/dl/r/{n}", "size": len(d)}
+                    for n, d in arquivos.items()]}]
+    for n, d in arquivos.items():
+        srv.rotas[f"/dl/r/{n}"] = d
+    item = {"id": "sistema (ISO)", "tipo": "sistema",
+            "fonte": {"forja": "github", "repo": "o/Aldeir", "host": srv.url, "tag_prefixo": "minivideo-v"},
+            "arquivo": r"^ia-linux-minivideo\.iso$", "arquivo_ivybridge": r"^ia-linux-minivideo-ivybridge\.iso$",
+            "somas": "SHA256SUMS", "assinatura": "SHA256SUMS.sig"}
+    linha = indice.atualizar_indice(ws, cli, [item])["itens"][0]
+    assert linha["instalada"] == "0.4.0" and linha["disponivel"] == "0.5.0" and linha["novo"]
+    assert linha["arquivo"]["nome"] == "ia-linux-minivideo-ivybridge.iso"  # mesma variante de CPU
+
+    final = instalador.aplicar(ws, item, linha, cli)
+    assert final.endswith("Saidas/ia-linux-minivideo-ivybridge-0.5.0.iso") and open(final, "rb").read() == iso_ivy
+    assert instalador.historico(ws)[-1]["assinatura_conferida"] is True
+    os.unlink(final)
+
+    srv.rotas["/dl/r/SHA256SUMS"] = somas.replace(b"ivybridge.iso", b"ivybridge.isx")  # adulterado
+    with pytest.raises(instalador.Recusado, match="ASSINATURA INVÁLIDA"):
+        instalador.aplicar(ws, item, linha, cli)
+    srv.rotas["/dl/r/SHA256SUMS"] = somas
+    srv.rotas["/dl/r/ia-linux-minivideo-ivybridge.iso"] = b"X" * len(iso_ivy)  # ISO adulterado
+    with pytest.raises(instalador.Recusado, match="não confere"):
+        instalador.aplicar(ws, item, linha, cli)
+    assert not [f for f in os.listdir(os.path.join(ws, "Saidas")) if f.endswith(".iso")]
+
+    monkeypatch.setenv("MINIVIDEO_CHAVE_PUBLICA", str(tmp_path / "nao-existe.pem"))
+    with pytest.raises(instalador.Recusado, match="não tem chave pública"):
+        instalador.aplicar(ws, item, linha, cli)
