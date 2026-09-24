@@ -18,7 +18,8 @@ cp "$VARS_ORIG" "$TMP/vars.fd"
 : > "$LOG"
 case "$MODO" in
     cd)    MIDIA="-cdrom $ISO" ;;
-    disco) MIDIA="-drive file=$ISO,format=raw,if=virtio,snapshot=on" ;;
+    # pendrive de verdade: disco USB (usb-storage num controlador xHCI)
+    disco) MIDIA="-device qemu-xhci -drive file=$ISO,format=raw,if=none,id=pd,snapshot=on -device usb-storage,drive=pd" ;;
     *) echo "modo inválido: $MODO (cd|disco)" >&2; exit 2 ;;
 esac
 ACCEL=""; [ -w /dev/kvm ] && ACCEL="-enable-kvm"
@@ -47,7 +48,12 @@ if ! espera "executed automatically" "${ESPERA_GRUB:-120}"; then
     echo "testar-uefi: menu do GRUB não apareceu (firmware não achou o BOOTX64.EFI?)" >&2
     exit 1
 fi
-tecla down; tecla down; tecla ret
+# posição da entrada "Diagnostico" no menu (conta as anteriores no grub-uefi.cfg)
+CFG="$(dirname "$0")/../board/minivideo/grub-uefi.cfg"
+ANTES=$(sed -n '/^menuentry/p' "$CFG" | sed -n '/Diagnostico/q;p' | wc -l)
+i=0
+while [ "$i" -lt "$ANTES" ]; do tecla down; i=$((i + 1)); done
+tecla ret
 # "minivideo-live: raiz" = o initramfs achou o ISO, montou o squashfs com overlay e fez switch_root
 if espera "${MARCA_FINAL:-minivideo-live: raiz}" "${ESPERA_KERNEL:-300}" \
    && grep -a -q -E "efi: EFI v" "$LOG"; then
