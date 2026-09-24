@@ -40,22 +40,38 @@ espera() {  # espera <regex> <segundos>
     done
     return 1
 }
-tecla() { printf 'sendkey %s\n' "$1" | python3 -c '
+monitor() { printf '%s\n' "$1" | python3 -c '
 import socket, sys
 s = socket.socket(socket.AF_UNIX); s.connect(sys.argv[1]); s.sendall(sys.stdin.buffer.read())' "$TMP/mon"; sleep 0.3; }
+# sendkey segura a tecla 100 ms por padrão; sem KVM (CI) o firmware pode perder um toque tão curto
+tecla() { monitor "sendkey $1 400"; }
+# captura da tela da VM ao falhar (PNG ao lado do log, se o ImageMagick existir)
+tela() {
+    kill -0 "$QPID" 2>/dev/null || return 0   # VM já desligou: não há tela
+    monitor "screendump $TMP/tela.ppm"; sleep 2
+    if command -v convert >/dev/null && [ -s "$TMP/tela.ppm" ]; then convert "$TMP/tela.ppm" "${LOG%.log}.png"; fi
+}
 
 if ! espera "executed automatically" "${ESPERA_GRUB:-120}"; then
     echo "testar-uefi: menu do GRUB não apareceu (firmware não achou o BOOTX64.EFI?)" >&2
-    exit 1
+    tela; exit 1
 fi
 # "Diagnostico" tem atalho --hotkey=d no grub-uefi.cfg: uma tecla só, sem navegar
-# pelo menu com setas (na VM da CI uma seta às vezes se perdia e caía em outra entrada)
-tecla d
+# pelo menu com setas. Repete o D até o kernel aparecer no serial (só essa entrada
+# usa console serial), dentro da contagem de 8 s do menu: um toque perdido não
+# deixa mais o GRUB iniciar a entrada padrão (que não escreve no serial).
+n=0
+while [ "$n" -lt 5 ]; do
+    tecla d
+    espera "Linux version|EFI stub" 2 && break
+    n=$((n + 1))
+done
 # "minivideo-live: raiz" = o initramfs achou o ISO, montou o squashfs com overlay e fez switch_root
 if espera "${MARCA_FINAL:-minivideo-live: raiz}" "${ESPERA_KERNEL:-300}" \
    && grep -a -q -E "efi: EFI v" "$LOG"; then
     echo "testar-uefi: OK ($MODO): GRUB EFI -> kernel (stub EFI) -> initramfs -> squashfs + overlay"
     exit 0
 fi
-echo "testar-uefi: kernel não chegou ao init por UEFI ($MODO); ver $LOG" >&2
+tela
+echo "testar-uefi: kernel não chegou ao init por UEFI ($MODO); ver $LOG e ${LOG%.log}.png" >&2
 exit 1

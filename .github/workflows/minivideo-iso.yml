@@ -145,6 +145,7 @@ jobs:
             /mnt/minivideo/ia-linux-minivideo*.iso.sha256
             /mnt/minivideo/serial.log
             /mnt/minivideo/uefi-*.log
+            /mnt/minivideo/uefi-*.png
             /mnt/minivideo/build.log
             /mnt/minivideo/tela-*.png
             /mnt/minivideo/output*/.config
