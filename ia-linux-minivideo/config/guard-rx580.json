@@ -1,0 +1,38 @@
+{
+  "limites": {
+    "temp_edge_c": {
+      "atencao": 75,
+      "reduzir": 80,
+      "pausar": 85,
+      "critico": 90,
+      "histerese": 5
+    },
+    "temp_hotspot_c": {
+      "atencao": 90,
+      "reduzir": 95,
+      "pausar": 100,
+      "critico": 105,
+      "histerese": 5
+    },
+    "temp_mem_c": {
+      "atencao": 85,
+      "reduzir": 90,
+      "pausar": 95,
+      "critico": 100,
+      "histerese": 5
+    },
+    "vram_pct": {
+      "atencao": 85,
+      "reduzir": 92,
+      "histerese": 4
+    },
+    "power_pct_cap": {
+      "atencao": 95,
+      "reduzir": 102,
+      "histerese": 5
+    }
+  },
+  "amostras_para_rebaixar": 3,
+  "sem_temperatura": "atencao",
+  "ventoinha_parada_acima_c": 70
+}
