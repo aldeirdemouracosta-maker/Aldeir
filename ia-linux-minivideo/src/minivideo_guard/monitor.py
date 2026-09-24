@@ -15,14 +15,14 @@ from .sensors import GpuDevice, Reading, SensorBackend, empty_metrics
 
 
 class JobLog:
-    """Um arquivo ``<job_id>.guard.jsonl`` por job; uma linha por registro."""
+    """Um arquivo ``<job_id>.<suffix>.jsonl`` por job; uma linha por registro."""
 
-    def __init__(self, log_dir: str, job_id: str):
+    def __init__(self, log_dir: str, job_id: str, suffix: str = "guard"):
         if not re.fullmatch(r"[A-Za-z0-9._-]{1,128}", job_id):
             raise ValueError("job_id deve conter apenas letras, números, '.', '_' ou '-'")
         os.makedirs(log_dir, exist_ok=True)
         self.job_id = job_id
-        self.path = os.path.join(log_dir, f"{job_id}.guard.jsonl")
+        self.path = os.path.join(log_dir, f"{job_id}.{suffix}.jsonl")
 
     def write(self, kind: str, **data) -> None:
         record = {"ts": datetime.now(timezone.utc).isoformat(), "job_id": self.job_id, "tipo": kind}

@@ -1,0 +1,91 @@
+name: MiniVideo - ISO
+
+# Compila o ISO do IA-Linux MiniVideo (Buildroot 2026.08 + kernel do IA Linux
+# Minimal) e dá boot nele no QEMU. QEMU valida boot, initramfs, init,
+# interface e FFmpeg — NÃO valida RX 580, Vulkan RADV, VA-API nem sensores.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "ia-linux-minivideo/image/**"
+      - ".github/workflows/minivideo-iso.yml"
+
+jobs:
+  iso:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 355
+    defaults:
+      run:
+        shell: bash   # bash -eo pipefail: falha no meio de um pipe derruba o passo
+    env:
+      MINIVIDEO_WORK: /mnt/minivideo
+      BR2_DL_DIR: /mnt/minivideo/dl
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # precisa do commit do IA Linux Minimal (outro branch)
+
+      - name: Espaço em disco e dependências do host
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo mkdir -p "$MINIVIDEO_WORK" && sudo chown "$USER" "$MINIVIDEO_WORK"
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential git unzip rsync bc cpio file wget patch \
+               glslc libelf-dev libssl-dev python3 qemu-system-x86 imagemagick
+          df -h / /mnt
+
+      - name: Cache de downloads do Buildroot
+        uses: actions/cache@v4
+        with:
+          path: /mnt/minivideo/dl
+          key: br-dl-${{ hashFiles('ia-linux-minivideo/image/configs/*', 'ia-linux-minivideo/image/package/**') }}
+          restore-keys: br-dl-
+
+      - name: Configurar e validar opções
+        run: ia-linux-minivideo/image/scripts/build-iso.sh --so-configurar
+
+      - name: Compilar ISO
+        run: |
+          ia-linux-minivideo/image/scripts/build-iso.sh > "$MINIVIDEO_WORK/build.log" 2>&1 \
+            || { tail -300 "$MINIVIDEO_WORK/build.log"; exit 1; }
+          tail -20 "$MINIVIDEO_WORK/build.log"
+
+      - name: Boot no QEMU com autoteste (serial)
+        run: |
+          IMG="$MINIVIDEO_WORK/output/images"
+          ACCEL=""; [ -w /dev/kvm ] && ACCEL="-enable-kvm"
+          timeout 1500 qemu-system-x86_64 $ACCEL -m 6G -smp 2 -cpu SandyBridge -nographic -no-reboot \
+            -kernel "$IMG/bzImage" -initrd "$IMG/rootfs.cpio.gz" \
+            -append "console=ttyS0,115200 minivideo.autoteste=1" | tee "$MINIVIDEO_WORK/serial.log" || true
+          grep -q "AUTOTESTE: OK" "$MINIVIDEO_WORK/serial.log"
+
+      - name: Boot do ISO pelo isolinux (captura de tela)
+        run: |
+          ACCEL=""; [ -w /dev/kvm ] && ACCEL="-enable-kvm"
+          qemu-system-x86_64 $ACCEL -m 6G -smp 2 -cpu SandyBridge -cdrom "$MINIVIDEO_WORK/ia-linux-minivideo.iso" \
+            -boot d -vga std -display none -monitor unix:/tmp/qmon,server,nowait &
+          for t in 8 120; do
+            sleep "$t"
+            python3 - "$MINIVIDEO_WORK/tela-$t.ppm" <<'PY'
+          import socket, sys, time
+          s = socket.socket(socket.AF_UNIX)
+          s.connect("/tmp/qmon")
+          s.sendall(f"screendump {sys.argv[1]}\n".encode())
+          time.sleep(2)
+          PY
+          done
+          kill %1 || true
+          for f in "$MINIVIDEO_WORK"/tela-*.ppm; do convert "$f" "${f%.ppm}.png"; done
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ia-linux-minivideo-iso
+          path: |
+            /mnt/minivideo/ia-linux-minivideo.iso
+            /mnt/minivideo/ia-linux-minivideo.iso.sha256
+            /mnt/minivideo/serial.log
+            /mnt/minivideo/build.log
+            /mnt/minivideo/tela-*.png
+            /mnt/minivideo/output/.config
+          if-no-files-found: warn

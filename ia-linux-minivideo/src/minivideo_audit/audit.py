@@ -131,7 +131,9 @@ def vulkan_info() -> Dict:
     names = re.findall(r"deviceName\s*=\s*(.+)", out)
     drivers = re.findall(r"driverName\s*=\s*(.+)", out)
     devs = [{"nome": n.strip(), "driver": (drivers[i].strip() if i < len(drivers) else None)} for i, n in enumerate(names)]
-    return {"estado": "presente" if devs else "sem_dispositivo", "dispositivos": devs}
+    real = [d for d in devs if "llvmpipe" not in d["nome"].lower()]
+    estado = "presente" if real else ("somente_software" if devs else "sem_dispositivo")
+    return {"estado": estado, "dispositivos": devs}
 
 
 def cuda_info() -> Dict:

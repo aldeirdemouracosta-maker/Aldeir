@@ -1,0 +1,55 @@
+# IA-Linux MiniVideo — fragmento de kernel ADITIVO sobre o kernel do IA Linux
+# Minimal (6.18.52 + ia_linux_x86_64.config + physical.fragment). Nada aqui
+# desliga o que a base liga; só acrescenta o que edição de vídeo precisa.
+
+# Boot pelo ISO: rootfs inteiro no initramfs. Com isso /lib/firmware já existe
+# quando o amdgpu (embutido na base) sobe — o firmware da Polaris carrega.
+CONFIG_BLK_DEV_INITRD=y
+CONFIG_RD_GZIP=y
+
+# Console na tela depois que o amdgpu assume o vídeo (prévia com mpv --vo=drm)
+CONFIG_DRM_FBDEV_EMULATION=y
+CONFIG_FRAMEBUFFER_CONSOLE=y
+
+# Sensores lidos pelo Hardware Safety Guard (somente leitura)
+CONFIG_HWMON=y
+CONFIG_SENSORS_CORETEMP=y
+
+# Áudio: placa-mãe (HDA Realtek), HDMI/DP da RX 580 e microfones USB
+CONFIG_SOUND=y
+CONFIG_SND=y
+CONFIG_SND_HDA_INTEL=y
+CONFIG_SND_HDA_GENERIC=y
+CONFIG_SND_HDA_CODEC_REALTEK=y
+CONFIG_SND_HDA_CODEC_HDMI=y
+CONFIG_SND_HDA_CODEC_HDMI_GENERIC=y
+CONFIG_SND_HDA_CODEC_HDMI_ATI=y
+CONFIG_SND_USB_AUDIO=y
+
+# Rede cabeada para baixar modelos: a base pede E1000/E1000E/R8169, mas sem
+# NETDEVICES/ETHERNET/NET_VENDOR_* o olddefconfig descarta os três em
+# silêncio (conferido contra o Linux 6.18.52 real nesta sessão).
+CONFIG_NETDEVICES=y
+CONFIG_ETHERNET=y
+CONFIG_NET_VENDOR_INTEL=y
+CONFIG_NET_VENDOR_REALTEK=y
+CONFIG_E1000=y
+CONFIG_E1000E=y
+CONFIG_R8169=y
+
+# Mídia em pendrives/HDs externos (FAT/exFAT/NTFS) com nomes em UTF-8
+CONFIG_EXFAT_FS=y
+CONFIG_NTFS3_FS=y
+CONFIG_NLS_CODEPAGE_437=y
+CONFIG_NLS_ISO8859_1=y
+CONFIG_NLS_UTF8=y
+
+# ---- Preparação para hardware futuro (não usado pela RX 580/X79) ----
+# APU AMD (Ryzen com gráficos integrados): mesmo amdgpu; plataforma e sensores AMD
+CONFIG_CPU_SUP_AMD=y
+CONFIG_X86_AMD_PLATFORM_DEVICE=y
+CONFIG_AMD_IOMMU=y
+CONFIG_SENSORS_K10TEMP=y
+# NVIDIA/CUDA: o driver (módulos abertos da NVIDIA) é externo e carregado
+# como módulo; nouveau fica desligado para não disputar a GPU.
+# CONFIG_DRM_NOUVEAU is not set

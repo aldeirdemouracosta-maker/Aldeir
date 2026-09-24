@@ -1,0 +1,55 @@
+name: MiniVideo - testes
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "ia-linux-minivideo/**"
+      - ".github/workflows/minivideo-testes.yml"
+
+jobs:
+  pytest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ia-linux-minivideo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: FFmpeg e Vulkan por software (llvmpipe)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg mesa-vulkan-drivers libvulkan1 vulkan-tools libgomp1
+      - name: RIFE (release oficial) para o teste real de interpolação
+        run: |
+          curl -fsSLO https://github.com/nihui/rife-ncnn-vulkan/releases/download/20221029/rife-ncnn-vulkan-20221029-ubuntu.zip
+          echo "1e2c7ee7fa7daa326542d50622f0afedc80cf6f1858bda411d16385ffa5cdf68  rife-ncnn-vulkan-20221029-ubuntu.zip" | sha256sum -c -
+          unzip -q rife-ncnn-vulkan-20221029-ubuntu.zip -d "$RUNNER_TEMP"
+          R="$RUNNER_TEMP/rife-ncnn-vulkan-20221029-ubuntu"
+          echo "$R" >> "$GITHUB_PATH"
+          echo "MINIVIDEO_TEST_RIFE_MODEL=$R/rife-v4.6" >> "$GITHUB_ENV"
+      - name: Auto-Editor (release oficial) para o teste real de silêncios
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/auto-editor" https://github.com/WyattBlue/auto-editor/releases/download/31.6.0/auto-editor-linux-x86_64
+          echo "ad38d62dda324bf5adf820e7c49fd982c30e4b9b89682a6f9a441b6485edd29a  $RUNNER_TEMP/auto-editor" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/auto-editor"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - run: pip install -e '.[dev]'
+      - run: python -m pytest -v
+
+  segredos:
+    # Varredura de segredos (Gitleaks) só no código do MiniVideo — leve, sem daemon.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Gitleaks 8.30.1 (checksum conferido)
+        run: |
+          curl -fsSLO https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks_8.30.1_linux_x64.tar.gz" | sha256sum -c -
+          tar xzf gitleaks_8.30.1_linux_x64.tar.gz gitleaks
+          ./gitleaks dir ia-linux-minivideo --redact --no-banner
+          ./gitleaks dir .github --redact --no-banner

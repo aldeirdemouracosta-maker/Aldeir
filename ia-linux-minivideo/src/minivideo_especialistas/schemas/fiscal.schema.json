@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "minivideo/fiscal.schema.json",
+  "title": "Fiscal de hardware",
+  "description": "Aprova, reduz ou suspende a execução conforme sensores e limites configurados.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "papel",
+    "versao",
+    "decisao",
+    "tarefas",
+    "recursos",
+    "limites",
+    "motivos"
+  ],
+  "properties": {
+    "papel": {
+      "const": "fiscal"
+    },
+    "versao": {
+      "const": 1
+    },
+    "decisao": {
+      "enum": [
+        "aprovar",
+        "reduzir",
+        "suspender"
+      ]
+    },
+    "motivos": {
+      "type": "array",
+      "maxItems": 40,
+      "items": {
+        "type": "string",
+        "maxLength": 300
+      }
+    },
+    "tarefas": {
+      "type": "array",
+      "maxItems": 120,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "indice",
+          "cena",
+          "agente",
+          "dispositivo",
+          "decisao",
+          "motivos",
+          "ajustes"
+        ],
+        "properties": {
+          "indice": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cena": {
+            "type": "string",
+            "pattern": "^c[0-9]{1,2}$"
+          },
+          "agente": {
+            "enum": [
+              "cortador",
+              "silencios",
+              "audio",
+              "cenas",
+              "transcritor",
+              "legendas",
+              "interpolador",
+              "upscaler",
+              "escala",
+              "exportador",
+              "gerador",
+              "editor_generativo",
+              "montador"
+            ]
+          },
+          "dispositivo": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 40
+          },
+          "decisao": {
+            "enum": [
+              "aprovar",
+              "reduzir",
+              "suspender"
+            ]
+          },
+          "motivos": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 300
+            }
+          },
+          "ajustes": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "altura": {
+                "type": "integer",
+                "minimum": 144,
+                "maximum": 4320
+              },
+              "fator": {
+                "type": "integer",
+                "minimum": 2,
+                "maximum": 8
+              }
+            }
+          }
+        }
+      }
+    },
+    "recursos": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ram_disponivel_mib",
+        "disco_livre_mib",
+        "estimativa_disco_mib",
+        "gpu"
+      ],
+      "properties": {
+        "ram_disponivel_mib": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "disco_livre_mib": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "estimativa_disco_mib": {
+          "type": "number",
+          "minimum": 0
+        },
+        "gpu": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      }
+    },
+    "limites": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tempo_max_etapa_s",
+        "tempo_max_job_s",
+        "memoria_max_mib",
+        "disco_reserva_mib"
+      ],
+      "properties": {
+        "tempo_max_etapa_s": {
+          "type": "number",
+          "minimum": 1
+        },
+        "tempo_max_job_s": {
+          "type": "number",
+          "minimum": 1
+        },
+        "memoria_max_mib": {
+          "type": "number",
+          "minimum": 64
+        },
+        "disco_reserva_mib": {
+          "type": "number",
+          "minimum": 0
+        },
+        "altura_max_gpu_vulkan_sw": {
+          "type": "integer",
+          "minimum": 144
+        }
+      }
+    }
+  }
+}

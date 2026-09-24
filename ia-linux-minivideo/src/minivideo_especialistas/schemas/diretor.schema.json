@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "minivideo/diretor.schema.json",
+  "title": "Diretor",
+  "description": "Transforma o pedido em cenas e critérios de aceitação. Não escolhe motores.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "papel",
+    "versao",
+    "pedido",
+    "origem",
+    "cenas",
+    "criterios",
+    "avisos"
+  ],
+  "properties": {
+    "papel": {
+      "const": "diretor"
+    },
+    "versao": {
+      "const": 1
+    },
+    "pedido": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "origem": {
+      "enum": [
+        "regras",
+        "llm"
+      ]
+    },
+    "cenas": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {
+        "$ref": "#/$defs/cena"
+      }
+    },
+    "criterios": {
+      "type": "array",
+      "maxItems": 40,
+      "items": {
+        "$ref": "#/$defs/criterio"
+      }
+    },
+    "avisos": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "string",
+        "maxLength": 300
+      }
+    }
+  },
+  "$defs": {
+    "cena": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "descricao",
+        "inicio_s",
+        "fim_s",
+        "objetivos"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^c[0-9]{1,2}$"
+        },
+        "descricao": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "inicio_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 86400
+        },
+        "fim_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 86400
+        },
+        "objetivos": {
+          "type": "array",
+          "maxItems": 13,
+          "items": {
+            "enum": [
+              "cortar",
+              "remover_silencios",
+              "limpar_audio",
+              "normalizar_audio",
+              "detectar_cenas",
+              "interpolar",
+              "camera_lenta",
+              "upscale_ia",
+              "escalar",
+              "transcrever",
+              "legendar",
+              "gerar_video",
+              "editar_generativo"
+            ]
+          }
+        },
+        "parametros": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "altura": {
+              "type": "integer",
+              "minimum": 144,
+              "maximum": 4320
+            },
+            "fator_quadros": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 8
+            },
+            "idioma": {
+              "type": "string",
+              "pattern": "^[a-z]{2}$"
+            },
+            "prompt_generativo": {
+              "type": "string",
+              "maxLength": 1000
+            }
+          }
+        }
+      }
+    },
+    "criterio": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "cena",
+        "tipo",
+        "alvo",
+        "tolerancia"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^k[0-9]{1,2}$"
+        },
+        "cena": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^c[0-9]{1,2}$"
+            },
+            {
+              "const": "final"
+            }
+          ]
+        },
+        "tipo": {
+          "enum": [
+            "duracao_s",
+            "duracao_max_s",
+            "altura",
+            "fps_min",
+            "loudness_lufs",
+            "audio_presente",
+            "legenda_presente",
+            "fronteira_suave"
+          ]
+        },
+        "alvo": {
+          "type": [
+            "number",
+            "boolean"
+          ]
+        },
+        "tolerancia": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        }
+      }
+    }
+  }
+}

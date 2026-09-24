@@ -1,0 +1,64 @@
+#!/bin/sh
+# S99autoteste — só roda com "minivideo.autoteste=1" na linha do kernel (CI/QEMU).
+# Exercita o espaço de usuário do ISO e imprime "AUTOTESTE: OK" ou
+# "AUTOTESTE: FALHOU <etapa>" no console; depois desliga a máquina.
+
+grep -q "minivideo.autoteste=1" /proc/cmdline || exit 0
+[ "$1" = "start" ] || exit 0
+
+say() { echo "AUTOTESTE: $*" > /dev/console; }
+fail() { say "FALHOU $*"; sync; poweroff -f; exit 1; }
+
+W=/tmp/autoteste
+mkdir -p "$W"
+say "início (kernel $(uname -r))"
+cat /etc/minivideo-release > /dev/console
+
+for b in minivideo-modelos llama-bench ffmpeg ffprobe mpv auto-editor whisper-cli llama-server rife-ncnn-vulkan realesrgan-ncnn-vulkan \
+         vulkaninfo minivideo-ui minivideo-agentes minivideo-guard minivideo-audit; do
+    command -v "$b" >/dev/null || fail "binário ausente: $b"
+done
+say "binários presentes"
+
+# Bibliotecas dos binários pré-compilados resolvem (libgomp, libvulkan, glibc)
+for b in rife-ncnn-vulkan realesrgan-ncnn-vulkan; do
+    if ldd "$(command -v $b)" 2>&1 | grep -q "not found"; then
+        ldd "$(command -v $b)" > /dev/console 2>&1
+        fail "bibliotecas faltando em $b"
+    fi
+done
+say "bibliotecas dos binários NCNN ok"
+
+minivideo-audit > "$W/audit.txt" 2>&1 || fail "minivideo-audit"
+cat "$W/audit.txt" > /dev/console
+minivideo-agentes --workspace "$W/ws" dispositivos > /dev/console 2>&1 || fail "minivideo-agentes dispositivos"
+minivideo-guard detect > /dev/console 2>&1 || say "guard: nenhuma GPU AMD (esperado em VM)"
+
+ffmpeg -v error -y -f lavfi -i testsrc2=size=320x180:rate=12 -f lavfi -i sine=frequency=440 \
+    -t 4 -c:v libx264 -pix_fmt yuv420p -c:a aac "$W/clipe.mp4" || fail "ffmpeg gerar clipe"
+minivideo-agentes --workspace "$W/ws" executar "$W/clipe.mp4" \
+    "corte 00:00:01 até 00:00:03, limpe o áudio e converta para 144p sem IA" \
+    -o "$W/saida.mp4" --job-id autoteste --confirmar > /dev/console 2>&1 || fail "pipeline de agentes (ffmpeg)"
+ffprobe -v error -show_entries stream=codec_name,height:format=duration -of compact "$W/saida.mp4" > /dev/console \
+    || fail "ffprobe da saída"
+
+# Especialistas: dry-run completo (Diretor, Editor, Fiscal) e edição de duas cenas sem CUDA
+minivideo-agentes --workspace "$W/ws" especialistas planejar \
+    "cena 1: 00:00:00 até 00:00:01.5 limpe o áudio; cena 2: 00:00:02 até 00:00:03.5 converta para 144p sem IA" \
+    --entrada "$W/clipe.mp4" > /dev/console 2>&1 || fail "especialistas planejar"
+minivideo-agentes --workspace "$W/ws" especialistas editar "$W/clipe.mp4" \
+    "cena 1: 00:00:00 até 00:00:01.5 limpe o áudio; cena 2: 00:00:02 até 00:00:03.5 converta para 144p sem IA" \
+    -o "$W/especialistas.mp4" --confirmar > /dev/console 2>&1 || fail "especialistas editar"
+J="$(ls -d "$W"/ws/Jobs/esp-*/job.json | tail -1)"
+minivideo-agentes --workspace "$W/ws" especialistas reproduzir "$J" -o "$W/rep.mp4" --confirmar \
+    > /dev/console 2>&1 || fail "especialistas reproduzir"
+minivideo-agentes motores > /dev/console
+minivideo-modelos --workspace "$W/ws" catalogo > /dev/console 2>&1 || fail "minivideo-modelos catalogo"
+
+python3 -c "import curses, minivideo_ui.app" || fail "interface (curses) não importa"
+whisper-cli --help > /dev/null 2>&1 || fail "whisper-cli não executa"
+llama-server --version > /dev/console 2>&1 || fail "llama-server não executa"
+
+say "OK"
+sync
+poweroff -f

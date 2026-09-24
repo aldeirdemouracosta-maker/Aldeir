@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "minivideo/continuista.schema.json",
+  "title": "Continuísta",
+  "description": "Avalia fronteiras, áudio e coerência entre trechos e confere os critérios do Diretor.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "papel",
+    "versao",
+    "veredito",
+    "trechos",
+    "fronteiras",
+    "criterios",
+    "notas"
+  ],
+  "properties": {
+    "papel": {
+      "const": "continuista"
+    },
+    "versao": {
+      "const": 1
+    },
+    "veredito": {
+      "enum": [
+        "aprovado",
+        "ressalvas",
+        "reprovado"
+      ]
+    },
+    "notas": {
+      "type": "array",
+      "maxItems": 60,
+      "items": {
+        "type": "string",
+        "maxLength": 400
+      }
+    },
+    "trechos": {
+      "type": "array",
+      "maxItems": 21,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "cena",
+          "duracao_s",
+          "largura",
+          "altura",
+          "fps",
+          "audio",
+          "loudness_lufs"
+        ],
+        "properties": {
+          "cena": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^c[0-9]{1,2}$"
+              },
+              {
+                "const": "final"
+              }
+            ]
+          },
+          "duracao_s": {
+            "type": "number",
+            "minimum": 0
+          },
+          "largura": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "altura": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "fps": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "audio": {
+            "type": "boolean"
+          },
+          "loudness_lufs": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "fronteiras": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "entre",
+          "diferenca_visual",
+          "salto_loudness_db",
+          "mesma_resolucao",
+          "mesmo_fps",
+          "ok"
+        ],
+        "properties": {
+          "entre": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "string",
+              "pattern": "^c[0-9]{1,2}$"
+            }
+          },
+          "diferenca_visual": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1
+          },
+          "salto_loudness_db": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "mesma_resolucao": {
+            "type": "boolean"
+          },
+          "mesmo_fps": {
+            "type": "boolean"
+          },
+          "ok": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "criterios": {
+      "type": "array",
+      "maxItems": 40,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "tipo",
+          "alvo",
+          "medido",
+          "ok"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^k[0-9]{1,2}$"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "alvo": {
+            "type": [
+              "number",
+              "boolean"
+            ]
+          },
+          "medido": {
+            "type": [
+              "number",
+              "boolean",
+              "null"
+            ]
+          },
+          "ok": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}

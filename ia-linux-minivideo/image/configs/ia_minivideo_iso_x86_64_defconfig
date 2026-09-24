@@ -1,0 +1,125 @@
+# IA-Linux MiniVideo — ISO híbrido (CD/pendrive, BIOS legado) para Xeon X79 + RX 580
+# Buildroot 2026.08. Duas camadas BR2_EXTERNAL:
+#   IA_LINUX      = IA Linux Minimal (kernel 6.18.52 e sua configuração, sem alteração)
+#   IA_MINIVIDEO  = esta pasta (vídeo, agentes, interface de pastas)
+# Uso: scripts/build-iso.sh (monta BR2_EXTERNAL com as duas camadas).
+
+# ---- CPU ----
+# corei7-avx = Sandy Bridge (-march=corei7-avx ≡ sandybridge no GCC: AVX sem
+# AVX2/FMA/F16C, conferido com "gcc -dM -E"). Roda no Xeon E5 v1 e v2 (X79) e em
+# qualquer CPU x86-64 mais nova (máquinas CUDA e APUs futuras). Usamos este
+# nome, e não BR2_x86_sandybridge, porque só ele tem alvo OpenBLAS
+# (SANDYBRIDGE) no Buildroot 2026.08. Obs.: na base, "BR2_X86_CPU_HAS_AVX=y"
+# não tem efeito — é símbolo oculto; quem define as instruções é a variante.
+BR2_x86_64=y
+BR2_x86_corei7_avx=y
+
+# ---- Toolchain ----
+BR2_TOOLCHAIN_BUILDROOT_GLIBC=y
+BR2_TOOLCHAIN_BUILDROOT_CXX=y
+# (wchar já vem com glibc; BR2_TOOLCHAIN_BUILDROOT_WCHAR não existe para glibc)
+# libgomp: exigido pelos binários RIFE/Real-ESRGAN (ncnn usa OpenMP)
+BR2_GCC_ENABLE_OPENMP=y
+BR2_ENABLE_LOCALE=y
+BR2_GENERATE_LOCALE="C.UTF-8 pt_BR.UTF-8"
+
+# ---- Sistema ----
+BR2_TARGET_GENERIC_HOSTNAME="minivideo"
+BR2_TARGET_GENERIC_ISSUE="IA-Linux MiniVideo"
+BR2_INIT_BUSYBOX=y
+BR2_SYSTEM_BIN_SH_BUSYBOX=y
+BR2_SYSTEM_DHCP="eth0"
+BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_IA_MINIVIDEO_PATH)/rootfs-overlay"
+BR2_ROOTFS_USERS_TABLES="$(BR2_EXTERNAL_IA_MINIVIDEO_PATH)/board/minivideo/users.txt"
+BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_IA_MINIVIDEO_PATH)/board/minivideo/post-build.sh"
+
+# ---- Kernel: o mesmo do IA Linux Minimal + fragmento aditivo de vídeo ----
+BR2_LINUX_KERNEL=y
+BR2_LINUX_KERNEL_CUSTOM_VERSION=y
+BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="6.18.52"
+BR2_KERNEL_HEADERS_6_18=y
+BR2_LINUX_KERNEL_USE_CUSTOM_CONFIG=y
+BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE="$(BR2_EXTERNAL_IA_LINUX_PATH)/kernel/config/ia_linux_x86_64.config"
+BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_IA_LINUX_PATH)/kernel/config/physical.fragment $(BR2_EXTERNAL_IA_MINIVIDEO_PATH)/board/minivideo/linux-minivideo.fragment"
+BR2_LINUX_KERNEL_BZIMAGE=y
+BR2_LINUX_KERNEL_NEEDS_HOST_LIBELF=y
+
+# ---- Firmware ----
+BR2_PACKAGE_LINUX_FIRMWARE=y
+BR2_PACKAGE_LINUX_FIRMWARE_AMDGPU=y
+BR2_PACKAGE_LINUX_FIRMWARE_RTL_8169=y
+BR2_PACKAGE_INTEL_MICROCODE=y
+
+# ---- ISO híbrido (isolinux) com rootfs no initramfs ----
+BR2_TARGET_SYSLINUX=y
+BR2_TARGET_SYSLINUX_ISOLINUX=y
+# menu.c32 (menu do boot) e suas bibliotecas
+BR2_TARGET_SYSLINUX_C32="menu.c32 libutil.c32 libcom32.c32"
+BR2_TARGET_ROOTFS_CPIO=y
+BR2_TARGET_ROOTFS_CPIO_GZIP=y
+BR2_TARGET_ROOTFS_ISO9660=y
+BR2_TARGET_ROOTFS_ISO9660_ISOLINUX=y
+BR2_TARGET_ROOTFS_ISO9660_BOOT_MENU="$(BR2_EXTERNAL_IA_MINIVIDEO_PATH)/board/minivideo/isolinux.cfg"
+BR2_TARGET_ROOTFS_ISO9660_INITRD=y
+BR2_TARGET_ROOTFS_ISO9660_HYBRID=y
+
+# ---- GPU AMD: Vulkan RADV + VA-API (codificação H.264/HEVC na RX 580) ----
+BR2_PACKAGE_MESA3D=y
+BR2_PACKAGE_MESA3D_VULKAN_DRIVER_AMD=y
+BR2_PACKAGE_MESA3D_GALLIUM_DRIVER_RADEONSI=y
+BR2_PACKAGE_MESA3D_GALLIUM_VA=y
+BR2_PACKAGE_LIBDRM=y
+BR2_PACKAGE_LIBVA=y
+BR2_PACKAGE_LIBVA_UTILS=y
+BR2_PACKAGE_VULKAN_LOADER=y
+BR2_PACKAGE_VULKAN_HEADERS=y
+BR2_PACKAGE_VULKAN_TOOLS=y
+
+# ---- Vídeo e áudio ----
+BR2_PACKAGE_FFMPEG=y
+BR2_PACKAGE_FFMPEG_GPL=y
+BR2_PACKAGE_FFMPEG_FFPROBE=y
+BR2_PACKAGE_FFMPEG_SWSCALE=y
+BR2_PACKAGE_X264=y
+BR2_PACKAGE_LAME=y
+BR2_PACKAGE_OPUS=y
+BR2_PACKAGE_LIBASS=y
+BR2_PACKAGE_MPV=y
+BR2_PACKAGE_ALSA_UTILS=y
+BR2_PACKAGE_ALSA_UTILS_AMIXER=y
+BR2_PACKAGE_ALSA_UTILS_APLAY=y
+BR2_PACKAGE_ALSA_UTILS_ALSAMIXER=y
+
+# ---- Agentes de IA ----
+# Coordenador (Qwen3 GGUF via llama-server, CPU ou Vulkan)
+BR2_PACKAGE_LLAMA_CPP=y
+BR2_PACKAGE_LLAMA_CPP_VULKAN=y
+BR2_PACKAGE_LLAMA_CPP_TOOLS=y
+# OpenBLAS com alvo SANDYBRIDGE (derivado de BR2_x86_sandybridge): o pacote
+# llama-cpp liga GGML_BLAS sozinho quando OpenBLAS está presente — acelera o
+# processamento do prompt na CPU AVX1 do X79 (achado do pacote X79 anexado).
+BR2_PACKAGE_OPENBLAS=y
+BR2_PACKAGE_OPENBLAS_USE_THREAD=y
+# Transcritor, interpolador e upscaler (pacotes desta camada)
+BR2_PACKAGE_WHISPER_CPP=y
+BR2_PACKAGE_WHISPER_CPP_VULKAN=y
+BR2_PACKAGE_AUTO_EDITOR_BIN=y
+BR2_PACKAGE_RIFE_NCNN_VULKAN_BIN=y
+BR2_PACKAGE_REALESRGAN_NCNN_VULKAN_BIN=y
+# Interface de pastas, agentes, auditoria e Safety Guard
+BR2_PACKAGE_PYTHON3=y
+BR2_PACKAGE_PYTHON3_CURSES=y
+BR2_PACKAGE_NCURSES_WCHAR=y
+BR2_PACKAGE_MINIVIDEO_TOOLS=y
+
+# ---- Utilitários ----
+BR2_PACKAGE_KBD=y
+BR2_PACKAGE_UTIL_LINUX=y
+BR2_PACKAGE_UTIL_LINUX_BINARIES=y
+BR2_PACKAGE_E2FSPROGS=y
+BR2_PACKAGE_PCIUTILS=y
+BR2_PACKAGE_OPENSSL=y
+BR2_PACKAGE_CA_CERTIFICATES=y
+# curl para baixar modelos; com libcurl o llama.cpp também baixa GGUF sozinho
+BR2_PACKAGE_LIBCURL=y
+BR2_PACKAGE_LIBCURL_CURL=y

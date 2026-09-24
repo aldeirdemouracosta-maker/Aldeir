@@ -1,0 +1,17 @@
+config BR2_PACKAGE_REALESRGAN_NCNN_VULKAN_BIN
+	bool "realesrgan-ncnn-vulkan (binário oficial)"
+	depends on BR2_x86_64
+	depends on BR2_TOOLCHAIN_USES_GLIBC
+	depends on BR2_GCC_ENABLE_OPENMP # libgomp
+	select BR2_PACKAGE_VULKAN_LOADER
+	help
+	  Upscale Real-ESRGAN (ncnn + Vulkan), binário do release oficial
+	  v0.2.5.0 (glibc >= 2.29). Instala os modelos em
+	  /usr/share/minivideo/modelos/realesrgan/models/ (o binário exige
+	  "models" no caminho).
+
+	  https://github.com/xinntao/Real-ESRGAN
+
+comment "realesrgan-ncnn-vulkan precisa de glibc e OpenMP (BR2_GCC_ENABLE_OPENMP)"
+	depends on BR2_x86_64
+	depends on !BR2_TOOLCHAIN_USES_GLIBC || !BR2_GCC_ENABLE_OPENMP

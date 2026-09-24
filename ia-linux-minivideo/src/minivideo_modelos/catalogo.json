@@ -1,0 +1,216 @@
+{
+  "formato": "minivideo-catalogo/1",
+  "atualizado": "2026-09-24",
+  "modelos": [
+    {
+      "id": "whisper-base",
+      "agente": "transcritor",
+      "motor": "whisper.cpp",
+      "formato": "ggml-whisper",
+      "arquivo": "ggml-base.bin",
+      "destino": "whisper",
+      "tamanho_mib": 142,
+      "ram_mib": 388,
+      "vram_mib": 388,
+      "requer": [
+        "cpu",
+        "vulkan",
+        "cuda"
+      ],
+      "licenca": "MIT",
+      "pagina": "https://huggingface.co/ggerganov/whisper.cpp",
+      "url_arquivo": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
+      "nota": "rápido; qualidade menor em português"
+    },
+    {
+      "id": "whisper-small",
+      "agente": "transcritor",
+      "motor": "whisper.cpp",
+      "formato": "ggml-whisper",
+      "arquivo": "ggml-small.bin",
+      "destino": "whisper",
+      "tamanho_mib": 466,
+      "ram_mib": 852,
+      "vram_mib": 852,
+      "requer": [
+        "cpu",
+        "vulkan",
+        "cuda"
+      ],
+      "licenca": "MIT",
+      "pagina": "https://huggingface.co/ggerganov/whisper.cpp",
+      "url_arquivo": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin",
+      "nota": "equilíbrio recomendado para a RX 580"
+    },
+    {
+      "id": "whisper-medium",
+      "agente": "transcritor",
+      "motor": "whisper.cpp",
+      "formato": "ggml-whisper",
+      "arquivo": "ggml-medium.bin",
+      "destino": "whisper",
+      "tamanho_mib": 1463,
+      "ram_mib": 2100,
+      "vram_mib": 2100,
+      "requer": [
+        "cpu",
+        "vulkan",
+        "cuda"
+      ],
+      "licenca": "MIT",
+      "pagina": "https://huggingface.co/ggerganov/whisper.cpp",
+      "url_arquivo": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin",
+      "nota": "melhor qualidade; lento na CPU do X79"
+    },
+    {
+      "id": "qwen3-0.6b",
+      "agente": "coordenador",
+      "motor": "llama.cpp",
+      "formato": "gguf",
+      "arquivo": "Qwen3-0.6B*.gguf",
+      "destino": "llm",
+      "tamanho_mib": null,
+      "ram_mib": 1200,
+      "vram_mib": 1200,
+      "requer": [
+        "cpu",
+        "vulkan",
+        "cuda"
+      ],
+      "licenca": "Apache-2.0 (conferir no card do modelo)",
+      "pagina": "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF",
+      "url_arquivo": null,
+      "nota": "mínimo para Diretor/Editor; escolha o arquivo .gguf na página"
+    },
+    {
+      "id": "qwen3-1.7b",
+      "agente": "coordenador",
+      "motor": "llama.cpp",
+      "formato": "gguf",
+      "arquivo": "Qwen3-1.7B*.gguf",
+      "destino": "llm",
+      "tamanho_mib": null,
+      "ram_mib": 2600,
+      "vram_mib": 2600,
+      "requer": [
+        "cpu",
+        "vulkan",
+        "cuda"
+      ],
+      "licenca": "Apache-2.0 (conferir no card do modelo)",
+      "pagina": "https://huggingface.co/Qwen/Qwen3-1.7B-GGUF",
+      "url_arquivo": null,
+      "nota": "recomendado para Diretor/Editor; cabe na RX 580 com folga"
+    },
+    {
+      "id": "rife-v4.6",
+      "agente": "interpolador",
+      "motor": "rife-ncnn-vulkan",
+      "formato": "ncnn",
+      "arquivo": "flownet.param",
+      "destino": "rife/rife-v4.6",
+      "tamanho_mib": 11,
+      "ram_mib": 500,
+      "vram_mib": 1000,
+      "requer": [
+        "vulkan"
+      ],
+      "licenca": "MIT",
+      "pagina": "https://github.com/nihui/rife-ncnn-vulkan",
+      "url_arquivo": null,
+      "embutido": true,
+      "nota": "já vem no ISO"
+    },
+    {
+      "id": "realesrgan",
+      "agente": "upscaler",
+      "motor": "realesrgan-ncnn-vulkan",
+      "formato": "ncnn",
+      "arquivo": "realesr*.param",
+      "destino": "realesrgan/models",
+      "tamanho_mib": 45,
+      "ram_mib": 500,
+      "vram_mib": 1000,
+      "requer": [
+        "vulkan"
+      ],
+      "licenca": "BSD-3-Clause",
+      "pagina": "https://github.com/xinntao/Real-ESRGAN",
+      "url_arquivo": null,
+      "embutido": true,
+      "nota": "já vem no ISO"
+    },
+    {
+      "id": "wan2.1-vace-1.3b",
+      "agente": "editor_generativo",
+      "motor": "wan2.1-vace-1.3b",
+      "formato": "safetensors",
+      "arquivo": "*.safetensors",
+      "destino": "generativos/wan2.1-vace-1.3b",
+      "tamanho_mib": null,
+      "ram_mib": 16000,
+      "vram_mib": 12000,
+      "requer": [
+        "cuda"
+      ],
+      "licenca": "Apache-2.0 (conferir no card do modelo)",
+      "pagina": "https://huggingface.co/Wan-AI/Wan2.1-VACE-1.3B",
+      "url_arquivo": null,
+      "nota": "futuro: exige NVIDIA CUDA; VRAM é alvo do projeto, não medição"
+    },
+    {
+      "id": "editctrl-1.3b",
+      "agente": "editor_generativo",
+      "motor": "editctrl-1.3b",
+      "formato": "safetensors",
+      "arquivo": "*.safetensors",
+      "destino": "generativos/editctrl-1.3b",
+      "tamanho_mib": null,
+      "ram_mib": 16000,
+      "vram_mib": 12000,
+      "requer": [
+        "cuda"
+      ],
+      "licenca": "Apache-2.0 (código); conferir pesos",
+      "pagina": "https://huggingface.co/thebluser/Wan2.1-VACE-1.3B-editctrl",
+      "url_arquivo": null,
+      "nota": "futuro; reimplementação pública do EditCtrl"
+    },
+    {
+      "id": "ltx-2.3",
+      "agente": "gerador",
+      "motor": "ltx-2",
+      "formato": "safetensors",
+      "arquivo": "*.safetensors",
+      "destino": "generativos/ltx-2.3",
+      "tamanho_mib": null,
+      "ram_mib": 32000,
+      "vram_mib": 16000,
+      "requer": [
+        "cuda"
+      ],
+      "licenca": "LTX-2 Community License (restrições comerciais)",
+      "pagina": "https://huggingface.co/Lightricks/LTX-2.3",
+      "url_arquivo": null,
+      "nota": "futuro"
+    },
+    {
+      "id": "wan2.2-ti2v-5b",
+      "agente": "gerador",
+      "motor": "wan2.2-ti2v-5b",
+      "formato": "safetensors",
+      "arquivo": "*.safetensors",
+      "destino": "generativos/wan2.2-ti2v-5b",
+      "tamanho_mib": null,
+      "ram_mib": 32000,
+      "vram_mib": 24000,
+      "requer": [
+        "cuda"
+      ],
+      "licenca": "Apache-2.0 (conferir no card do modelo)",
+      "pagina": "https://huggingface.co/Wan-AI/Wan2.2-TI2V-5B",
+      "url_arquivo": null,
+      "nota": "README oficial: ≥24 GB com offload; acima do alvo de 16 GB"
+    }
+  ]
+}

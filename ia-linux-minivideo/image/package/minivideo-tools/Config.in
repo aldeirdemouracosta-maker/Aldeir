@@ -1,0 +1,12 @@
+config BR2_PACKAGE_MINIVIDEO_TOOLS
+	bool "minivideo-tools"
+	depends on BR2_PACKAGE_PYTHON3
+	select BR2_PACKAGE_PYTHON3_CURSES
+	select BR2_PACKAGE_NCURSES_WCHAR
+	help
+	  Interface de pastas (minivideo-ui), agentes de vídeo
+	  (minivideo-agentes), auditoria (minivideo-audit) e Hardware
+	  Safety Guard (minivideo-guard). Sem dependências Python extras.
+
+comment "minivideo-tools precisa de python3"
+	depends on !BR2_PACKAGE_PYTHON3

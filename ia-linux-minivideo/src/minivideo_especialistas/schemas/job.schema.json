@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "minivideo/job.schema.json",
+  "title": "Registro de job reproduzível",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formato",
+    "job_id",
+    "criado_em",
+    "pedido",
+    "entrada",
+    "saida",
+    "modo_orquestrador",
+    "llm",
+    "diretor",
+    "editor",
+    "tarefas",
+    "fiscal",
+    "limites",
+    "versoes",
+    "dispositivos",
+    "resultado"
+  ],
+  "properties": {
+    "formato": {
+      "const": "minivideo-job/1"
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]{1,128}$"
+    },
+    "criado_em": {
+      "type": "string"
+    },
+    "pedido": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "entrada": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "saida": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "modo_orquestrador": {
+      "enum": [
+        "regras",
+        "qwen",
+        "auto"
+      ]
+    },
+    "llm": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "diretor": {
+      "type": "object"
+    },
+    "editor": {
+      "type": "object"
+    },
+    "tarefas": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "fiscal": {
+      "type": "object"
+    },
+    "continuista": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "limites": {
+      "type": "object"
+    },
+    "versoes": {
+      "type": "object"
+    },
+    "dispositivos": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "resultado": {
+      "type": "object"
+    }
+  }
+}

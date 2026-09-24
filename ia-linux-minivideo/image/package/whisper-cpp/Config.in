@@ -1,0 +1,21 @@
+config BR2_PACKAGE_WHISPER_CPP
+	bool "whisper.cpp"
+	depends on BR2_INSTALL_LIBSTDCPP
+	depends on BR2_TOOLCHAIN_HAS_THREADS
+	depends on BR2_TOOLCHAIN_GCC_AT_LEAST_9
+	depends on BR2_USE_WCHAR
+	help
+	  Transcrição de fala (Whisper) em C/C++ — instala whisper-cli.
+	  Modelos ggml-*.bin ficam fora da imagem, em Modelos/whisper/.
+
+	  https://github.com/ggml-org/whisper.cpp
+
+if BR2_PACKAGE_WHISPER_CPP
+
+config BR2_PACKAGE_WHISPER_CPP_VULKAN
+	bool "Vulkan (RADV / RX 580)"
+	depends on !BR2_STATIC_LIBS
+	select BR2_PACKAGE_VULKAN_LOADER
+	select BR2_PACKAGE_VULKAN_HEADERS
+
+endif

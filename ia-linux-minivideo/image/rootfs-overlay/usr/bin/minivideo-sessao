@@ -1,0 +1,13 @@
+#!/bin/sh
+# Sessão do tty1: roda a interface de pastas como usuário minivideo.
+# Ao sair (Q), mostra um menu curto; a sessão volta pelo respawn do init.
+[ -r /run/minivideo.env ] && . /run/minivideo.env
+export MINIVIDEO_HOME LANG=C.UTF-8 TERM=linux
+su -s /bin/sh minivideo -c "MINIVIDEO_HOME='$MINIVIDEO_HOME' LANG=C.UTF-8 TERM=linux minivideo-ui"
+echo
+echo "IA-Linux MiniVideo — [Enter] reabrir a interface · [d] desligar · [r] reiniciar"
+read -r op
+case "$op" in
+    d|D) poweroff ;;
+    r|R) reboot ;;
+esac

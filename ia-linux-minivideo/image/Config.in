@@ -1,0 +1,7 @@
+menu "IA-Linux MiniVideo"
+source "$BR2_EXTERNAL_IA_MINIVIDEO_PATH/package/minivideo-tools/Config.in"
+source "$BR2_EXTERNAL_IA_MINIVIDEO_PATH/package/whisper-cpp/Config.in"
+source "$BR2_EXTERNAL_IA_MINIVIDEO_PATH/package/auto-editor-bin/Config.in"
+source "$BR2_EXTERNAL_IA_MINIVIDEO_PATH/package/rife-ncnn-vulkan-bin/Config.in"
+source "$BR2_EXTERNAL_IA_MINIVIDEO_PATH/package/realesrgan-ncnn-vulkan-bin/Config.in"
+endmenu

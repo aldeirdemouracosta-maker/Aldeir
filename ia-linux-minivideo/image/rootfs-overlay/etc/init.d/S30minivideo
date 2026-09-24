@@ -1,0 +1,52 @@
+#!/bin/sh
+# S30minivideo — prepara console, dados, GPU e áudio para o IA-Linux MiniVideo.
+# Nada aqui altera clocks, voltagens, ventoinha ou firmware da GPU.
+
+LOG=/run/minivideo-boot.log
+log() { echo "minivideo: $*" | tee -a "$LOG" >/dev/console 2>/dev/null; }
+
+start() {
+    : > "$LOG"
+    # Fonte com ã/õ/ç e teclado ABNT2 no console
+    setfont lat1-16 2>/dev/null || log "fonte lat1-16 indisponível"
+    loadkeys br-abnt2 2>/dev/null || log "mapa de teclado br-abnt2 indisponível"
+
+    # Partição de dados persistente (ext4 com rótulo MV_DADOS)
+    mkdir -p /data
+    DEV="$(findfs LABEL=MV_DADOS 2>/dev/null)"
+    if [ -n "$DEV" ]; then
+        if mount -o noatime "$DEV" /data; then
+            log "dados em $DEV montados em /data"
+        else
+            log "falha ao montar $DEV; seguindo sem dados persistentes"
+        fi
+    else
+        log "partição MV_DADOS não encontrada: trabalho fica em RAM e some ao desligar"
+    fi
+    if mountpoint -q /data; then
+        HOME_MV=/data/minivideo
+    else
+        HOME_MV=/home/minivideo/MiniVideo
+    fi
+    for d in Projetos Midia Modelos Saidas Jobs Logs; do mkdir -p "$HOME_MV/$d"; done
+    chown -R minivideo:minivideo "$HOME_MV" 2>/dev/null
+    echo "MINIVIDEO_HOME=$HOME_MV" > /run/minivideo.env
+
+    # Sem udev: dá acesso à GPU (render/card) e ao áudio aos grupos certos
+    if [ -d /dev/dri ]; then
+        chgrp video /dev/dri/card* 2>/dev/null; chmod 0660 /dev/dri/card* 2>/dev/null
+        chgrp render /dev/dri/renderD* 2>/dev/null; chmod 0660 /dev/dri/renderD* 2>/dev/null
+    else
+        log "sem /dev/dri: GPU não inicializada (veja 'dmesg | grep amdgpu')"
+    fi
+    if [ -d /dev/snd ]; then
+        chgrp -R audio /dev/snd; chmod 0660 /dev/snd/* 2>/dev/null
+    fi
+    grep -q "minivideo.recuperacao=1" /proc/cmdline && log "modo de recuperação: sem aceleração de GPU"
+}
+
+case "$1" in
+    start) start ;;
+    stop) sync ;;
+    *) echo "uso: $0 {start|stop}"; exit 1 ;;
+esac

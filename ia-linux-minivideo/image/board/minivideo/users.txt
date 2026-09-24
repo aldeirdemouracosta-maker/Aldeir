@@ -1,0 +1,1 @@
+minivideo -1 minivideo -1 * /home/minivideo /bin/sh video,audio,render Usuario do IA-Linux MiniVideo

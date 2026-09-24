@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "minivideo/editor.schema.json",
+  "title": "Editor",
+  "description": "Seleciona apenas operações (agentes) e motores cadastrados para cada cena.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "papel",
+    "versao",
+    "origem",
+    "operacoes",
+    "rejeitados",
+    "montagem"
+  ],
+  "properties": {
+    "papel": {
+      "const": "editor"
+    },
+    "versao": {
+      "const": 1
+    },
+    "origem": {
+      "enum": [
+        "regras",
+        "llm"
+      ]
+    },
+    "operacoes": {
+      "type": "array",
+      "maxItems": 120,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "cena",
+          "agente",
+          "motor",
+          "params"
+        ],
+        "properties": {
+          "cena": {
+            "type": "string",
+            "pattern": "^c[0-9]{1,2}$"
+          },
+          "agente": {
+            "enum": [
+              "cortador",
+              "silencios",
+              "audio",
+              "cenas",
+              "transcritor",
+              "legendas",
+              "interpolador",
+              "upscaler",
+              "escala",
+              "exportador",
+              "gerador",
+              "editor_generativo",
+              "montador"
+            ]
+          },
+          "motor": {
+            "enum": [
+              "ffmpeg",
+              "auto-editor",
+              "whisper.cpp",
+              "rife-ncnn-vulkan",
+              "realesrgan-ncnn-vulkan",
+              "llama.cpp",
+              "stable-diffusion.cpp",
+              "wan2.1-vace-1.3b",
+              "editctrl-1.3b",
+              "dfvedit-wan-1.3b",
+              "ltx-2",
+              "wan2.2-ti2v-5b"
+            ]
+          },
+          "params": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "rejeitados": {
+      "type": "array",
+      "maxItems": 60,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "cena",
+          "objetivo",
+          "motivo"
+        ],
+        "properties": {
+          "cena": {
+            "type": "string",
+            "pattern": "^c[0-9]{1,2}$"
+          },
+          "objetivo": {
+            "enum": [
+              "cortar",
+              "remover_silencios",
+              "limpar_audio",
+              "normalizar_audio",
+              "detectar_cenas",
+              "interpolar",
+              "camera_lenta",
+              "upscale_ia",
+              "escalar",
+              "transcrever",
+              "legendar",
+              "gerar_video",
+              "editar_generativo"
+            ]
+          },
+          "motivo": {
+            "type": "string",
+            "maxLength": 300
+          }
+        }
+      }
+    },
+    "montagem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "transicao",
+        "duracao_transicao_s"
+      ],
+      "properties": {
+        "transicao": {
+          "enum": [
+            "corte",
+            "crossfade"
+          ]
+        },
+        "duracao_transicao_s": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2
+        }
+      }
+    }
+  }
+}
