@@ -1,5 +1,39 @@
 # Changelog — IA Linux Minimal
 
+## Ajuste de CPU: AVX1 habilitado para o Xeon X79 de referência
+
+Depois de revisar pesquisas externas sobre otimização de IA local no
+hardware alvo real (RX 580 + Xeon plataforma X79 — Sandy Bridge-E/Ivy
+Bridge-E, com AVX1 mas sem AVX2/AVX-512), conferimos o que os
+defconfigs `bios`/`uefi` realmente declaram para o toolchain: só
+`BR2_X86_CPU_HAS_SSE4=y`, sem nenhuma opção `BR2_X86_CPU_HAS_AVX*`.
+Isso não é um bug (o sistema builda e funciona normalmente), mas é
+sub-ótimo: o toolchain do Buildroot nunca teria motivo pra emitir
+instruções AVX1, mesmo a CPU real suportando.
+
+Adicionado `BR2_X86_CPU_HAS_AVX=y` em `ia_linux_bios_x86_64_defconfig`
+e `ia_linux_uefi_x86_64_defconfig` (não no `qemu`, que é alvo de
+desenvolvimento/CPU genérica, não o hardware físico de referência).
+Deliberadamente **não** habilitamos `BR2_X86_CPU_HAS_AVX2` nem
+`_AVX512` — nessas CPUs isso geraria `SIGILL` em tempo de execução,
+exatamente o alerta central da pesquisa sobre X79 (nunca copiar/gerar
+binário compilado para uma CPU mais nova que a real).
+
+O Mesa/RADV + Vulkan + `llama.cpp` com backend Vulkan (a outra parte
+central da pesquisa, para a RX 580) **já estavam implementados** nos
+defconfigs antes desta mudança (`BR2_PACKAGE_MESA3D_VULKAN_DRIVER_AMD`,
+`BR2_PACKAGE_LLAMA_CPP_VULKAN`) — nenhuma mudança foi necessária aí.
+
+**Não pôde ser testado neste sandbox** (sem a árvore Buildroot real
+nem o hardware). `BR2_X86_CPU_HAS_AVX` é um símbolo padrão e bem
+estabelecido do Kconfig de arquitetura x86 do Buildroot (mesma família
+de `BR2_X86_CPU_HAS_SSE4`, já em uso e já validada por builds reais
+anteriores nesta sessão), mas ainda assim recomendamos rodar
+`scripts/validate-buildroot-configs.sh` antes do próximo build para
+confirmar contra a árvore 2026.08 real. Essa mudança só afeta flags de
+compilação do toolchain — não deveria, sozinha, exigir mudança de
+kernel nem de genimage.
+
 ## Bug crítico de boot físico: kernel sem driver de disco SCSI (`CONFIG_SCSI`/`CONFIG_BLK_DEV_SD`)
 
 Segundo boot físico real, depois de corrigido o bug do GRUB não embutido
