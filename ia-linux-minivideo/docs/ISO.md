@@ -4,12 +4,12 @@ Sistema inicializável dedicado **somente** à criação e edição de vídeo co
 agentes de IA locais. Não inclui chat genérico, criação de aplicativos nem
 os serviços `ai-core`/`ia-shell` da base.
 
-> **Estado em 2026-09-24:** configuração validada contra o Buildroot 2026.08
-> real e kernel compilado de verdade (veja "O que foi testado"). **O ISO
-> completo ainda não foi compilado nem inicializado**: este ambiente de
-> desenvolvimento só alcança o GitHub. O workflow
-> `.github/workflows/minivideo-iso.yml` compila o ISO e dá boot no QEMU
-> no GitHub Actions. Nada foi testado na RX 580 ainda.
+> **Estado em 2026-09-24:** o ISO completo compila no GitHub Actions
+> (workflow `.github/workflows/minivideo-iso.yml`) e passa no autoteste de
+> boot no QEMU (run 36015350849: "AUTOTESTE: OK"). O boot **UEFI** foi
+> acrescentado depois desse run e testado aqui num ISO de teste com o mesmo
+> kernel e o mesmo `post-image.sh` (veja "O que foi testado"); no ISO
+> completo ele é validado pela CI. Nada foi testado na RX 580 ainda.
 
 ## Arquitetura em camadas
 
@@ -31,7 +31,7 @@ os serviços `ai-core`/`ia-shell` da base.
 │ + linux-minivideo.fragment (aditivo: áudio, initrd, fbcon,  │
 │   rede, exFAT/NTFS, sensores, preparo APU/NVIDIA)           │
 ├─────────────────────────────────────────────────────────────┤
-│ ISO híbrido isolinux (BIOS) · rootfs inteiro no initramfs   │
+│ ISO híbrido: isolinux (BIOS) + GRUB EFI (UEFI) · initramfs  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -75,7 +75,31 @@ Onde ficam os modelos:
 | Coordenador | `Modelos/llm/*.gguf` | não (Qwen3-1.7B ou 0.6B) |
 | Gerador/editor | via `mini-ia-videos` + CUDA | não (futuro) |
 
-## Menu de boot (isolinux)
+## Boot: BIOS/legado e UEFI no mesmo ISO
+
+O mesmo arquivo dá boot em BIOS/legado (CSM) e em UEFI, gravado em CD ou em
+pendrive:
+
+- **BIOS/legado:** isolinux (menu abaixo), como antes.
+- **UEFI:** o `board/minivideo/post-image.sh` refaz o ISO do Buildroot com
+  uma segunda entrada El Torito, uma imagem FAT (`/boot/efiboot.img`) com
+  o GRUB EFI (`BOOTX64.EFI`). Com `-isohybrid-gpt-basdat`, essa imagem
+  também vira partição EFI quando o ISO é gravado no pendrive com `dd`. O
+  GRUB acha o ISO pelo arquivo `/boot/minivideo-uefi.id` e carrega o menu
+  de `/boot/grub/grub.cfg` (`board/minivideo/grub-uefi.cfg`), que tem as
+  mesmas três entradas.
+- **Kernel:** o fragmento MiniVideo liga `EFI`, `EFI_STUB` e o framebuffer
+  do firmware (`SYSFB_SIMPLEFB` + `DRM_SIMPLEDRM`). Sem isso a tela fica
+  preta em UEFI até o `amdgpu` assumir, e no modo de recuperação
+  (`nomodeset`) fica preta para sempre.
+- **Secure Boot:** o GRUB não é assinado. Se a placa tiver Secure Boot,
+  desative-o no firmware (placas X79 em geral não têm).
+
+Por que não o modo "grub2" do próprio Buildroot: ele gera ISO só para CD
+(`BR2_TARGET_ROOTFS_ISO9660_HYBRID` exige isolinux), e a imagem precisa
+dar boot também em pendrive.
+
+### Menu de boot
 
 | Entrada | Uso |
 |---|---|
@@ -95,6 +119,7 @@ cd ia-linux-minivideo/image
 ./scripts/build-iso.sh --so-configurar   # configura e valida as opções (minutos)
 ./scripts/build-iso.sh                   # compila (horas; ~20 GB em ~/minivideo-build)
 ./scripts/testar-qemu.sh                 # boot em VM com disco MV_DADOS de teste
+./scripts/testar-uefi.sh ~/minivideo-build/ia-linux-minivideo.iso disco   # boot UEFI (OVMF)
 ```
 
 `scripts/validar-config.sh` compara cada linha do defconfig com o `.config`
@@ -115,7 +140,10 @@ Gravar no pendrive: `sudo dd if=ia-linux-minivideo.iso of=/dev/sdX bs=4M conv=fs
 | Auto-Editor, RIFE, Real-ESRGAN em CPU **IvyBridge** emulada (seu E5-2630L v2) | sem instrução ilegal | `qemu-x86_64 -cpu IvyBridge` |
 | Mesmos binários em CPU **SandyBridge** (E5 v1) | Auto-Editor ok; RIFE e Real-ESRGAN falham, e o Real-ESRGAN aborta dentro do LLVM do llvmpipe (Vulkan por software) | não conclusivo para GPU real |
 | Interface de pastas | navegação, ajuda, terminal de prompt, execução de job | pty real + `pyte` |
-| ISO completo, boot, RX 580, VA-API, áudio, sensores | **não testado** | pendente (CI e hardware) |
+| ISO completo: compilação + boot BIOS no QEMU + autoteste | **OK** | CI, run 36015350849 |
+| Boot UEFI: kernel 6.18.52 com o fragmento (EFI + simpledrm) + `post-image.sh` + GRUB EFI | **OK** em OVMF como pendrive e como CD; BIOS continua OK (CD e pendrive); o ISO antigo falha em UEFI (`BdsDxe: failed to load`), como esperado | ISO de teste com initramfs mínimo (busybox), GRUB 2.12 do host; `scripts/testar-uefi.sh` |
+| Boot UEFI do ISO completo (GRUB 2.14 do Buildroot) | pendente | CI (passo "Boot UEFI") |
+| RX 580, VA-API, áudio, sensores, UEFI em placa real | **não testado** | pendente (hardware) |
 
 ## Defeitos encontrados na base (IA Linux Minimal), não corrigidos lá
 
@@ -156,5 +184,5 @@ e o `minivideo-modelos catalogo`.
 |---|---|---|
 | **APU AMD** (Ryzen com gráficos integrados) | amdgpu + firmware, RADV, `CPU_SUP_AMD`, `AMD_IOMMU`, `k10temp`; agentes classificam `vulkan-apu` (memória compartilhada, sem barrar por VRAM) | teste em hardware; limite de GTT no Safety Guard |
 | **NVIDIA/CUDA** (16 GB alvo, 12 GB mínimo) | `nouveau` desligado, `MODULES=y`; agentes classificam `cuda` e exigem ≥12 GB; backend NVIDIA do Guard (`nvidia-smi`) | pacote próprio com os módulos abertos da NVIDIA e o espaço de usuário CUDA (o `nvidia-driver` do Buildroot é o legado 390.151); PyTorch/diffusers para Wan/LTX; partição de dados maior |
-| **UEFI sem CSM** (placas novas) | — | segunda variante com GRUB EFI (o ISO isolinux atual só dá boot em BIOS/legado) |
+| **UEFI sem CSM** (placas novas) | GRUB EFI no mesmo ISO, kernel com stub EFI e simpledrm | teste em placa real; Secure Boot (shim assinado) |
 | **GPUs mistas** | cada GPU é um dispositivo independente; roteamento dGPU → APU → CUDA | escalonador por dispositivo com limite de memória |

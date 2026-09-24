@@ -7,6 +7,15 @@
 CONFIG_BLK_DEV_INITRD=y
 CONFIG_RD_GZIP=y
 
+# Boot UEFI: o GRUB EFI do ISO carrega o kernel pelo stub EFI. Sem framebuffer
+# do firmware (simpledrm) a tela fica preta em UEFI até o amdgpu assumir, e no
+# modo de recuperação (nomodeset) ficaria preta para sempre.
+CONFIG_EFI=y
+CONFIG_EFI_STUB=y
+CONFIG_EFI_PARTITION=y
+CONFIG_SYSFB_SIMPLEFB=y
+CONFIG_DRM_SIMPLEDRM=y
+
 # Console na tela depois que o amdgpu assume o vídeo (prévia com mpv --vo=drm)
 CONFIG_DRM_FBDEV_EMULATION=y
 CONFIG_FRAMEBUFFER_CONSOLE=y

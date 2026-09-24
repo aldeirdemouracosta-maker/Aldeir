@@ -1,7 +1,8 @@
 name: MiniVideo - ISO
 
 # Compila o ISO do IA-Linux MiniVideo (Buildroot 2026.08 + kernel do IA Linux
-# Minimal) e dá boot nele no QEMU. QEMU valida boot, initramfs, init,
+# Minimal) e dá boot nele no QEMU, em BIOS e em UEFI (OVMF, como CD e como
+# pendrive). QEMU valida boot, initramfs, init,
 # interface e FFmpeg — NÃO valida RX 580, Vulkan RADV, VA-API nem sensores.
 on:
   workflow_dispatch:
@@ -31,7 +32,7 @@ jobs:
           sudo mkdir -p "$MINIVIDEO_WORK" && sudo chown "$USER" "$MINIVIDEO_WORK"
           sudo apt-get update -qq
           sudo apt-get install -y -qq build-essential git unzip rsync bc cpio file wget patch \
-               glslc libelf-dev libssl-dev python3 qemu-system-x86 imagemagick
+               glslc libelf-dev libssl-dev python3 qemu-system-x86 ovmf imagemagick
           df -h / /mnt
 
       - name: Restaurar cache (downloads + ccache)
@@ -88,6 +89,14 @@ jobs:
           kill %1 || true
           for f in "$MINIVIDEO_WORK"/tela-*.ppm; do convert "$f" "${f%.ppm}.png"; done
 
+      - name: Boot UEFI (OVMF) como pendrive e como CD
+        env:
+          MEM: 6G
+        run: |
+          S=ia-linux-minivideo/image/scripts/testar-uefi.sh
+          "$S" "$MINIVIDEO_WORK/ia-linux-minivideo.iso" disco "$MINIVIDEO_WORK/uefi-disco.log"
+          "$S" "$MINIVIDEO_WORK/ia-linux-minivideo.iso" cd "$MINIVIDEO_WORK/uefi-cd.log"
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -96,6 +105,7 @@ jobs:
             /mnt/minivideo/ia-linux-minivideo.iso
             /mnt/minivideo/ia-linux-minivideo.iso.sha256
             /mnt/minivideo/serial.log
+            /mnt/minivideo/uefi-*.log
             /mnt/minivideo/build.log
             /mnt/minivideo/tela-*.png
             /mnt/minivideo/output/.config

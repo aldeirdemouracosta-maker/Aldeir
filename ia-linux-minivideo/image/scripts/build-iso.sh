@@ -4,7 +4,7 @@
 # Camadas (BR2_EXTERNAL):
 #   1. IA Linux Minimal, fixado no commit IA_LINUX_MINIMAL_REF (kernel 6.18.52)
 #   2. esta pasta (image/): vídeo, agentes e interface de pastas
-# Resultado: $MINIVIDEO_WORK/output/images/rootfs.iso9660 (ISO híbrido BIOS).
+# Resultado: $MINIVIDEO_WORK/output/images/rootfs.iso9660 (ISO híbrido BIOS + UEFI).
 set -eu
 
 IMG="$(cd "$(dirname "$0")/.." && pwd)"

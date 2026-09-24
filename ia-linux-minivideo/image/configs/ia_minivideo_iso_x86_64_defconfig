@@ -1,4 +1,4 @@
-# IA-Linux MiniVideo — ISO híbrido (CD/pendrive, BIOS legado) para Xeon X79 + RX 580
+# IA-Linux MiniVideo — ISO híbrido (CD/pendrive, BIOS legado e UEFI) para Xeon X79 + RX 580
 # Buildroot 2026.08. Duas camadas BR2_EXTERNAL:
 #   IA_LINUX      = IA Linux Minimal (kernel 6.18.52 e sua configuração, sem alteração)
 #   IA_MINIVIDEO  = esta pasta (vídeo, agentes, interface de pastas)
@@ -35,6 +35,8 @@ BR2_SYSTEM_DHCP="eth0"
 BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_IA_MINIVIDEO_PATH)/rootfs-overlay"
 BR2_ROOTFS_USERS_TABLES="$(BR2_EXTERNAL_IA_MINIVIDEO_PATH)/board/minivideo/users.txt"
 BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_IA_MINIVIDEO_PATH)/board/minivideo/post-build.sh"
+# Refaz o ISO com uma segunda entrada de boot: GRUB EFI (ver bloco UEFI abaixo)
+BR2_ROOTFS_POST_IMAGE_SCRIPT="$(BR2_EXTERNAL_IA_MINIVIDEO_PATH)/board/minivideo/post-image.sh"
 
 # ---- Kernel: o mesmo do IA Linux Minimal + fragmento aditivo de vídeo ----
 BR2_LINUX_KERNEL=y
@@ -65,6 +67,21 @@ BR2_TARGET_ROOTFS_ISO9660_ISOLINUX=y
 BR2_TARGET_ROOTFS_ISO9660_BOOT_MENU="$(BR2_EXTERNAL_IA_MINIVIDEO_PATH)/board/minivideo/isolinux.cfg"
 BR2_TARGET_ROOTFS_ISO9660_INITRD=y
 BR2_TARGET_ROOTFS_ISO9660_HYBRID=y
+
+# ---- UEFI: GRUB EFI como segunda entrada El Torito (post-image.sh) ----
+# O modo "grub2" do Buildroot não gera ISO gravável em pendrive (o híbrido só
+# existe com isolinux). Então o isolinux continua no BIOS/legado e o
+# post-image.sh acrescenta o BOOTX64.EFI numa imagem FAT, com
+# -isohybrid-gpt-basdat: um só ISO para BIOS e UEFI, em CD e em pendrive.
+# O GRUB não é assinado: com Secure Boot ligado, desative-o no firmware.
+BR2_TARGET_GRUB2=y
+# BR2_TARGET_GRUB2_I386_PC is not set
+BR2_TARGET_GRUB2_X86_64_EFI=y
+BR2_TARGET_GRUB2_BUILTIN_MODULES_EFI="boot linux ext2 fat part_msdos part_gpt normal efi_gop efi_uga iso9660 search search_fs_file configfile echo test gzio all_video serial terminal"
+BR2_TARGET_GRUB2_BUILTIN_CONFIG_EFI="$(BR2_EXTERNAL_IA_MINIVIDEO_PATH)/board/minivideo/grub-efi-embutido.cfg"
+BR2_PACKAGE_HOST_XORRISO=y
+BR2_PACKAGE_HOST_DOSFSTOOLS=y
+BR2_PACKAGE_HOST_MTOOLS=y
 
 # ---- GPU AMD: Vulkan RADV + VA-API (codificação H.264/HEVC na RX 580) ----
 BR2_PACKAGE_MESA3D=y
