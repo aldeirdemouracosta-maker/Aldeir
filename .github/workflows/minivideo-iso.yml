@@ -115,7 +115,7 @@ jobs:
           ACCEL=""; [ -w /dev/kvm ] && ACCEL="-enable-kvm"
           qemu-system-x86_64 $ACCEL -m 6G -smp 2 -cpu "$QEMU_CPU" -cdrom "$ISO" \
             -boot d -vga std -display none -monitor unix:/tmp/qmon,server,nowait &
-          for t in 8 120; do
+          for t in 8 150; do   # 8 s: menu de boot; 150 s: interface gráfica (Xorg + Fluxbox + PCManFM)
             sleep "$t"
             python3 - "$MINIVIDEO_WORK/tela-$t.ppm" <<'PY'
           import socket, sys, time

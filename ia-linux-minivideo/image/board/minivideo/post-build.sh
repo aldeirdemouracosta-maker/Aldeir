@@ -16,7 +16,9 @@ for f in usr/bin/minivideo-ui usr/bin/minivideo-modelos usr/bin/llama-bench usr/
          usr/bin/ffmpeg usr/bin/ffprobe usr/bin/mpv usr/bin/auto-editor usr/bin/rife-ncnn-vulkan usr/bin/realesrgan-ncnn-vulkan \
          usr/bin/whisper-cli usr/bin/llama-server etc/init.d/S30minivideo usr/bin/minivideo-sessao \
          usr/bin/minivideo-prompts usr/bin/minivideo-atualizar usr/bin/minivideo-diagnostico \
-         usr/bin/minivideo-preparar-disco usr/bin/minivideo-wifi usr/sbin/wpa_supplicant usr/sbin/iw usr/bin/openssl; do
+         usr/bin/minivideo-preparar-disco usr/bin/minivideo-wifi usr/sbin/wpa_supplicant usr/sbin/iw usr/bin/openssl \
+         usr/bin/Xorg usr/bin/xinit usr/bin/fluxbox usr/bin/startfluxbox usr/bin/pcmanfm usr/bin/xterm \
+         usr/libexec/minivideo/sessao-grafica etc/minivideo/fluxbox/startup; do
     if [ ! -e "${TARGET_DIR}/${f}" ]; then
         echo "post-build: faltando ${f} no rootfs" >&2
         exit 1

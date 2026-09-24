@@ -58,6 +58,11 @@ CONFIG_BLK_DEV_SR=y
 CONFIG_BLK_DEV_LOOP=y
 CONFIG_USB_UAS=y
 
+# Modo gráfico (Xorg): evdev entrega teclado e mouse ao libinput; bochs é o
+# vídeo da VM do QEMU (para a CI testar o Xorg de verdade; inofensivo no PC).
+CONFIG_INPUT_EVDEV=y
+CONFIG_DRM_BOCHS=y
+
 # Console na tela depois que o amdgpu assume o vídeo (prévia com mpv --vo=drm)
 CONFIG_DRM_FBDEV_EMULATION=y
 CONFIG_FRAMEBUFFER_CONSOLE=y

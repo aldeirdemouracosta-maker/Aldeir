@@ -14,7 +14,7 @@ mkdir -p "$W"
 say "início (kernel $(uname -r))"
 cat /etc/minivideo-release > /dev/console
 
-for b in minivideo-modelos minivideo-prompts minivideo-atualizar minivideo-diagnostico minivideo-preparar-disco minivideo-wifi wpa_supplicant iw llama-bench ffmpeg ffprobe mpv auto-editor whisper-cli llama-server rife-ncnn-vulkan realesrgan-ncnn-vulkan \
+for b in minivideo-modelos minivideo-prompts minivideo-atualizar minivideo-diagnostico minivideo-preparar-disco minivideo-wifi wpa_supplicant iw xinit Xorg fluxbox startfluxbox pcmanfm xterm llama-bench ffmpeg ffprobe mpv auto-editor whisper-cli llama-server rife-ncnn-vulkan realesrgan-ncnn-vulkan \
          vulkaninfo minivideo-ui minivideo-agentes minivideo-guard minivideo-audit; do
     command -v "$b" >/dev/null || fail "binário ausente: $b"
 done
@@ -71,6 +71,18 @@ minivideo-diagnostico --relatorio --workspace "$W/ws" > /dev/console 2>&1 || fai
 ls "$W"/ws/Logs/diagnostico-*.txt > /dev/null 2>&1 || fail "relatório de diagnóstico não foi gravado"
 minivideo-preparar-disco listar > /dev/console 2>&1 || fail "minivideo-preparar-disco listar"
 minivideo-wifi estado > /dev/console 2>&1 || fail "minivideo-wifi estado"
+# Modo gráfico: o Xorg precisa subir de verdade (na VM, vídeo bochs pelo modesetting)
+# (o busybox do ISO não tem "timeout": espera manual de até 90 s)
+xinit /usr/bin/xdpyinfo -- /usr/bin/Xorg :5 vt5 -ac -nolisten tcp > "$W/xorg.log" 2>&1 &
+XPID=$!; i=0
+while kill -0 "$XPID" 2>/dev/null && [ "$i" -lt 90 ]; do sleep 1; i=$((i + 1)); done
+kill "$XPID" 2>/dev/null
+if grep -q "dimensions:" "$W/xorg.log"; then
+    say "Xorg iniciou: $(grep dimensions: "$W/xorg.log" | head -1 | tr -s ' ')"
+else
+    cat "$W/xorg.log" > /dev/console; tail -40 /var/log/Xorg.5.log > /dev/console 2>&1
+    fail "Xorg não inicia"
+fi
 # Na CI há um disco SATA vazio só para isto (minivideo.autoteste.disco=sda): prepara de verdade e confere
 DISCO="$(sed -n 's/.*minivideo\.autoteste\.disco=\([a-z0-9]*\).*/\1/p' /proc/cmdline)"
 if [ -n "$DISCO" ]; then

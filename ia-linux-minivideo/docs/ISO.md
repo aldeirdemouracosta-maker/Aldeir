@@ -120,12 +120,27 @@ dar boot também em pendrive.
 
 ### Menu de boot
 
-| Entrada | Uso |
+Aparece ao ligar o computador: isolinux em BIOS/legado, GRUB em UEFI. Em
+UEFI, as teclas 1, 2, 3 e D escolhem a entrada direto.
+
+| Entrada | O que inicia |
 |---|---|
-| IA-Linux MiniVideo (RX 580 / Vulkan) | normal |
-| IA-Linux MiniVideo - carregar tudo na RAM | `minivideo.toram=1`: dá para tirar o pendrive |
-| Recuperação: sem GPU (`nomodeset`) | tela preta ou travamento no `amdgpu` |
-| Diagnóstico: console serial + tela (no UEFI, tecla **D** no menu) | logs completos (`loglevel=7`) |
+| **1. Interface** (padrão) | Xorg + Fluxbox + PCManFM. A janela "MiniVideo" (a mesma interface de pastas) abre dentro de um xterm; o menu do Fluxbox (clique direito na área de trabalho) tem Arquivos, Terminal, Diagnóstico e Wi-Fi. Se o Xorg não subir, a sessão volta sozinha para o modo terminal |
+| **2. Terminal** | a interface de pastas no console, como antes |
+| **3. Recuperação** | terminal com `nomodeset` (sem aceleração da GPU), para tela preta ou travamento no `amdgpu` |
+| Interface carregando tudo na RAM | igual à 1, com `minivideo.toram=1` (dá para tirar o pendrive) |
+| Diagnóstico: console serial | terminal com logs completos (`loglevel=7`) também na serial |
+
+Ao sair de qualquer modo, um menu curto oferece: reabrir, **[t]** modo terminal,
+**[g]** modo gráfico, Wi-Fi, preparar disco, desligar e reiniciar.
+
+Modo gráfico, por dentro:
+- **Xorg:** roda como root com `-ac -nolisten tcp`, sem rede e só com processos locais.
+- **Sessão:** Fluxbox, PCManFM e os programas rodam como o usuário `minivideo`.
+- **Teclado:** ABNT2.
+- **Vídeos:** abrem no mpv com duplo clique.
+- **Configuração:** fica em `~/.fluxbox/startup` e `~/.fluxbox/menu`, criados na primeira vez.
+- **Pacotes de base:** libinput (via eudev) e libglvnd, que permite GLX e VA-API juntos no Mesa.
 
 ## Como compilar
 

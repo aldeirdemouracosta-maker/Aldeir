@@ -1,16 +1,45 @@
 #!/bin/sh
-# Sessão do tty1: roda a interface de pastas como usuário minivideo.
-# Ao sair (Q), mostra um menu curto; a sessão volta pelo respawn do init.
+# Sessão do tty1 (roda como root pelo inittab; respawn ao terminar).
+#   minivideo.modo=grafico  → Xorg + Fluxbox + PCManFM (usuário minivideo)
+#   minivideo.modo=terminal → interface de pastas no console (como antes)
+# Se o Xorg não subir, marca /run/minivideo-x-falhou e usa o terminal até reiniciar.
 [ -r /run/minivideo.env ] && . /run/minivideo.env
 export MINIVIDEO_HOME LANG=C.UTF-8 TERM=linux
-su -s /bin/sh minivideo -c "MINIVIDEO_HOME='$MINIVIDEO_HOME' LANG=C.UTF-8 TERM=linux minivideo-ui"
+
+modo=terminal
+grep -q "minivideo.modo=grafico" /proc/cmdline && modo=grafico
+[ -e /run/minivideo-x-falhou ] || [ -e /run/minivideo-forcar-terminal ] && modo=terminal
+command -v xinit >/dev/null || modo=terminal
+
+if [ "$modo" = grafico ]; then
+    inicio=$(date +%s)
+    # -ac -nolisten tcp: sem rede e sem cookie; só processos locais (sistema de um usuário)
+    xinit /usr/libexec/minivideo/sessao-grafica -- /usr/bin/Xorg :0 vt1 -ac -nolisten tcp -keeptty \
+        > /var/log/minivideo-xinit.log 2>&1
+    if [ $(( $(date +%s) - inicio )) -lt 15 ]; then
+        touch /run/minivideo-x-falhou
+        echo
+        echo "A interface gráfica não iniciou (detalhes: /var/log/Xorg.0.log e /var/log/minivideo-xinit.log)."
+        echo "Abrindo o modo terminal. Tecla D → R na interface gera o relatório para diagnóstico."
+        sleep 5
+        su -s /bin/sh minivideo -c "MINIVIDEO_HOME='$MINIVIDEO_HOME' LANG=C.UTF-8 TERM=linux minivideo-ui"
+    fi
+else
+    su -s /bin/sh minivideo -c "MINIVIDEO_HOME='$MINIVIDEO_HOME' LANG=C.UTF-8 TERM=linux minivideo-ui"
+fi
+
 echo
-echo "IA-Linux MiniVideo — [Enter] reabrir a interface · [d] desligar · [r] reiniciar"
+echo "IA-Linux MiniVideo — [Enter] reabrir · [t] modo terminal · [g] modo gráfico · [d] desligar · [r] reiniciar"
 echo "                     [w] Wi-Fi · [p] preparar disco de dados MV_DADOS (APAGA o disco escolhido)"
 read -r op
 case "$op" in
     d|D) poweroff ;;
     r|R) reboot ;;
+    t|T) touch /run/minivideo-forcar-terminal ;;
+    g|G) rm -f /run/minivideo-forcar-terminal /run/minivideo-x-falhou
+         grep -q "minivideo.modo=grafico" /proc/cmdline || {
+             echo "Este boot foi no modo Terminal: para o gráfico, reinicie e escolha 'Interface' no menu."
+             sleep 4; } ;;
     w|W)
         minivideo-wifi --workspace "$MINIVIDEO_HOME" redes
         printf "Nome da rede (SSID; Enter cancela): "

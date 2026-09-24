@@ -1,0 +1,8 @@
+#!/bin/sh
+# Início da sessão gráfica do IA-Linux MiniVideo (Fluxbox). Pode editar à vontade:
+# este arquivo fica em ~/.fluxbox/startup.
+xsetroot -solid "#1f3b5a"
+# PCManFM como janela (sem --desktop: o clique direito na área de trabalho abre o menu do Fluxbox)
+pcmanfm "$MINIVIDEO_HOME" &
+xterm -title "MiniVideo" -fa "DejaVu Sans Mono" -fs 12 -geometry 120x34 -e minivideo-ui &
+exec fluxbox
