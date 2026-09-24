@@ -20,10 +20,14 @@ for b in minivideo-modelos llama-bench ffmpeg ffprobe mpv auto-editor whisper-cl
 done
 say "binários presentes"
 
-# Bibliotecas dos binários pré-compilados resolvem (libgomp, libvulkan, glibc)
-for b in rife-ncnn-vulkan realesrgan-ncnn-vulkan; do
-    if ldd "$(command -v $b)" 2>&1 | grep -q "not found"; then
-        ldd "$(command -v $b)" > /dev/console 2>&1
+# Bibliotecas dos binários pré-compilados resolvem (libgomp, libvulkan, glibc).
+# Buildroot não instala o script ldd: usa o carregador do glibc diretamente.
+LDSO="$(ls /lib64/ld-linux-x86-64.so.2 /lib/ld-linux-x86-64.so.2 2>/dev/null | head -1)"
+[ -n "$LDSO" ] || fail "carregador ld-linux-x86-64.so.2 ausente"
+for b in rife-ncnn-vulkan realesrgan-ncnn-vulkan auto-editor; do
+    libs="$("$LDSO" --list "$(command -v $b)" 2>&1)" || { echo "$libs" > /dev/console; fail "ld.so --list falhou em $b"; }
+    if echo "$libs" | grep -q "not found"; then
+        echo "$libs" > /dev/console
         fail "bibliotecas faltando em $b"
     fi
 done
