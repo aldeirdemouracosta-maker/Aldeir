@@ -4,9 +4,12 @@
 [ -r /run/minivideo.env ] && . /run/minivideo.env
 U=/home/minivideo
 mkdir -p "$U/.fluxbox" "$U/.config"
-for f in startup menu; do
+for f in startup menu overlay; do
     [ -e "$U/.fluxbox/$f" ] || cp "/etc/minivideo/fluxbox/$f" "$U/.fluxbox/$f"
 done
 [ -e "$U/.config/mimeapps.list" ] || cp /etc/minivideo/mimeapps.list "$U/.config/mimeapps.list"
 chown -R minivideo:minivideo "$U/.fluxbox" "$U/.config"
-exec su -s /bin/sh minivideo -c "HOME=$U MINIVIDEO_HOME='$MINIVIDEO_HOME' DISPLAY=:0 LANG=C.UTF-8 exec startfluxbox"
+# Barramento D-Bus da sessão para o GTK3 (PCManFM); NO_AT_BRIDGE evita a espera pelo barramento de acessibilidade
+INICIO=startfluxbox
+command -v dbus-run-session >/dev/null && INICIO="dbus-run-session startfluxbox"
+exec su -s /bin/sh minivideo -c "HOME=$U MINIVIDEO_HOME='$MINIVIDEO_HOME' DISPLAY=:0 LANG=C.UTF-8 NO_AT_BRIDGE=1 exec $INICIO"

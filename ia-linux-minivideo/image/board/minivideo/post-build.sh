@@ -18,12 +18,17 @@ for f in usr/bin/minivideo-ui usr/bin/minivideo-modelos usr/bin/llama-bench usr/
          usr/bin/minivideo-prompts usr/bin/minivideo-atualizar usr/bin/minivideo-diagnostico \
          usr/bin/minivideo-preparar-disco usr/bin/minivideo-wifi usr/sbin/wpa_supplicant usr/sbin/iw usr/bin/openssl \
          usr/bin/Xorg usr/bin/xinit usr/bin/fluxbox usr/bin/startfluxbox usr/bin/pcmanfm usr/bin/xterm \
-         usr/libexec/minivideo/sessao-grafica etc/minivideo/fluxbox/startup; do
+         usr/libexec/minivideo/sessao-grafica etc/minivideo/fluxbox/startup etc/minivideo/fluxbox/overlay; do
     if [ ! -e "${TARGET_DIR}/${f}" ]; then
         echo "post-build: faltando ${f} no rootfs" >&2
         exit 1
     fi
 done
+# O Fluxbox termina o rótulo no primeiro ")": "(Arquivos (PCManFM))" aparece cortado
+if grep -nE '^[[:space:]]*\[[a-z]+\][[:space:]]*\([^)]*\(' "${TARGET_DIR}/etc/minivideo/fluxbox/menu" >&2; then
+    echo "post-build: rótulo do menu do Fluxbox com parênteses dentro (acima)" >&2
+    exit 1
+fi
 
 # Modelos pequenos embutidos (RIFE v4.6, Real-ESRGAN) — o binário do Real-ESRGAN
 # exige "models" no caminho.

@@ -139,8 +139,16 @@ Modo gráfico, por dentro:
 - **Sessão:** Fluxbox, PCManFM e os programas rodam como o usuário `minivideo`.
 - **Teclado:** ABNT2.
 - **Vídeos:** abrem no mpv com duplo clique.
-- **Configuração:** fica em `~/.fluxbox/startup` e `~/.fluxbox/menu`, criados na primeira vez.
+- **Configuração:** fica em `~/.fluxbox/startup`, `~/.fluxbox/menu` e `~/.fluxbox/overlay`, criados na primeira vez.
+  No menu, o rótulo não pode ter parênteses dentro: o Fluxbox corta no primeiro `)`.
+- **D-Bus:** a sessão roda em `dbus-run-session` (o GTK3 do PCManFM espera um barramento).
 - **Pacotes de base:** libinput (via eudev) e libglvnd, que permite GLX e VA-API juntos no Mesa.
+
+![área de trabalho](interface/8-area-de-trabalho.png)
+
+Prévia gerada fora do ISO (Xvfb + Fluxbox/PCManFM/xterm do Ubuntu) com os mesmos
+arquivos de sessão do ISO; o cursor foi desenhado depois. A captura do ISO real
+sai da CI (`tela-150.png` no artefato).
 
 ## Como compilar
 

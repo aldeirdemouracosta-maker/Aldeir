@@ -1,0 +1,2 @@
+! Sobrepõe o estilo do Fluxbox: não pintar o fundo (a cor vem do xsetroot no startup).
+background: none
