@@ -313,8 +313,11 @@ class App:
         try:
             pl = pipeline.planejar(pedido, entrada, "auto", self.ws)
         except Exception as exc:  # plano inválido: mostra o motivo, nunca executa
+            self.msg = "Plano recusado (nada foi executado)."
             self.text_view("Plano", f"Não foi possível planejar: {exc}")
             return
+        self.msg = f"Plano {pl.job_id} pronto (nada foi executado)."
+        self.draw()
         text = _resumo_especialistas(pl)
         if entrada:
             saida = self.b.default_output(entrada)

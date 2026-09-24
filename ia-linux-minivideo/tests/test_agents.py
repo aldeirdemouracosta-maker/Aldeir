@@ -123,6 +123,17 @@ def test_plan_full_request_in_canonical_order():
     assert p.etapas[2].params["altura"] == 1080
 
 
+def test_plan_remove_silence_is_not_generative_edit():
+    """"remova os silêncios/o ruído" é edição comum; "remova o carro" é generativa (CUDA)."""
+    def agentes(pedido):
+        return [e.agente for e in plan_rules(pedido).etapas]
+    assert "editor_generativo" not in agentes("remova os silêncios da entrevista e limpe o áudio")
+    assert agentes("remova o ruído") == ["audio", "exportador"]
+    assert agentes("remova as pausas") == ["silencios", "exportador"]
+    assert "editor_generativo" in agentes("remova o carro do fundo")
+    assert "editor_generativo" in agentes("troque o fundo por uma praia")
+
+
 @pytest.mark.parametrize("pedido,agentes", [
     ("reduza o chiado", ["audio", "exportador"]),
     ("câmera lenta 4x", ["interpolador", "exportador"]),

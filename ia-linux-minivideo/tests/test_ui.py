@@ -101,6 +101,7 @@ def test_tui_prompt_terminal_explains_before_running(ws_with_video):
         screen = t.text()
         assert "DIRETOR" in screen and "REJEITADO c1/gerar_video" in screen
         assert "CUDA" in screen
+        assert "planejando" not in screen and "pronto (nada foi executado)" in screen
         t.send("e", 1.0)  # etapa bloqueada: não pode executar
         t.send(ESC)
         assert not os.listdir(ws_with_video.path("Saidas"))

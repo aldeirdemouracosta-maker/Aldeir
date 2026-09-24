@@ -89,7 +89,11 @@ def plan_rules(pedido: str) -> Plan:
         steps["transcritor"] = Step("transcritor", {"idioma": "pt"})
     if re.search(r"\b(gere|gerar|crie|criar)\b.*\bvideo", t):
         steps["gerador"] = Step("gerador", {"prompt": pedido})
-    if re.search(r"troqu\w* o fundo|remov\w* (a|o|essa|esse)|substitu", t):
+    # "remova o carro" é edição generativa; "remova os silêncios/o ruído" não.
+    alvos = re.findall(r"\bremov\w* (?:a|o|as|os|essa|esse|essas|esses) (\w+)", t)
+    remove_objeto = any(not re.match(r"silencio|pausa|ruido|chiado|eco|trecho|parte|inicio|final|fim", w)
+                        for w in alvos)
+    if re.search(r"troqu\w* o fundo|substitu", t) or remove_objeto:
         steps["editor_generativo"] = Step("editor_generativo", {"prompt": pedido})
 
     if not steps:
