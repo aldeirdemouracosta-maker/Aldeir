@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "conversa",
+  "description": "Resposta do LLM a cada fala: campos que entendeu e a próxima pergunta. Só texto; nada é executado.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ficha", "pergunta"],
+  "properties": {
+    "ficha": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "assunto": {"type": "string", "maxLength": 300},
+        "acao": {"type": "string", "maxLength": 400},
+        "cenario": {"type": "string", "maxLength": 300},
+        "estilo": {"type": "string", "maxLength": 60},
+        "periodo": {"type": "string", "maxLength": 60},
+        "luz": {"type": "string", "maxLength": 60},
+        "tom": {"type": "string", "maxLength": 60},
+        "plano": {"type": "string", "maxLength": 60},
+        "angulo": {"type": "string", "maxLength": 60},
+        "movimento": {"type": "string", "maxLength": 60},
+        "duracao_s": {"type": "string", "maxLength": 4},
+        "orientacao": {"type": "string", "maxLength": 60},
+        "evitar": {"type": "string", "maxLength": 300}
+      }
+    },
+    "pergunta": {"type": "string", "maxLength": 400}
+  }
+}

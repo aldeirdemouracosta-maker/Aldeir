@@ -9,4 +9,4 @@ Nenhum papel executa comandos: só ``pipeline.compilar`` e o executor
 transformam JSON validado em argumentos de ferramentas cadastradas.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"

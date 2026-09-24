@@ -28,7 +28,7 @@ start() {
     else
         HOME_MV=/home/minivideo/MiniVideo
     fi
-    for d in Projetos Midia Modelos Saidas Jobs Logs; do mkdir -p "$HOME_MV/$d"; done
+    for d in Projetos Midia Modelos Ferramentas Saidas Jobs Logs; do mkdir -p "$HOME_MV/$d"; done
     chown -R minivideo:minivideo "$HOME_MV" 2>/dev/null
     echo "MINIVIDEO_HOME=$HOME_MV" > /run/minivideo.env
 

@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-MINIVIDEO_TOOLS_VERSION = 0.3.0
+MINIVIDEO_TOOLS_VERSION = 0.4.0
 MINIVIDEO_TOOLS_SITE = $(BR2_EXTERNAL_IA_MINIVIDEO_PATH)/..
 MINIVIDEO_TOOLS_SITE_METHOD = local
 # Copia só o pacote Python: nunca a camada Buildroot (image/, onde pode haver

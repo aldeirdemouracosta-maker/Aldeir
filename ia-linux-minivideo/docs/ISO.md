@@ -61,7 +61,7 @@ sudo mkfs.ext4 -L MV_DADOS /dev/sdXN
 ```
 
 No boot, `S30minivideo` monta essa partição em `/data` e cria
-`/data/minivideo/{Projetos,Midia,Modelos,Saidas,Jobs,Logs}`. Sem ela, a
+`/data/minivideo/{Projetos,Midia,Modelos,Ferramentas,Saidas,Jobs,Logs}`. Sem ela, a
 interface mostra um aviso vermelho: os arquivos ficam na RAM e somem ao
 desligar.
 
@@ -140,6 +140,7 @@ Gravar no pendrive: `sudo dd if=ia-linux-minivideo.iso of=/dev/sdX bs=4M conv=fs
 | Auto-Editor, RIFE, Real-ESRGAN em CPU **IvyBridge** emulada (seu E5-2630L v2) | sem instrução ilegal | `qemu-x86_64 -cpu IvyBridge` |
 | Mesmos binários em CPU **SandyBridge** (E5 v1) | Auto-Editor ok; RIFE e Real-ESRGAN falham, e o Real-ESRGAN aborta dentro do LLVM do llvmpipe (Vulkan por software) | não conclusivo para GPU real |
 | Interface de pastas | navegação, ajuda, terminal de prompt, execução de job | pty real + `pyte` |
+| Assistente de prompts (C) e Atualizações (U) | diálogo, ficha, prompt por modelo, salvar; índice, sha256, troca atômica, reversão | pty + `pyte`; APIs e LLM simulados em servidor local (ver `ASSISTENTE_E_ATUALIZACOES.md`) |
 | ISO completo: compilação + boot BIOS no QEMU + autoteste | **OK** | CI, run 36015350849 |
 | Boot UEFI: kernel 6.18.52 com o fragmento (EFI + simpledrm) + `post-image.sh` + GRUB EFI | **OK** em OVMF como pendrive e como CD; BIOS continua OK (CD e pendrive); o ISO antigo falha em UEFI (`BdsDxe: failed to load`), como esperado | ISO de teste com initramfs mínimo (busybox), GRUB 2.12 do host; `scripts/testar-uefi.sh` |
 | Boot UEFI do ISO completo (GRUB 2.14 do Buildroot) | pendente | CI (passo "Boot UEFI") |

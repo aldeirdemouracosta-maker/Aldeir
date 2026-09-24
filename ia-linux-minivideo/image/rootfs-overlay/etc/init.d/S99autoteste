@@ -14,7 +14,7 @@ mkdir -p "$W"
 say "início (kernel $(uname -r))"
 cat /etc/minivideo-release > /dev/console
 
-for b in minivideo-modelos llama-bench ffmpeg ffprobe mpv auto-editor whisper-cli llama-server rife-ncnn-vulkan realesrgan-ncnn-vulkan \
+for b in minivideo-modelos minivideo-prompts minivideo-atualizar llama-bench ffmpeg ffprobe mpv auto-editor whisper-cli llama-server rife-ncnn-vulkan realesrgan-ncnn-vulkan \
          vulkaninfo minivideo-ui minivideo-agentes minivideo-guard minivideo-audit; do
     command -v "$b" >/dev/null || fail "binário ausente: $b"
 done
@@ -58,6 +58,14 @@ minivideo-agentes --workspace "$W/ws" especialistas reproduzir "$J" -o "$W/rep.m
     > /dev/console 2>&1 || fail "especialistas reproduzir"
 minivideo-agentes motores > /dev/console
 minivideo-modelos --workspace "$W/ws" catalogo > /dev/console 2>&1 || fail "minivideo-modelos catalogo"
+
+# Assistente de prompts (perguntas guiadas, sem LLM) e atualizações (sem rede: só o que é local)
+printf 'um barco navegando no mar\n/pronto\n' | minivideo-prompts conversar --modo regras \
+    --salvar "$W/ws/Projetos/teste" > /dev/console 2>&1 || fail "minivideo-prompts conversar"
+ls "$W"/ws/Projetos/teste/prompts/*-wan2.2-ti2v-5b.json > /dev/null 2>&1 || fail "prompt não foi salvo"
+minivideo-atualizar --workspace "$W/ws" caminhos > /dev/console 2>&1 || fail "minivideo-atualizar caminhos"
+python3 -c "from minivideo_atualizacoes import indice; assert len(indice.carregar_fontes()) >= 5" \
+    || fail "fontes de atualização não carregam"
 
 python3 -c "import curses, minivideo_ui.app" || fail "interface (curses) não importa"
 whisper-cli --help > /dev/null 2>&1 || fail "whisper-cli não executa"

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "refino",
+  "description": "Prompt reescrito pelo LLM (inglês, parágrafo único).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["prompt"],
+  "properties": {
+    "prompt": {"type": "string", "minLength": 20, "maxLength": 1500}
+  }
+}

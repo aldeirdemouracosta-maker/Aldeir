@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 from typing import List, Optional
 
-FOLDERS = ("Projetos", "Midia", "Modelos", "Saidas", "Jobs", "Logs")
+FOLDERS = ("Projetos", "Midia", "Modelos", "Ferramentas", "Saidas", "Jobs", "Logs")
 SYSTEM_MODELS = "/usr/share/minivideo/modelos"
 
 

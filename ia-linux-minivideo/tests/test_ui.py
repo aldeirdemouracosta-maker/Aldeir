@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import subprocess
@@ -81,6 +82,8 @@ def test_tui_renders_folders_help_and_navigation(ws_with_video):
         t.send(ESC)
         t.send(DOWN)
         t.send(DOWN)
+        assert " > Ferramentas" in t.text()
+        t.send(DOWN)
         assert " > Saidas" in t.text()
         t.send(TAB)
         assert "Saidas ◄" in t.text()
@@ -122,5 +125,63 @@ def test_tui_executes_ffmpeg_job(ws_with_video):
         t.send("e", 1.0)
         assert t.wait_for("Continuísta: aprovado", 60)
         assert os.listdir(ws_with_video.path("Saidas")) == ["clipe_editado.mp4"]
+    finally:
+        t.close()
+
+
+def test_tui_assistente_de_prompts(ws_with_video):
+    t = Tui(ws_with_video.root)
+    try:
+        t.send("C", 0.8)
+        assert t.wait_for("Assistente de prompts")
+        assert "motor: perguntas guiadas" in t.text() and "Ficha do vídeo" in t.text()
+        t.send("um cachorro correndo na praia", 0.3)
+        t.send(ENTER, 0.8)
+        assert t.wait_for("Qual estilo?")
+        tela = t.text()
+        assert "assunto    um cachorro" in tela and "cenario    na praia" in tela
+        t.send("drone", 0.3)
+        t.send(ENTER, 0.8)
+        assert "angulo     aéreo (drone)" in t.text()
+        t.send("/pronto", 0.3)
+        t.send(ENTER, 0.8)
+        assert t.wait_for("Pronto!") and "aerial drone shot" in t.text()
+        t.send("/salvar", 0.3)
+        t.send(ENTER, 0.8)
+        assert t.wait_for("Salvo em Projetos/geral/prompts/")
+        salvos = os.listdir(ws_with_video.path("Projetos/geral/prompts"))
+        assert len(salvos) == 1 and salvos[0].endswith("-wan2.2-ti2v-5b.json")
+        t.send(ESC, 0.8)
+        assert "Pastas ◄" in t.text()
+    finally:
+        t.close()
+
+
+def test_tui_atualizacoes_indice_e_recusas(ws_with_video):
+    pasta = os.path.join(ws_with_video.root, "Ferramentas", "_atualizacoes")
+    os.makedirs(pasta, exist_ok=True)
+    with open(os.path.join(pasta, "indice.json"), "w") as fh:
+        json.dump({"formato": "minivideo-indice/1", "consultado_em": "2026-09-24T10:00:00", "itens": [
+            {"id": "llama.cpp", "tipo": "compilado", "forja": "github", "repo": "ggml-org/llama.cpp",
+             "instalada": "b8117", "disponivel": "b8200", "novo": True, "pagina": "https://github.com/x",
+             "data": "2026-09-20", "arquivo": None, "erro": None, "notas": "melhorias no Vulkan"},
+            {"id": "auto-editor", "tipo": "ferramenta", "forja": "github", "repo": "WyattBlue/auto-editor",
+             "instalada": "31.6.0", "disponivel": "31.6.0", "novo": False, "pagina": "", "data": "",
+             "arquivo": None, "erro": None}]}, fh)
+    t = Tui(ws_with_video.root)
+    try:
+        t.send("U", 0.8)
+        assert t.wait_for("índice de 2026-09-24T10:00:00")
+        tela = t.text()
+        assert "[novo] llama.cpp" in tela and "b8117 -> b8200" in tela and "melhorias no Vulkan" in tela
+        t.send(ENTER, 0.6)
+        assert t.wait_for("Instalar llama.cpp b8200? (s/N)")
+        t.send("s", 0.2)
+        t.send(ENTER, 0.8)
+        assert t.wait_for("próxima versão do ISO")
+        t.send(DOWN, 0.4)
+        t.send("R", 0.6)
+        assert t.wait_for("nenhuma versão instalada")
+        t.send(ESC, 0.8)
     finally:
         t.close()

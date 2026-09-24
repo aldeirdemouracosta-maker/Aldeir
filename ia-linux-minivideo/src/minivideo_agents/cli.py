@@ -261,4 +261,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)
+    from minivideo_atualizacoes.instalador import ativar_path
+    from minivideo_agents.workspace import default_root
+    ativar_path(getattr(args, "workspace", None) or default_root())  # ferramentas atualizadas (tecla U)
     return args.func(args)

@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 SUPPORTED = {
     "$schema", "$id", "$defs", "$ref", "title", "description", "type", "properties", "required",
@@ -128,14 +128,16 @@ def validate(value: Any, schema: Dict) -> None:
 _CACHE: Dict[str, Dict] = {}
 
 
-def load(name: str) -> Dict:
-    """Carrega ``schemas/<name>.schema.json`` e confere as palavras-chave usadas."""
-    if name not in _CACHE:
-        with open(os.path.join(SCHEMA_DIR, f"{name}.schema.json"), encoding="utf-8") as fh:
+def load(name: str, pasta: Optional[str] = None) -> Dict:
+    """Carrega ``<pasta>/<name>.schema.json`` (padrão: schemas/ dos papéis) e confere as palavras-chave."""
+    pasta = pasta or SCHEMA_DIR
+    chave = os.path.join(pasta, name)
+    if chave not in _CACHE:
+        with open(os.path.join(pasta, f"{name}.schema.json"), encoding="utf-8") as fh:
             schema = json.load(fh)
         _check_keywords(schema)
-        _CACHE[name] = schema
-    return _CACHE[name]
+        _CACHE[chave] = schema
+    return _CACHE[chave]
 
 
 def check(name: str, value: Any) -> Any:

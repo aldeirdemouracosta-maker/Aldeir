@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "prompt",
+  "description": "Prompt salvo pelo assistente (formato minivideo-prompt/1).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["formato", "criado_em", "modelo", "prompt", "prompt_negativo", "parametros", "ficha", "dialogo", "origem"],
+  "properties": {
+    "formato": {"const": "minivideo-prompt/1"},
+    "criado_em": {"type": "string"},
+    "modelo": {"enum": ["wan2.2-ti2v-5b", "wan2.1-vace-1.3b", "ltx-2.3"]},
+    "prompt": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "prompt_negativo": {"type": "string", "maxLength": 1000},
+    "parametros": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tamanho", "fps", "quadros", "duracao_s"],
+      "properties": {
+        "tamanho": {"type": "string"},
+        "fps": {"type": "integer", "minimum": 1},
+        "quadros": {"type": "integer", "minimum": 1},
+        "duracao_s": {"type": "number", "minimum": 1, "maximum": 20}
+      }
+    },
+    "ficha": {"type": "object"},
+    "dialogo": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["papel", "texto"],
+        "properties": {"papel": {"enum": ["usuario", "assistente"]}, "texto": {"type": "string"}}
+      }
+    },
+    "origem": {"enum": ["regras", "llm"]},
+    "llm": {"type": "array"}
+  }
+}

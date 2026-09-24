@@ -41,6 +41,10 @@ HELP = """Teclas
   I              informações do arquivo (ffprobe)
   T              terminal de prompt: Diretor, Editor e Fiscal planejam; você confirma;
                  o Continuísta confere o resultado
+  C              assistente de prompts: conversa, ficha ao lado e prompt pronto para
+                 Wan2.2, VACE ou LTX (Qwen local se houver; senão, perguntas guiadas)
+  U              atualizações: consulta GitHub/GitLab/Codeberg/Hugging Face, instala
+                 ferramentas na partição de dados (sha256, teste, troca atômica) e reverte
   A              agentes e onde cada um roda (CPU, Vulkan, CUDA)
   M              modelos: recomendados, instalados e catálogo (sem downloads)
   G              sensores da GPU (Safety Guard, somente leitura)
@@ -51,9 +55,31 @@ HELP = """Teclas
   F1 ou ?        esta ajuda
   Q              sair
 
-Pastas: Projetos, Midia (entrada), Modelos (pesos), Saidas (resultados),
-Jobs (arquivos intermediários) e Logs (JSONL por job).
+Pastas: Projetos, Midia (entrada), Modelos (pesos), Ferramentas (versões
+instaladas pela tecla U), Saidas (resultados), Jobs (arquivos intermediários)
+e Logs (JSONL por job).
 Nada é executado sem confirmação. Recurso indisponível sempre mostra o motivo."""
+
+
+TECLAS = [("F1", "Ajuda"), ("T", "Prompt"), ("C", "Assistente"), ("U", "Atualizar"), ("P", "Prévia"),
+          ("I", "Info"), ("A", "Agentes"), ("M", "Modelos"), ("G", "GPU"), ("D", "Diag"), ("N", "Pasta"),
+          ("Q", "Sair")]
+DESCARTAR = ["N", "D", "G", "M", "A", "I", "P"]  # ordem em que saem da barra quando falta largura
+
+
+def barra_de_teclas(largura: int) -> str:
+    """Mostra o máximo de teclas que couber; Ajuda, Prompt, Assistente, Atualizar e Sair ficam sempre."""
+    itens = list(TECLAS)
+    for sep in ("  ", " "):
+        texto = " " + sep.join(f"{k} {v}" for k, v in itens)
+        if len(texto) <= largura - 1:
+            return texto
+    for k in DESCARTAR:
+        itens = [t for t in itens if t[0] != k]
+        texto = " " + " ".join(f"{a} {b}" for a, b in itens)
+        if len(texto) <= largura - 1:
+            return texto
+    return texto
 
 
 class App:
@@ -68,6 +94,7 @@ class App:
         self.job_thread: Optional[threading.Thread] = None
         self.job_status = ""
         self._assign = None
+        self.servidor = None  # llama-server iniciado pelo assistente (/llm)
         self._init_colors()
 
     # ---------- aparência ----------
@@ -185,8 +212,7 @@ class App:
             self.put(h - 2, 0, " " + status, self.c["warn"], w)
         else:
             self.put(h - 2, 0, " " + (status or "Pronto."), self.c["bar"], w)
-        keys = " F1 Ajuda  T Prompt  P Prévia  I Info  A Agentes  M Modelos  G GPU  D Diag  N Pasta  Q Sair"
-        self.put(h - 1, 0, keys, self.c["title"], w)
+        self.put(h - 1, 0, barra_de_teclas(w), self.c["title"], w)
         self.scr.refresh()
 
     # ---------- diálogos ----------
@@ -298,14 +324,15 @@ class App:
         text.append(f"Áudio: {a.get('codec_name')} {a.get('sample_rate')} Hz" if a else "Áudio: nenhum")
         self.text_view("Informações", "\n".join(text))
 
-    def prompt_terminal(self) -> None:
+    def prompt_terminal(self, pedido: Optional[str] = None) -> None:
         """Pedido → Diretor, Editor e Fiscal (JSON validado) → plano explicado → confirmação."""
         from minivideo_agents.cli import _resumo_especialistas
         from minivideo_especialistas import pipeline
         e = self.b.selected
         entrada = e.path if e and e.kind == "vídeo" else None
-        pedido = self.ask("Terminal de prompt - descreva a edição (ex.: cena 1: 00:00:00 até 00:00:05 "
-                          "limpe o áudio; cena 2: ...)")
+        if pedido is None:
+            pedido = self.ask("Terminal de prompt - descreva a edição (ex.: cena 1: 00:00:00 até 00:00:05 "
+                              "limpe o áudio; cena 2: ...)")
         if not pedido:
             return
         self.msg = "Diretor, Editor e Fiscal planejando" + ELL
@@ -353,6 +380,251 @@ class App:
 
         self.job_thread = threading.Thread(target=work, daemon=True)
         self.job_thread.start()
+
+    # ---------- assistente de prompts (C) ----------
+    def _cliente_llm(self):
+        from minivideo_especialistas.llm import ClienteLLM, LLMIndisponivel
+        try:
+            if self.servidor:
+                return ClienteLLM(url=self.servidor.url, modelo="local", timeout=120)
+            return ClienteLLM(timeout=120)
+        except LLMIndisponivel:
+            return None
+
+    def _pasta_projeto(self) -> str:
+        rel = self.b.relative_cwd
+        if rel.startswith("Projetos" + os.sep):
+            return self.b.cwd
+        return os.path.join(self.ws.path("Projetos"), "geral")
+
+    def _iniciar_llm(self) -> str:
+        from minivideo_prompts.servidor import ServidorLocal, achar_gguf
+        if self.servidor:
+            return "O LLM local já está ligado."
+        gguf = achar_gguf(self.ws.path("Modelos"))
+        if not gguf:
+            return ("Nenhum .gguf em Modelos/llm (ex.: Qwen3-1.7B). Veja a tecla M; sem ele o assistente "
+                    "continua com perguntas guiadas.")
+        if not shutil.which("llama-server"):
+            return "llama-server ausente neste sistema."
+        self.msg = f"Carregando {os.path.basename(gguf)} no llama-server" + ELL
+        self.draw()
+        srv = ServidorLocal(gguf)
+        try:
+            srv.iniciar(os.path.join(self.ws.logs, "llama-server.log"))
+        except RuntimeError as exc:
+            return f"Não foi possível ligar o LLM: {exc}"
+        self.servidor = srv
+        self.msg = ""
+        return f"LLM local ligado ({os.path.basename(gguf)}). As próximas falas usam o Qwen."
+
+    def _desenhar_assistente(self, conv, entrada: str, aviso: str) -> None:
+        from minivideo_prompts import modelos, vocabulario as voc
+        h, w = self.scr.getmaxyx()
+        top, bottom = 1, h - 3
+        motor = "Qwen local" if conv.llm_ativo else "perguntas guiadas"
+        self.put(top, 0, f" Assistente de prompts {DASH} {modelos.MODELOS[conv.modelo]['nome']} {DASH} "
+                         f"motor: {motor}", self.c["title"], w)
+        lw = max(30, (w * 3) // 5)
+        rw = w - lw - 1
+        # conversa (esquerda): as últimas linhas que couberem
+        linhas: List[str] = []
+        for fala in conv.dialogo:
+            quem = "Você: " if fala["papel"] == "usuario" else "Assistente: "
+            for i, para in enumerate(fala["texto"].splitlines() or [""]):
+                pre = quem if i == 0 else "  "
+                linhas += textwrap.wrap(pre + para, lw - 2) or [""]
+            linhas.append("")
+        area = bottom - top - 2
+        for i, ln in enumerate(linhas[-area:] if len(linhas) > area else linhas):
+            self.put(top + 1 + i, 0, " " + ln, self.c["win"], lw)
+        for y in range(top + 1 + min(len(linhas), area), bottom - 1):
+            self.put(y, 0, "", self.c["win"], lw)
+        # ficha e prompt (direita)
+        x = lw + 1
+        lado = [("Ficha do vídeo", True)]
+        for campo in voc.ORDEM:
+            val = conv.ficha.get(campo) or ("(pulado)" if campo in conv.pulados else "-")
+            lado.append((f"{campo:<10} {val}", False))
+        if conv.ficha.get("assunto"):
+            r = modelos.montar(conv.ficha, conv.modelo)
+            lado += [("", False), ("Prompt", True)]
+            lado += [(ln, False) for ln in textwrap.wrap(r["prompt"], rw - 2)]
+            p = r["parametros"]
+            lado.append((f"{p['tamanho']} · {p['fps']} fps · {p['quadros']} quadros", False))
+        for i in range(bottom - top - 2):
+            txt, titulo = lado[i] if i < len(lado) else ("", False)
+            self.put(top + 1 + i, x, " " + txt, self.c["dim"] if titulo else self.c["win"], rw)
+        # entrada e ajuda
+        vis = entrada[-(w - 6):]
+        self.put(bottom - 1, 0, " > " + vis, self.c["sel"], w)
+        dica = aviso or ("Enter envia · /pronto /salvar /enviar /refinar /llm /modelo /ficha /novo · Esc sai")
+        self.put(bottom, 0, " " + dica, self.c["bar"], w)
+        self.scr.move(bottom - 1, min(3 + len(vis), w - 2))
+        self.scr.refresh()
+
+    def assistente(self) -> None:
+        from minivideo_especialistas.llm import LLMIndisponivel
+        from minivideo_especialistas.schema import SchemaError
+        from minivideo_prompts.conversa import Conversa, salvar
+        conv = Conversa(cliente=self._cliente_llm())
+        conv.abrir()
+        buf: List[str] = []
+        aviso = ""
+        curses.curs_set(1)
+        try:
+            while True:
+                self._desenhar_assistente(conv, "".join(buf), aviso)
+                try:
+                    ch = self.scr.get_wch()
+                except curses.error:
+                    continue
+                if ch == "\x1b":
+                    return
+                if ch in (curses.KEY_BACKSPACE, "\x7f", "\b"):
+                    if buf:
+                        buf.pop()
+                    continue
+                if isinstance(ch, str) and ch.isprintable():
+                    buf.append(ch)
+                    continue
+                if ch not in ("\n", "\r", curses.KEY_ENTER):
+                    continue
+                texto, buf, aviso = "".join(buf).strip(), [], ""
+                cmd = texto.split()[0].lower() if texto.startswith("/") else ""
+                if cmd == "/llm":
+                    conv.dialogo.append({"papel": "usuario", "texto": texto})
+                    conv.dialogo.append({"papel": "assistente", "texto": self._iniciar_llm()})
+                    conv.cliente = self._cliente_llm()
+                    continue
+                if cmd in ("/salvar", "/enviar", "/refinar"):
+                    if not conv.ficha.get("assunto"):
+                        aviso = "Descreva o vídeo primeiro."
+                        continue
+                    try:
+                        if cmd == "/refinar":
+                            self._desenhar_assistente(conv, "", "Refinando com o LLM local" + ELL)
+                        doc = conv.resultado(refinar=(cmd == "/refinar"))
+                    except (LLMIndisponivel, SchemaError) as exc:
+                        aviso = f"Não foi possível: {exc}"
+                        continue
+                    if cmd == "/refinar":
+                        conv.dialogo.append({"papel": "assistente", "texto": "Refinado (inglês):\n" + doc["prompt"]})
+                        self._refinado = doc
+                        continue
+                    doc = getattr(self, "_refinado", None) if getattr(self, "_refinado", None) and \
+                        self._refinado.get("ficha") == conv.ficha else doc
+                    if cmd == "/salvar":
+                        caminho = salvar(doc, self._pasta_projeto())
+                        self.b.refresh()
+                        aviso = f"Salvo em {os.path.relpath(caminho, self.ws.root)}"
+                        continue
+                    curses.curs_set(0)
+                    self.prompt_terminal("gere um vídeo: " + doc["prompt"])
+                    curses.curs_set(1)
+                    continue
+                if texto:
+                    self._desenhar_assistente(conv, "", "Pensando" + ELL)
+                    try:
+                        conv.responder(texto)
+                    except LLMIndisponivel as exc:
+                        aviso = f"LLM indisponível: {exc}"
+        finally:
+            self._refinado = None
+            curses.curs_set(0)
+
+    # ---------- atualizações (U) ----------
+    def atualizacoes(self) -> None:
+        from minivideo_atualizacoes import forjas, indice, instalador
+        from minivideo_atualizacoes.cli import linhas_indice
+        sel, aviso = 0, ""
+        while True:
+            doc = indice.ler_indice(self.ws.root)
+            itens = doc["itens"] if doc else []
+            h, w = self.scr.getmaxyx()
+            top, bottom = 1, h - 3
+            self.put(top, 0, " Atualizações " + DASH + (f" índice de {doc['consultado_em']}" if doc else
+                                                          " sem índice: aperte V para consultar"), self.c["title"], w)
+            linhas = linhas_indice(doc)[1:] if doc else [
+                "Nada foi consultado ainda. V consulta os repositórios acompanhados (GitHub, GitLab,",
+                "Codeberg/Forgejo, Hugging Face) e mostra o que há de novo. Nada é instalado sem você confirmar."]
+            sel = min(sel, max(len(itens) - 1, 0))
+            area = bottom - top - 7
+            ini = max(0, sel - area + 1)
+            for i in range(area):
+                j = ini + i
+                txt = linhas[j] if j < len(linhas) else ""
+                attr = self.c["sel"] if (itens and j == sel) else self.c["win"]
+                self.put(top + 1 + i, 0, " " + txt, attr, w)
+            # detalhes do item selecionado
+            det = []
+            if itens:
+                it = itens[sel]
+                det.append(f"{it['id']} · {it['forja']}:{it['repo']} · {it['tipo']}")
+                det.append(f"página: {it.get('pagina') or '-'}   publicado: {it.get('data') or '-'}")
+                if it.get("arquivo"):
+                    a = it["arquivo"]
+                    det.append(f"arquivo: {a['nome']} · sha256: {a['sha256'] or 'não publicado'}")
+                nota = " ".join((it.get("notas") or "").split())
+                det.append("notas: " + (nota[:w * 2] or "-"))
+            for i in range(6):
+                self.put(bottom - 6 + i, 0, " " + (det[i] if i < len(det) else ""), self.c["dim"], w)
+            self.put(bottom, 0, " " + (aviso or "V consultar · Enter instalar · R reverter · H histórico · Esc sai"),
+                     self.c["bar"], w)
+            self.scr.refresh()
+            ch = self.scr.getch()
+            if ch == -1:
+                continue
+            aviso = ""
+            if ch in (27, ord("q")):
+                return
+            if ch in (curses.KEY_DOWN, ord("j")):
+                sel += 1
+            elif ch in (curses.KEY_UP, ord("k")):
+                sel = max(sel - 1, 0)
+            elif ch in (ord("v"), ord("V")):
+                self.put(bottom, 0, " Consultando os repositórios" + ELL, self.c["bar"], w)
+                self.scr.refresh()
+                d = indice.atualizar_indice(self.ws.root)
+                novos = sum(1 for i in d["itens"] if i["novo"])
+                erros = sum(1 for i in d["itens"] if i.get("erro") and not i.get("disponivel"))
+                aviso = f"{novos} novidade(s)" + (f", {erros} fonte(s) com erro (rede?)" if erros else "")
+            elif ch in (ord("h"), ord("H")):
+                hist = instalador.historico(self.ws.root)
+                self.text_view("Histórico de atualizações", "\n".join(
+                    " · ".join(f"{k}={v}" for k, v in e.items()) for e in hist) or "(vazio)")
+            elif ch in (ord("r"), ord("R")) and itens:
+                try:
+                    para = instalador.reverter(self.ws.root, itens[sel]["id"])
+                    aviso = f"{itens[sel]['id']}: agora usando {para}"
+                    self._assign = None
+                except instalador.Recusado as exc:
+                    aviso = str(exc)
+            elif ch in (10, 13, curses.KEY_ENTER) and itens:
+                it = itens[sel]
+                item = next((f for f in indice.carregar_fontes(self.ws.root) if f["id"] == it["id"]), None)
+                if not item:
+                    continue
+                if not it.get("novo"):
+                    aviso = f"{it['id']}: nada novo para instalar."
+                    continue
+                sem_hash = bool(it.get("arquivo")) and not it["arquivo"].get("sha256")
+                pergunta = f"Instalar {it['id']} {it['disponivel']}? (s/N)"
+                if sem_hash:
+                    pergunta = f"{it['id']}: a plataforma NÃO publicou sha256. Instalar mesmo assim? (s/N)"
+                resp = self.ask(pergunta)
+                if not resp or resp.lower() not in ("s", "sim"):
+                    aviso = "Cancelado."
+                    continue
+                self.put(bottom, 0, " Baixando, conferindo e testando" + ELL, self.c["bar"], w)
+                self.scr.refresh()
+                try:
+                    v = instalador.aplicar(self.ws.root, item, it, aceitar_sem_hash=sem_hash)
+                    instalador.ativar_path(self.ws.root)
+                    self._assign = None
+                    aviso = f"{it['id']} {v} ativo. R volta para a versão anterior."
+                except (instalador.Recusado, forjas.ErroFonte) as exc:
+                    aviso = f"Recusado: {exc}"
 
     def models_view(self) -> None:
         from minivideo_especialistas.fiscal import ram_disponivel_mib
@@ -455,6 +727,10 @@ class App:
                 self.prompt_terminal()
             elif ch in (ord("a"), ord("A")):
                 self.agents_view()
+            elif ch in (ord("c"), ord("C")):
+                self.assistente()
+            elif ch in (ord("u"), ord("U")):
+                self.atualizacoes()
             elif ch in (ord("m"), ord("M")):
                 self.models_view()
             elif ch in (ord("g"), ord("G")):
@@ -478,5 +754,16 @@ def main(argv=None) -> int:
     args = p.parse_args(argv)
     os.environ.setdefault("ESCDELAY", "25")
     ws = Workspace(args.workspace)
-    curses.wrapper(lambda scr: App(scr, ws).run())
+    from minivideo_atualizacoes.instalador import ativar_path
+    ativar_path(ws.root)  # ferramentas atualizadas (tecla U) vêm antes das do ISO
+
+    def rodar(scr):
+        app = App(scr, ws)
+        try:
+            app.run()
+        finally:
+            if app.servidor:
+                app.servidor.parar()
+
+    curses.wrapper(rodar)
     return 0

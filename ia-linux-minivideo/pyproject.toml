@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ia-linux-minivideo-tools"
-version = "0.3.0"
+version = "0.4.0"
 description = "IA-Linux MiniVideo: agentes locais de vídeo, interface de pastas, auditoria e Hardware Safety Guard"
 requires-python = ">=3.9"
 dependencies = []
@@ -18,6 +18,8 @@ minivideo-guard = "minivideo_guard.cli:main"
 minivideo-agentes = "minivideo_agents.cli:main"
 minivideo-ui = "minivideo_ui.app:main"
 minivideo-modelos = "minivideo_modelos.cli:main"
+minivideo-prompts = "minivideo_prompts.cli:main"
+minivideo-atualizar = "minivideo_atualizacoes.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -25,6 +27,8 @@ where = ["src"]
 [tool.setuptools.package-data]
 minivideo_especialistas = ["schemas/*.json"]
 minivideo_modelos = ["catalogo.json"]
+minivideo_prompts = ["schemas/*.json"]
+minivideo_atualizacoes = ["fontes.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
