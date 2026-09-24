@@ -1,10 +1,10 @@
 [begin] (IA-Linux MiniVideo)
   [exec] (MiniVideo: pastas, agentes, assistente) {xterm -title MiniVideo -fa "DejaVu Sans Mono" -fs 11 -geometry 120x32+0+0 -e minivideo-ui}
   [exec] (Arquivos - PCManFM) {pcmanfm "$MINIVIDEO_HOME"}
-  [exec] (Terminal) {xterm -fa "DejaVu Sans Mono" -fs 12}
+  [exec] (Terminal) {xterm -title Terminal -fa "DejaVu Sans Mono" -fs 12}
   [separator]
-  [exec] (Diagnóstico: gerar relatório) {xterm -fa "DejaVu Sans Mono" -fs 12 -e sh -c 'minivideo-diagnostico --relatorio; echo; echo "Enter fecha"; read x'}
-  [exec] (Wi-Fi - senha do root: Enter) {xterm -fa "DejaVu Sans Mono" -fs 12 -e su -c 'minivideo-wifi redes; printf "Rede (SSID): "; read s; [ -n "$s" ] && minivideo-wifi conectar "$s"; echo "Enter fecha"; read x'}
+  [exec] (Diagnóstico: gerar relatório) {xterm -title "Diagnóstico" -fa "DejaVu Sans Mono" -fs 12 -e sh -c 'minivideo-diagnostico --relatorio; echo; echo "Enter fecha"; read x'}
+  [exec] (Wi-Fi - senha do root: Enter) {xterm -title Wi-Fi -fa "DejaVu Sans Mono" -fs 12 -e su -c 'minivideo-wifi redes; printf "Rede (SSID): "; read s; [ -n "$s" ] && minivideo-wifi conectar "$s"; echo "Enter fecha"; read x'}
   [separator]
   [workspaces] (Áreas de trabalho)
   [config] (Configurações do Fluxbox)

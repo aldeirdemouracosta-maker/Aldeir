@@ -185,3 +185,34 @@ def test_tui_atualizacoes_indice_e_recusas(ws_with_video):
         t.send(ESC, 0.8)
     finally:
         t.close()
+
+
+# textos que só aparecem na tela aberta (não na tela principal); "Esc/Enter fecha" é o rodapé das janelas de texto
+TELAS = {"?": "Teclas", "i": "Duração:", "a": "Coordenador —", "c": "Assistente de prompts", "u": "Atualizações",
+         "m": "Recomendados para esta máquina", "g": "Esc/Enter fecha", "d": "CPU:", "t": "Terminal de prompt",
+         "n": "Nova pasta em"}
+
+
+def test_tui_todas_as_teclas_abrem_e_voltam(ws_with_video, tmp_path):
+    """Cada tecla da barra abre a sua tela e Esc volta; P chama o mpv com o arquivo."""
+    fake = tmp_path / "bin"
+    fake.mkdir()
+    (fake / "mpv").write_text(f'#!/bin/sh\necho "$@" > {tmp_path}/mpv.args\n')
+    (fake / "mpv").chmod(0o755)
+    t = Tui(ws_with_video.root, cols=120, rows=32, env={"PATH": f"{fake}:{os.environ['PATH']}"})
+    try:
+        assert t.wait_for("Q Sair")
+        for titulo in TELAS.values():
+            assert titulo not in t.text(), titulo
+        for tecla, titulo in TELAS.items():
+            t.send(TAB)  # foco na lista de arquivos (clipe.mp4 selecionado)
+            t.send(tecla, 1.0)
+            assert t.wait_for(titulo, 20), (tecla, t.text())
+            for _ in range(3):
+                t.send(ESC, 0.5)
+            assert t.wait_for("Q Sair", 10), (tecla, t.text())
+        t.send(TAB)
+        t.send("p", 2.0)
+        assert "clipe.mp4" in (tmp_path / "mpv.args").read_text()
+    finally:
+        t.close()
