@@ -122,6 +122,10 @@ BR2_PACKAGE_VULKAN_HEADERS=y
 BR2_PACKAGE_VULKAN_TOOLS=y
 
 # ---- Modo gráfico (entrada "Interface" do boot): Xorg + Fluxbox + PCManFM ----
+# RELRO parcial: com o RELRO completo (padrão, -z now) os drivers do Xorg não carregam,
+# porque usam símbolos de módulos que o servidor carrega depois (fbdevhw, glamoregl):
+# "modesetting_drv.so: undefined symbol: gbm_bo_get_offset" (run 36076562725).
+BR2_RELRO_PARTIAL=y
 # eudev: o libinput (mouse/teclado no Xorg) exige udev. O modo "Terminal" do boot
 # continua como antes; se o Xorg falhar, a sessão volta sozinha para o terminal.
 BR2_ROOTFS_DEVICE_CREATION_DYNAMIC_EUDEV=y

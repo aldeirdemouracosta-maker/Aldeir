@@ -24,6 +24,15 @@ for f in usr/bin/minivideo-ui usr/bin/minivideo-modelos usr/bin/llama-bench usr/
         exit 1
     fi
 done
+# Drivers do Xorg precisam de ligação preguiçosa: usam símbolos de módulos carregados
+# depois (fbdevhw, glamoregl). Com BIND_NOW (RELRO completo) o Xorg diz "no screens found".
+for so in "${TARGET_DIR}"/usr/lib/xorg/modules/drivers/*_drv.so; do
+    [ -e "$so" ] || continue
+    if readelf -d "$so" | grep -qE 'BIND_NOW|FLAGS.*NOW'; then
+        echo "post-build: ${so#"${TARGET_DIR}"} ligado com -z now (use BR2_RELRO_PARTIAL)" >&2
+        exit 1
+    fi
+done
 # O Fluxbox termina o rótulo no primeiro ")": "(Arquivos (PCManFM))" aparece cortado
 if grep -nE '^[[:space:]]*\[[a-z]+\][[:space:]]*\([^)]*\(' "${TARGET_DIR}/etc/minivideo/fluxbox/menu" >&2; then
     echo "post-build: rótulo do menu do Fluxbox com parênteses dentro (acima)" >&2
