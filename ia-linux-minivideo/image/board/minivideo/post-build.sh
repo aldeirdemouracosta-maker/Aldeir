@@ -24,6 +24,10 @@ for f in usr/bin/minivideo-ui usr/bin/minivideo-modelos usr/bin/llama-bench usr/
         exit 1
     fi
 done
+# O pacote do Xorg instala /etc/init.d/S40xorg, que sobe um "Xorg :0 vt01" vazio no boot:
+# ele ocupa o display e a tela (preta), e a sessão da entrada "Interface" falhava com
+# "Server is already active for display 0" (run 36102231453). Quem inicia o X é a minivideo-sessao.
+rm -f "${TARGET_DIR}/etc/init.d/S40xorg"
 # Drivers do Xorg precisam de ligação preguiçosa: usam símbolos de módulos carregados
 # depois (fbdevhw, glamoregl). Com BIND_NOW (RELRO completo) o Xorg diz "no screens found".
 for so in "${TARGET_DIR}"/usr/lib/xorg/modules/drivers/*_drv.so; do

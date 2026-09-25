@@ -71,6 +71,8 @@ minivideo-diagnostico --relatorio --workspace "$W/ws" > /dev/console 2>&1 || fai
 ls "$W"/ws/Logs/diagnostico-*.txt > /dev/null 2>&1 || fail "relatório de diagnóstico não foi gravado"
 minivideo-preparar-disco listar > /dev/console 2>&1 || fail "minivideo-preparar-disco listar"
 minivideo-wifi estado > /dev/console 2>&1 || fail "minivideo-wifi estado"
+# Nenhum X pode estar no :0 antes da sessão (o S40xorg do Buildroot ocupava o display e a tela)
+[ -e /tmp/.X0-lock ] && fail "já existe um X no display :0 ($(cat /tmp/.X0-lock 2>/dev/null | tr -d ' '))"
 # Modo gráfico: o Xorg precisa subir de verdade (na VM, vídeo bochs pelo modesetting)
 # (o busybox do ISO não tem "timeout": espera manual de até 90 s)
 xinit /usr/bin/xdpyinfo -- /usr/bin/Xorg :5 vt5 -ac -nolisten tcp > "$W/xorg.log" 2>&1 &
