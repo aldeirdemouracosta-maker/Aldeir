@@ -129,6 +129,27 @@ jobs:
           kill %1 || true
           for f in "$MINIVIDEO_WORK"/tela-*.ppm; do convert "$f" "${f%.ppm}.png"; done
 
+      # A mesma linha da entrada "1. Interface" (sem quiet) + console serial para ler o que a
+      # sessão registra no log do kernel; exige "Xorg iniciou" e captura a tela 30 s depois.
+      - name: Entrada Interface com console serial (sessão gráfica de verdade)
+        run: |
+          ACCEL=""; [ -w /dev/kvm ] && ACCEL="-enable-kvm"
+          LOG="$MINIVIDEO_WORK/interface-serial.log"; : > "$LOG"
+          qemu-system-x86_64 $ACCEL -m 6G -smp 2 -cpu "$QEMU_CPU" -vga std -display none \
+            -kernel "$IMG/bzImage" -initrd "$IMG/initrd-live.img" -cdrom "$ISO" \
+            -append "console=tty1 console=ttyS0,115200 loglevel=7 minivideo.modo=grafico" \
+            -serial "file:$LOG" -monitor unix:/tmp/qmon2,server,nowait &
+          QPID=$!; i=0
+          until grep -a -q "minivideo-sessao: Xorg iniciou" "$LOG" || [ "$i" -ge 480 ] || ! kill -0 "$QPID"; do
+            sleep 2; i=$((i + 2))
+          done
+          sleep 30
+          python3 -c 'import socket,sys,time; s=socket.socket(socket.AF_UNIX); s.connect("/tmp/qmon2"); s.sendall(f"screendump {sys.argv[1]}\n".encode()); time.sleep(2)' "$MINIVIDEO_WORK/interface.ppm" || true
+          kill "$QPID" || true
+          [ -f "$MINIVIDEO_WORK/interface.ppm" ] && convert "$MINIVIDEO_WORK/interface.ppm" "$MINIVIDEO_WORK/interface.png"
+          grep -a "minivideo-sessao:\|minivideo-live:" "$LOG" || true
+          grep -a -q "minivideo-sessao: Xorg iniciou" "$LOG"
+
       - name: Boot UEFI (OVMF) como pendrive e como CD
         env:
           MEM: 6G
@@ -147,7 +168,7 @@ jobs:
             echo "===== $(basename "$f") (fim)"
             sed -e 's/\x1b\[[0-9;?]*[A-Za-z]//g' "$f" | tr -d '\r' | tr -s ' ' | grep -a -v '^ *$' | tail -60
           done
-          for f in "$MINIVIDEO_WORK"/uefi-*.png "$MINIVIDEO_WORK"/tela-150.png "$MINIVIDEO_WORK"/tela-300.png; do
+          for f in "$MINIVIDEO_WORK"/uefi-*.png "$MINIVIDEO_WORK"/interface.png "$MINIVIDEO_WORK"/tela-300.png; do
             [ -f "$f" ] || continue
             convert "$f" -resize 800x -colors 64 "$f.min.png"
             echo "===== BASE64 $(basename "$f") INICIO"
@@ -167,6 +188,7 @@ jobs:
             /mnt/minivideo/uefi-*.png
             /mnt/minivideo/build.log
             /mnt/minivideo/tela-*.png
+            /mnt/minivideo/interface*
             /mnt/minivideo/output*/.config
           if-no-files-found: warn
 

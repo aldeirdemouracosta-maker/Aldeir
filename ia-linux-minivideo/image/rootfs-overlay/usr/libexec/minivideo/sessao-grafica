@@ -9,6 +9,7 @@ for f in startup menu overlay; do
 done
 [ -e "$U/.config/mimeapps.list" ] || cp /etc/minivideo/mimeapps.list "$U/.config/mimeapps.list"
 chown -R minivideo:minivideo "$U/.fluxbox" "$U/.config"
+echo "minivideo-sessao: Xorg iniciou ($DISPLAY); abrindo Fluxbox, PCManFM e MiniVideo" > /dev/kmsg 2>/dev/null
 # Barramento D-Bus da sessão para o GTK3 (PCManFM); NO_AT_BRIDGE evita a espera pelo barramento de acessibilidade
 INICIO=startfluxbox
 command -v dbus-run-session >/dev/null && INICIO="dbus-run-session startfluxbox"

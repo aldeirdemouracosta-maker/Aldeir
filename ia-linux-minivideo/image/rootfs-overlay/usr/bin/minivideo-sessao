@@ -6,18 +6,25 @@
 [ -r /run/minivideo.env ] && . /run/minivideo.env
 export MINIVIDEO_HOME LANG=C.UTF-8 TERM=linux
 
+# registro curto no log do kernel (dmesg; aparece no console serial quando houver)
+log() { echo "minivideo-sessao: $*" > /dev/kmsg 2>/dev/null || true; }
+
 modo=terminal
 grep -q "minivideo.modo=grafico" /proc/cmdline && modo=grafico
 [ -e /run/minivideo-x-falhou ] || [ -e /run/minivideo-forcar-terminal ] && modo=terminal
 command -v xinit >/dev/null || modo=terminal
 
+log "modo $modo"
 if [ "$modo" = grafico ]; then
     inicio=$(date +%s)
     # -ac -nolisten tcp: sem rede e sem cookie; só processos locais (sistema de um usuário)
     xinit /usr/libexec/minivideo/sessao-grafica -- /usr/bin/Xorg :0 vt1 -ac -nolisten tcp -keeptty \
         > /var/log/minivideo-xinit.log 2>&1
+    log "interface gráfica encerrou após $(( $(date +%s) - inicio )) s"
     if [ $(( $(date +%s) - inicio )) -lt 15 ]; then
         touch /run/minivideo-x-falhou
+        log "Xorg não iniciou; fim do log:"
+        tail -15 /var/log/minivideo-xinit.log 2>/dev/null | while IFS= read -r l; do log "  $l"; done
         echo
         echo "A interface gráfica não iniciou (detalhes: /var/log/Xorg.0.log e /var/log/minivideo-xinit.log)."
         echo "Abrindo o modo terminal. Tecla D → R na interface gera o relatório para diagnóstico."
