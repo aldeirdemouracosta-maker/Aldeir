@@ -83,6 +83,23 @@ else
     cat "$W/xorg.log" > /dev/console; tail -40 /var/log/Xorg.5.log > /dev/console 2>&1
     fail "Xorg não inicia"
 fi
+# A sessão de verdade (a mesma da entrada "Interface"): Fluxbox, PCManFM e a janela MiniVideo
+# como o usuário minivideo. Espera até 150 s (a VM da CI não tem KVM).
+MINIVIDEO_HOME="$W/ws" xinit /usr/libexec/minivideo/sessao-grafica -- /usr/bin/Xorg :6 vt6 -ac -nolisten tcp \
+    > "$W/sessao.log" 2>&1 &
+SPID=$!; i=0; faltam="fluxbox pcmanfm xterm"
+while [ -n "$faltam" ] && [ "$i" -lt 150 ] && kill -0 "$SPID" 2>/dev/null; do
+    sleep 1; i=$((i + 1)); f2=""
+    for p in $faltam; do pidof "$p" > /dev/null || f2="$f2 $p"; done
+    faltam="${f2# }"
+done
+if [ -z "$faltam" ]; then
+    say "sessão gráfica: fluxbox, pcmanfm e xterm (MiniVideo) rodando em ${i} s"
+    kill "$SPID" 2>/dev/null; sleep 2
+else
+    cat "$W/sessao.log" > /dev/console; tail -30 /var/log/Xorg.6.log > /dev/console 2>&1
+    fail "sessão gráfica: não subiu ($faltam)"
+fi
 # Na CI há um disco SATA vazio só para isto (minivideo.autoteste.disco=sda): prepara de verdade e confere
 DISCO="$(sed -n 's/.*minivideo\.autoteste\.disco=\([a-z0-9]*\).*/\1/p' /proc/cmdline)"
 if [ -n "$DISCO" ]; then

@@ -115,8 +115,9 @@ jobs:
           ACCEL=""; [ -w /dev/kvm ] && ACCEL="-enable-kvm"
           qemu-system-x86_64 $ACCEL -m 6G -smp 2 -cpu "$QEMU_CPU" -cdrom "$ISO" \
             -boot d -vga std -display none -monitor unix:/tmp/qmon,server,nowait &
-          for t in 8 150; do   # 8 s: menu de boot; 150 s: interface gráfica (Xorg + Fluxbox + PCManFM)
-            sleep "$t"
+          # 8 s: menu de boot; 150 e 300 s: interface gráfica (Xorg + Fluxbox + PCManFM; a VM não tem KVM)
+          for t in 8 150 300; do
+            sleep $(( t - ${ant:-0} )); ant=$t
             python3 - "$MINIVIDEO_WORK/tela-$t.ppm" <<'PY'
           import socket, sys, time
           s = socket.socket(socket.AF_UNIX)
@@ -146,7 +147,7 @@ jobs:
             echo "===== $(basename "$f") (fim)"
             sed -e 's/\x1b\[[0-9;?]*[A-Za-z]//g' "$f" | tr -d '\r' | tr -s ' ' | grep -a -v '^ *$' | tail -60
           done
-          for f in "$MINIVIDEO_WORK"/uefi-*.png "$MINIVIDEO_WORK"/tela-150.png; do
+          for f in "$MINIVIDEO_WORK"/uefi-*.png "$MINIVIDEO_WORK"/tela-150.png "$MINIVIDEO_WORK"/tela-300.png; do
             [ -f "$f" ] || continue
             convert "$f" -resize 800x -colors 64 "$f.min.png"
             echo "===== BASE64 $(basename "$f") INICIO"

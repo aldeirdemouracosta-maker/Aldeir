@@ -12,4 +12,4 @@ chown -R minivideo:minivideo "$U/.fluxbox" "$U/.config"
 # Barramento D-Bus da sessão para o GTK3 (PCManFM); NO_AT_BRIDGE evita a espera pelo barramento de acessibilidade
 INICIO=startfluxbox
 command -v dbus-run-session >/dev/null && INICIO="dbus-run-session startfluxbox"
-exec su -s /bin/sh minivideo -c "HOME=$U MINIVIDEO_HOME='$MINIVIDEO_HOME' DISPLAY=:0 LANG=C.UTF-8 NO_AT_BRIDGE=1 exec $INICIO"
+exec su -s /bin/sh minivideo -c "HOME=$U MINIVIDEO_HOME='$MINIVIDEO_HOME' DISPLAY=${DISPLAY:-:0} LANG=C.UTF-8 NO_AT_BRIDGE=1 exec $INICIO"

@@ -25,7 +25,9 @@ esac
 ACCEL=""; [ -w /dev/kvm ] && ACCEL="-enable-kvm"
 
 # shellcheck disable=SC2086
-qemu-system-x86_64 $ACCEL -m "${MEM:-2G}" -machine q35 -display none -no-reboot \
+# CPU com AVX: o ISO é compilado para Xeon E5 (corei7-avx); sem -cpu o QEMU (TCG) emula uma CPU
+# sem AVX e o init morre com "invalid opcode" no ld-linux (run 36090651934)
+qemu-system-x86_64 $ACCEL -m "${MEM:-2G}" -cpu "${QEMU_CPU:-SandyBridge}" -machine q35 -display none -no-reboot \
     -drive "if=pflash,format=raw,readonly=on,file=$CODE" \
     -drive "if=pflash,format=raw,file=$TMP/vars.fd" \
     $MIDIA -serial "file:$LOG" -monitor "unix:$TMP/mon,server,nowait" &
