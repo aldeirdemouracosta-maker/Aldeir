@@ -136,6 +136,24 @@ jobs:
           "$S" "$ISO" disco "$MINIVIDEO_WORK/uefi-disco.log"
           "$S" "$ISO" cd "$MINIVIDEO_WORK/uefi-cd.log"
 
+      # O artefato só abre com login; o log do job dá para ler de qualquer lugar.
+      # Fim dos logs UEFI (sem códigos de terminal) e as capturas de tela em base64.
+      - name: Diagnóstico no log (UEFI e capturas)
+        if: always()
+        run: |
+          for f in "$MINIVIDEO_WORK"/uefi-*.log; do
+            [ -f "$f" ] || continue
+            echo "===== $(basename "$f") (fim)"
+            sed -e 's/\x1b\[[0-9;?]*[A-Za-z]//g' "$f" | tr -d '\r' | tr -s ' ' | grep -a -v '^ *$' | tail -60
+          done
+          for f in "$MINIVIDEO_WORK"/uefi-*.png "$MINIVIDEO_WORK"/tela-150.png; do
+            [ -f "$f" ] || continue
+            convert "$f" -resize 800x -colors 64 "$f.min.png"
+            echo "===== BASE64 $(basename "$f") INICIO"
+            base64 -w 0 "$f.min.png"; echo
+            echo "===== BASE64 $(basename "$f") FIM"
+          done
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
