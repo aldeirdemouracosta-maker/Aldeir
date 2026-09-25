@@ -37,6 +37,15 @@ for so in "${TARGET_DIR}"/usr/lib/xorg/modules/drivers/*_drv.so; do
         exit 1
     fi
 done
+# O xterm só usa UTF-8 se o Xlib aceitar o locale: C.UTF-8 aponta para en_US.UTF-8
+X11L="${TARGET_DIR}/usr/share/X11/locale"
+if [ -d "$X11L" ]; then
+    test -f "$X11L/en_US.UTF-8/XLC_LOCALE" && grep -q "^en_US.UTF-8/XLC_LOCALE" "$X11L/locale.dir" \
+        && grep -qE "^C.UTF-8[[:space:]]+en_US.UTF-8" "$X11L/locale.alias" || {
+        echo "post-build: locale X11 en_US.UTF-8 ou locale.alias ausente (BR2_ENABLE_LOCALE_WHITELIST): acentos quebram no xterm" >&2
+        exit 1
+    }
+fi
 # O Fluxbox termina o rótulo no primeiro ")": "(Arquivos (PCManFM))" aparece cortado
 if grep -nE '^[[:space:]]*\[[a-z]+\][[:space:]]*\([^)]*\(' "${TARGET_DIR}/etc/minivideo/fluxbox/menu" >&2; then
     echo "post-build: rótulo do menu do Fluxbox com parênteses dentro (acima)" >&2

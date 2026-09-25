@@ -25,6 +25,10 @@ BR2_TOOLCHAIN_BUILDROOT_CXX=y
 BR2_GCC_ENABLE_OPENMP=y
 BR2_ENABLE_LOCALE=y
 BR2_GENERATE_LOCALE="C.UTF-8 pt_BR.UTF-8"
+# A limpeza de locales também apaga arquivos de /usr/share/X11/locale, inclusive o locale.alias
+# (C.UTF-8 -> en_US.UTF-8): o Xlib diz "locale not supported, locale set to C" e o xterm
+# mostra "PrÃ©via" (run 36111719695; reproduzido e corrigido aqui com a mesma limpeza)
+BR2_ENABLE_LOCALE_WHITELIST="C en_US en_US.UTF-8 pt_BR pt_BR.UTF-8 locale.alias compose.dir"
 
 # ---- Sistema ----
 BR2_TARGET_GENERIC_HOSTNAME="minivideo"
