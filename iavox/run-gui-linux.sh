@@ -23,4 +23,5 @@ if ! $PY -c "import sounddevice, faster_whisper" 2>/dev/null; then
         echo "AVISO: a parte de voz não foi instalada; o FalaVox vai pedir para digitar a resposta."
 fi
 
+export PYTHONUTF8=1
 exec $PY run_gui.py "$@"

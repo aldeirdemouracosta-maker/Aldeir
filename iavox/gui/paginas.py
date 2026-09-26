@@ -514,7 +514,7 @@ class RespostaPorVoz(QObject):
         self.ctx.definir_estado("ouvindo")
         self._tarefa = Tarefa(self.gravador.gravar, wav)
         self._tarefa.concluida.connect(self._gravado)
-        self._tarefa.falhou.connect(self._erro)
+        self._tarefa.falhou.connect(lambda m: self._erro(f"Falha ao gravar do microfone: {m}"))
         self._tarefa.start()
 
     def parar(self) -> None:
@@ -539,9 +539,11 @@ class RespostaPorVoz(QObject):
             return
         self._mudar("transcrevendo")
         self.ctx.definir_estado("processando")
+        if self.transcritor._modelo is None:
+            self.ctx.anunciar("Transcrevendo. Na primeira vez o modelo do Whisper é baixado, pode demorar alguns minutos.")
         self._tarefa = Tarefa(self.transcritor.transcrever, wav)
         self._tarefa.concluida.connect(self._transcrito)
-        self._tarefa.falhou.connect(self._erro)
+        self._tarefa.falhou.connect(lambda m: self._erro(f"Falha ao transcrever a fala: {m}"))
         self._tarefa.start()
 
     def _transcrito(self, texto: str) -> None:
@@ -569,7 +571,7 @@ class RespostaPorVoz(QObject):
     def _erro(self, mensagem: str) -> None:
         self._mudar("parado")
         self.ctx.definir_estado("erro")
-        self.falhou.emit(mensagem)
+        self.falhou.emit(f"{mensagem}\n\nDetalhes técnicos salvos em ~/.iavox/erros.log")
 
 
 class PainelConfirmacao(QFrame):

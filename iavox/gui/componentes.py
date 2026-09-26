@@ -31,7 +31,23 @@ class Tarefa(QThread):
         try:
             self.concluida.emit(self._funcao(*self._args, **self._kwargs))
         except Exception as exc:  # noqa: BLE001
+            registrar_erro(getattr(self._funcao, "__qualname__", str(self._funcao)))
             self.falhou.emit(str(exc) or exc.__class__.__name__)
+
+
+def registrar_erro(onde: str) -> Path | None:
+    """Guarda o erro completo em ~/.iavox/erros.log, para diagnóstico."""
+    import traceback
+    from datetime import datetime
+
+    try:
+        log = Path.home() / ".iavox" / "erros.log"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        with log.open("a", encoding="utf-8") as f:
+            f.write(f"\n=== {datetime.now():%d/%m/%Y %H:%M:%S} — {onde}\n{traceback.format_exc()}")
+        return log
+    except OSError:
+        return None
 
 
 # ---------------------------------------------------------------- voz
