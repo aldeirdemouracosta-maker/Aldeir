@@ -195,3 +195,27 @@ def test_leitura_pausa_continua_de_onde_parou_e_esc_para(janela):
     assert janela.pilha.currentWidget() is leitor
     tecla(janela, Qt.Key_Escape)                         # 2º Esc volta ao início
     assert janela.pilha.currentWidget() is janela.inicio
+
+
+def test_velocidade_f8_f9_salva_e_vale_para_as_vozes(janela, tmp_path):
+    from gui.contexto import Config
+    from iavox_pdf_audio.tts.selector import get_engine
+
+    f = janela.ctx.falador
+    inicial = f.velocidade
+    tecla(janela, Qt.Key_F9)
+    assert f.velocidade == inicial + 10
+    assert f._espeak.speed_wpm == 50 + 2 * f.velocidade
+    if f._leticia:
+        assert f._leticia.rate_percent == f.velocidade
+    for _ in range(3):
+        tecla(janela, Qt.Key_F8)
+    assert f.velocidade == inicial - 20
+    assert Config.carregar().velocidade == inicial - 20      # ficou salvo
+    for _ in range(20):
+        f.mais_lenta()
+    assert f.velocidade == 10                                # limite mínimo
+
+    # o arquivo de áudio do PDF usa a mesma velocidade
+    assert get_engine("offline", velocidade=100).speed_wpm == 250
+    assert get_engine("leticia", velocidade=80).rate_percent == 80

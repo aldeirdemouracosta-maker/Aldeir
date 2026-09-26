@@ -76,7 +76,7 @@ class RHVoiceEngine(TTSEngine):
 
     name = "Letícia (RHVoice)"
 
-    def __init__(self, voice: str = VOZ_PADRAO, rate_percent: int = 55):
+    def __init__(self, voice: str = VOZ_PADRAO, rate_percent: int = 60):
         self.voice = voice
         self.rate_percent = rate_percent          # 0-100 (50 = normal)
         self.windows = platform.system() == "Windows"

@@ -5,6 +5,14 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 
 
+VELOCIDADE_PADRAO = 60  # 0-100; 50 = normal
+
+
+def velocidade_para_wpm(velocidade: int) -> int:
+    """Converte a velocidade do IAVOX (0-100) em palavras por minuto do espeak-ng."""
+    return int(50 + 2 * max(0, min(100, velocidade)))   # 50 -> 150, 60 -> 170, 100 -> 250
+
+
 class TTSEngine(ABC):
     """Todo motor de voz do IAVOX implementa essa interface."""
 

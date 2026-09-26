@@ -17,6 +17,7 @@ def caminho_config() -> Path:
 class Config:
     feedback_sonoro: bool = True
     motor_voz: str = "automatico"
+    velocidade: int = 60          # velocidade da fala, 0-100 (50 = normal)
     modelo_whisper: str = "small"
     tesseract_cmd: str = ""
     poppler_path: str = ""

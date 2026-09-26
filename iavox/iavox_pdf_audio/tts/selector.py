@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 
 from .ai_engine import AITTSEngine
-from .base import TTSEngine
+from .base import VELOCIDADE_PADRAO, TTSEngine, velocidade_para_wpm
 from .espeak_engine import EspeakEngine
 from .kokoro_engine import KokoroEngine
 from .piper_engine import PiperEngine
@@ -35,6 +35,8 @@ def _make_espeak(kwargs: dict) -> EspeakEngine:
     params = {}
     if kwargs.get("espeak_voice"):
         params["voice"] = kwargs["espeak_voice"]
+    if kwargs.get("velocidade") is not None and not kwargs.get("espeak_speed_wpm"):
+        params["speed_wpm"] = velocidade_para_wpm(kwargs["velocidade"])
     if kwargs.get("espeak_speed_wpm"):
         params["speed_wpm"] = kwargs["espeak_speed_wpm"]
     if kwargs.get("espeak_binary_path"):
@@ -84,8 +86,12 @@ def get_engine(choice: str = "automatico", **kwargs) -> TTSEngine:
     if choice not in ENGINE_CHOICES:
         raise ValueError(f"Motor inválido: {choice!r}. Use um de {ENGINE_CHOICES}")
 
+    velocidade = kwargs.get("velocidade")
+    if velocidade is None:
+        velocidade = VELOCIDADE_PADRAO
+
     if choice == "leticia":
-        return RHVoiceEngine()
+        return RHVoiceEngine(rate_percent=velocidade)
     if choice == "offline":
         return _make_espeak(kwargs)
     if choice == "piper":
@@ -97,7 +103,7 @@ def get_engine(choice: str = "automatico", **kwargs) -> TTSEngine:
 
     # automático: tenta do melhor pro mais garantido
     candidates = [
-        RHVoiceEngine(),  # Letícia-F123, a voz do Orca/NVDA — preferida quando instalada
+        RHVoiceEngine(rate_percent=velocidade),  # Letícia-F123, a voz do Orca/NVDA — preferida quando instalada
         _make_ia(kwargs),
         _make_kokoro(kwargs),
         _make_piper(kwargs),

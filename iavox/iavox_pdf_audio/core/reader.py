@@ -38,6 +38,7 @@ class ReadingOptions:
     piper_model_path: str | None = None  # caminho do modelo .onnx do Piper (Windows/Linux)
     kokoro_model_path: str | None = None
     kokoro_voices_path: str | None = None
+    velocidade: int = 60            # velocidade da fala, 0-100 (50 = normal)
     espeak_binary_path: str | None = None  # caminho manual do espeak-ng.exe (Windows)
 
 
@@ -128,6 +129,7 @@ class IAVOXPDFReader:
             kokoro_model_path=options.kokoro_model_path,
             kokoro_voices_path=options.kokoro_voices_path,
             espeak_binary_path=options.espeak_binary_path,
+            velocidade=options.velocidade,
         )
         if not engine.is_available():
             raise RuntimeError(
@@ -150,6 +152,7 @@ class IAVOXPDFReader:
             kokoro_model_path=options.kokoro_model_path,
             kokoro_voices_path=options.kokoro_voices_path,
             espeak_binary_path=options.espeak_binary_path,
+            velocidade=options.velocidade,
         )
         if not engine.is_available():
             raise RuntimeError(f"Motor de TTS '{engine.name}' não está disponível.")

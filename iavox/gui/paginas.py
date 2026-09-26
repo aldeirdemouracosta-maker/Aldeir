@@ -274,9 +274,9 @@ class PaginaLeitor(PaginaModulo):
         self.ouvir.setAccessibleName(f"Ler o texto em voz alta agora, com a voz {ctx.falador.voz}")
         self.ouvir.clicked.connect(lambda: ctx.falador.ler(self.saida.toPlainText()))
         acoes.addWidget(self.ouvir)
-        acoes.addWidget(ControlesLeitura(ctx.falador))
         acoes.addStretch(1)
         principal.addLayout(acoes)
+        principal.addWidget(ControlesLeitura(ctx.falador), 0, Qt.AlignLeft)
 
         baixo = QHBoxLayout()
         progresso = QVBoxLayout()
@@ -358,6 +358,7 @@ class PaginaLeitor(PaginaModulo):
             kokoro_model_path=cfg.kokoro_model_path or None,
             kokoro_voices_path=cfg.kokoro_voices_path or None,
             espeak_binary_path=cfg.espeak_binary_path or None,
+            velocidade=self.ctx.falador.velocidade,
         )
         self.etapas.clear()
         self.saida.clear()
@@ -1115,13 +1116,13 @@ class PaginaCaderno(PaginaModulo):
         b_limpar.clicked.connect(self._limpar)
         for b in (self.b_ler, b_txt, b_ed, b_limpar):
             botoes.addWidget(b)
-        botoes.addWidget(ControlesLeitura(ctx.falador))
         botoes.addStretch(1)
         self.contagem = QLabel()
         self.contagem.setObjectName("textoSuave")
         botoes.addWidget(self.contagem)
         self.raiz.addLayout(botoes)
 
+        self.raiz.addWidget(ControlesLeitura(ctx.falador), 0, Qt.AlignLeft)
         self.lista = QListWidget()
         self.lista.setAccessibleName("Itens do Mini Caderno")
         self.lista.setWordWrap(True)
@@ -1198,6 +1199,7 @@ AJUDA_HTML = f"""
 <tr><td><b>Esc</b></td><td>para a leitura; cancela; se não houver nada, volta ao início</td></tr>
 <tr><td><b>Ctrl+P</b></td><td>pausar e continuar a leitura (continua de onde parou)</td></tr>
 <tr><td><b>Ctrl+Seta ↑ / ↓</b></td><td>voltar ou avançar uma frase na leitura</td></tr>
+<tr><td><b>F8 / F9</b></td><td>fala mais lenta / mais rápida (fica salvo)</td></tr>
 <tr><td><b>Ctrl+R</b></td><td>repetir a última mensagem falada</td></tr>
 <tr><td><b>Ctrl+.</b></td><td>calar a voz</td></tr>
 <tr><td><b>Tab</b></td><td>passar pelos botões (o foco fica em amarelo)</td></tr>

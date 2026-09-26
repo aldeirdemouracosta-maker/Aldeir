@@ -82,10 +82,13 @@ class Falador(QObject):
     """
 
     mudou = pyqtSignal(str)  # "lendo" | "pausado" | "parado"
+    velocidade_mudou = pyqtSignal(int)
 
-    def __init__(self, ativo: bool = True, binario: str | None = None, motor: str = "automatico"):
+    def __init__(self, ativo: bool = True, binario: str | None = None, motor: str = "automatico",
+                 velocidade: int = 60):
         super().__init__()
         self.ativo = ativo
+        self.velocidade = max(10, min(100, velocidade))
         self._proc: subprocess.Popen | None = None
         self._lock = threading.Lock()
         self.frases: list[str] = []
@@ -106,6 +109,36 @@ class Falador(QObject):
             leticia = RHVoiceEngine()
             if leticia.is_available():
                 self._leticia = leticia
+        self._aplicar_velocidade()
+
+    # ------------------------------------------------------------ velocidade
+
+    def _aplicar_velocidade(self) -> None:
+        from iavox_pdf_audio.tts.base import velocidade_para_wpm
+
+        self._espeak.speed_wpm = velocidade_para_wpm(self.velocidade)
+        if self._leticia:
+            self._leticia.rate_percent = self.velocidade
+
+    def definir_velocidade(self, velocidade: int) -> int:
+        """Muda a velocidade (10-100). Se estiver lendo, a frase atual recomeça já na nova velocidade."""
+        velocidade = max(10, min(100, velocidade))
+        if velocidade == self.velocidade:
+            return velocidade
+        self.velocidade = velocidade
+        self._aplicar_velocidade()
+        self.velocidade_mudou.emit(velocidade)
+        if self.estado == "lendo":
+            self._reiniciar_frase()
+        elif self.estado == "parado":
+            self.falar(f"Velocidade {velocidade}")
+        return velocidade
+
+    def mais_rapida(self) -> int:
+        return self.definir_velocidade(self.velocidade + 10)
+
+    def mais_lenta(self) -> int:
+        return self.definir_velocidade(self.velocidade - 10)
 
     @property
     def voz(self) -> str:
@@ -243,8 +276,31 @@ class ControlesLeitura(QWidget):
         self.b_parar.clicked.connect(falador.calar)
         for b in (self.b_voltar, self.b_pausa, self.b_avancar, self.b_parar):
             lay.addWidget(b)
+
+        lay.addSpacing(12)
+        self.b_lenta = QPushButton("−")
+        self.b_lenta.setAccessibleName("Fala mais lenta (F8)")
+        self.b_lenta.setToolTip("Fala mais lenta (F8)")
+        self.lbl_vel = QLabel()
+        self.lbl_vel.setStyleSheet("font-size:15px; font-weight:600;")
+        self.b_rapida = QPushButton("+")
+        self.b_rapida.setAccessibleName("Fala mais rápida (F9)")
+        self.b_rapida.setToolTip("Fala mais rápida (F9)")
+        self.b_lenta.clicked.connect(falador.mais_lenta)
+        self.b_rapida.clicked.connect(falador.mais_rapida)
+        for w in (self.b_lenta, self.lbl_vel, self.b_rapida):
+            lay.addWidget(w)
+        falador.velocidade_mudou.connect(self._velocidade)
+        self._velocidade(falador.velocidade)
+
         falador.mudou.connect(self._atualizar)
         self._atualizar(falador.estado)
+
+    def _velocidade(self, v: int) -> None:
+        self.lbl_vel.setText(f"Velocidade {v}%")
+        self.lbl_vel.setAccessibleName(f"Velocidade da fala: {v} por cento. F8 diminui, F9 aumenta")
+        self.b_lenta.setEnabled(v > 10)
+        self.b_rapida.setEnabled(v < 100)
 
     def _atualizar(self, estado: str) -> None:
         self.b_pausa.setText("▶  Continuar (Ctrl+P)" if estado == "pausado" else "⏸  Pausar (Ctrl+P)")

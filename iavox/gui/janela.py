@@ -61,7 +61,9 @@ class JanelaIAVOX(QMainWindow):
         self.setStyleSheet(theme.STYLESHEET)
 
         self.config = config or Config.carregar()
-        falador = Falador(self.config.feedback_sonoro, self.config.espeak_binary_path or None, self.config.motor_voz)
+        falador = Falador(self.config.feedback_sonoro, self.config.espeak_binary_path or None,
+                          self.config.motor_voz, self.config.velocidade)
+        falador.velocidade_mudou.connect(self._salvar_velocidade)
         self.ctx = Contexto(self.config, falador)
         self.ctx.definir_estado = self.definir_estado
         self.ctx.navegar = self.navegar
@@ -240,8 +242,14 @@ class JanelaIAVOX(QMainWindow):
         QShortcut(QKeySequence("Ctrl+R"), self, activated=lambda: self.ctx.falador.falar(self._ultima_fala))
         QShortcut(QKeySequence("Ctrl+."), self, activated=self.ctx.falador.calar)
         QShortcut(QKeySequence("Ctrl+P"), self, activated=self._pausar)
+        QShortcut(QKeySequence("F8"), self, activated=self.ctx.falador.mais_lenta)
+        QShortcut(QKeySequence("F9"), self, activated=self.ctx.falador.mais_rapida)
         QShortcut(QKeySequence("Ctrl+Up"), self, activated=self.ctx.falador.voltar_frase)
         QShortcut(QKeySequence("Ctrl+Down"), self, activated=self.ctx.falador.avancar_frase)
+
+    def _salvar_velocidade(self, v: int) -> None:
+        self.config.velocidade = v
+        self.config.salvar()
 
     def _pausar(self) -> None:
         atual = self.pilha.currentWidget()

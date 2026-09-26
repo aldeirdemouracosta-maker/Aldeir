@@ -230,5 +230,5 @@ def test_leticia_pelo_speechd_fala_mas_nao_gera_arquivo(monkeypatch):
         e.synthesize_to_file("x", "/tmp/nao.wav")
     # o motor automático não usa a Letícia para gerar o arquivo nesse caso
     from iavox_pdf_audio.tts import selector
-    monkeypatch.setattr(selector, "RHVoiceEngine", lambda: e)
+    monkeypatch.setattr(selector, "RHVoiceEngine", lambda **_: e)
     assert selector.get_engine("automatico").name != "Letícia (RHVoice)"

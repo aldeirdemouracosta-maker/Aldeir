@@ -28,6 +28,7 @@ DICAS = [
     (["Enter"], "confirmar"),
     (["Espaço"], "gravar novamente"),
     (["Ctrl", "P"], "pausar / continuar"),
+    (["F8", "F9"], "mais lenta / mais rápida"),
     (["Esc"], "cancelar / voltar"),
 ]
 
@@ -134,7 +135,8 @@ class PaginaInicio(QWidget):
             linha.setSpacing(6)
             for j, t in enumerate(teclas):
                 if j:
-                    mais = QLabel("+")
+                    # teclas de função alternativas (F8 / F9) usam barra; combinações usam "+"
+                    mais = QLabel("/" if all(k.startswith("F") for k in teclas) else "+")
                     mais.setStyleSheet("border:none; background:transparent;")
                     linha.addWidget(mais)
                 k = QLabel(t)
