@@ -27,6 +27,12 @@ class FakeOllamaHandler(BaseHTTPRequestHandler):
         if "images" in payload:
             # simula resposta de audiodescrição
             response_text = "Gráfico de barras coloridas mostrando o crescimento de vendas ao longo de três trimestres."
+        elif "perguntas de estudo" in payload.get("prompt", ""):
+            # simula as perguntas do EstudaVox
+            response_text = (
+                "Aqui estão as perguntas:\n1. O que é o IAVOX?\n"
+                "2. Como o IAVOX ajuda quem usa o DOSVOX?\n3. Por que funcionar offline é importante?"
+            )
         else:
             # simula resumo
             prompt = payload.get("prompt", "")

@@ -1,0 +1,7 @@
+# Opcional: FalaVox (F2) e Modo Atividade (F5) — responder com a voz.
+# Gravação do microfone + transcrição local com Whisper (sem nuvem).
+# O modelo do Whisper é baixado na primeira vez que o FalaVox é usado;
+# depois funciona 100% offline.
+sounddevice>=0.4
+numpy>=1.24
+faster-whisper>=1.0

@@ -139,22 +139,53 @@ ollama pull llama3.2:3b   # para resumo de texto
 ollama pull llava:7b      # para audiodescrição de imagens
 ```
 
-## Interface gráfica (desktop)
+## Interface gráfica (desktop) — Suíte IAVOX
 
-Além da CLI, o IAVOX tem uma interface gráfica desktop (Linux e Windows),
-com painel lateral de documentos recentes, opções de leitura e um botão de
-play para ouvir o resultado.
+A interface segue a **especificação oficial do tema** (azul profundo, azul
+elétrico, foco amarelo, robô assistente) e reúne os módulos na tela inicial:
+
+| Tecla | Módulo | O que faz |
+|---|---|---|
+| **F1** | LeitorVox | Lê PDF (com resumo e audiodescrição), imagem ou a tela (OCR) |
+| **F2** | FalaVox | Responder com voz: grava, transcreve com Whisper local e pede confirmação |
+| **F3** | OlhaVox | Descreve imagens (abrir, colar com Ctrl+V ou capturar a tela) |
+| **F4** | EstudaVox | Resumo e perguntas de estudo de um PDF, TXT ou texto colado |
+| **F5** | Modo Atividade | Lê cada pergunta, o aluno responde com a voz, confirma e continua |
+
+Barra de navegação: **Início**, **Atividade** (Mini Caderno), **Ajuda** e **Ajustes**.
+A barra de status mostra, com bolinha verde ou vermelha, o que está funcionando
+na máquina: DOSVOX (`C:\winvox`), microfone, OCR (Tesseract) e modelos locais (Ollama).
+Pressione Enter em um item para ouvir o detalhe.
+
+**Teclado** (tudo funciona sem mouse; o foco aparece em amarelo):
+
+- `F1`…`F5` abrem os módulos; `Esc` cancela ou volta ao início
+- `Ctrl+Shift+M` começa e termina a gravação da resposta
+- `Enter` confirma a resposta · `Espaço` grava de novo
+- `Ctrl+R` repete a última mensagem falada · `Ctrl+.` cala a voz
+
+**Mini Caderno**: tudo o que o aluno faz nos módulos fica registrado em ordem
+cronológica (texto leve, até 30 itens na tela), para o professor acompanhar.
+Botões: Ler Caderno, Salvar TXT, Abrir no EDIVOX (editor do DOSVOX) e Limpar.
+As respostas confirmadas no FalaVox também vão para `IAVOX_respostas.txt`
+na pasta do usuário e para a área de transferência (Ctrl+V no EDIVOX).
+
+**Estados do robô**: Pronto, Ouvindo, Processando, Confirmando e Erro — o estado
+aparece por escrito e é anunciado por voz, nunca só pela imagem.
+
+Instalação:
 
 ```bash
 pip install -r requirements.txt -r requirements-gui.txt
+# opcional, para responder com a voz (F2 e F5):
+pip install -r requirements-voz.txt
 ```
 
 - **Linux**: `./run-gui-linux.sh` (ou `python3 run_gui.py`)
 - **Windows**: dê duplo clique em `run-gui-windows.bat` (ou `python run_gui.py`)
 
-A reprodução do áudio tenta tocar dentro da própria janela; se as bibliotecas
-de multimídia do sistema não estiverem disponíveis, o IAVOX abre o áudio
-gerado no tocador padrão do seu sistema operacional automaticamente.
+Sem microfone ou sem Whisper, o FalaVox oferece digitar a resposta — o fluxo
+de confirmação e o Mini Caderno continuam funcionando.
 
 ## Uso por linha de comando (CLI)
 
@@ -184,28 +215,29 @@ python tests/make_sample_pdf.py   # gera um PDF de exemplo
 python -m pytest tests/ -v
 ```
 
+`tests/test_suite.py` testa os módulos (caderno, EstudaVox, OlhaVox, status) e
+`tests/test_interface.py` dirige a interface pelo teclado (F1–F5, Esc, Enter,
+Espaço, Ctrl+Shift+M) sem precisar de monitor.
+
 ## Estrutura
 
 ```
 iavox_pdf_audio/
-  core/
-    extractor.py          # extração de texto + imagens do PDF (com OCR)
-    summarizer.py          # resumo por IA, 3 níveis de densidade
-    image_description.py   # audiodescrição de imagens por IA (visão)
-    reader.py               # orquestrador: junta tudo em um roteiro + áudio
-  tts/
-    base.py                 # interface comum dos motores de voz
-    espeak_engine.py        # motor offline básico
-    piper_engine.py         # motor offline natural
-    ai_engine.py             # motor por IA (Coqui TTS)
-    selector.py              # escolhe o motor (as 4 opções)
-  cli/
-    main.py                  # interface de linha de comando acessível
+  core/        extractor.py, summarizer.py, image_description.py, reader.py
+  tts/         motores de voz (espeak-ng, Piper, Kokoro, Coqui) + selector.py
+  suite/
+    caderno.py      # Mini Caderno (registro para o professor)
+    ambiente.py     # detecção de DOSVOX, microfone, OCR e Ollama
+    estudo.py       # EstudaVox: resumo + perguntas
+    olhavox.py      # OlhaVox + OCR de imagem/tela
+    voz_entrada.py  # FalaVox: gravação + Whisper local
+  cli/main.py  # linha de comando acessível
 gui/
-  main_window.py              # janela principal (layout do mockup)
-  worker.py                    # thread de fundo (não trava a interface)
-  audio_player.py              # player com fallback pro tocador do sistema
-  styles.py                     # visual (branco/azul, cantos arredondados)
-run_gui.py                       # ponto de entrada da interface gráfica
-run-gui-linux.sh / run-gui-windows.bat   # scripts de execução
+  janela.py          # janela principal, atalhos, navegação e barra de status
+  pagina_inicio.py   # tela inicial (F1–F5, robô, dicas rápidas)
+  paginas.py         # telas dos módulos, Mini Caderno e Ajuda
+  componentes.py     # cartões, robô com estados, voz de feedback, tarefas
+  ajustes.py         # configurações avançadas
+  theme.py, icones.py, assets/robo.png
+run_gui.py
 ```
