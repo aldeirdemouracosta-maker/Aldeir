@@ -61,7 +61,7 @@ class JanelaIAVOX(QMainWindow):
         self.setStyleSheet(theme.STYLESHEET)
 
         self.config = config or Config.carregar()
-        falador = Falador(self.config.feedback_sonoro, self.config.espeak_binary_path or None)
+        falador = Falador(self.config.feedback_sonoro, self.config.espeak_binary_path or None, self.config.motor_voz)
         self.ctx = Contexto(self.config, falador)
         self.ctx.definir_estado = self.definir_estado
         self.ctx.navegar = self.navegar
@@ -228,7 +228,7 @@ class JanelaIAVOX(QMainWindow):
         dlg.setStyleSheet(theme.STYLESHEET)
         if dlg.exec_():
             self.ctx.falador.ativo = self.config.feedback_sonoro
-            self.ctx.falador.configurar_binario(self.config.espeak_binary_path)
+            self.ctx.falador.configurar(self.config.espeak_binary_path, self.config.motor_voz)
             self.atualizar_status()
             self.anunciar("Ajustes salvos.")
 

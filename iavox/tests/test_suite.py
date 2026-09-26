@@ -166,3 +166,36 @@ def test_status_do_ambiente(ollama_fake):
     assert not desligado.ok and "não está rodando" in desligado.fala
     nomes = [s.nome for s in ambiente.checar_tudo()]
     assert nomes == ["DOSVOX", "Microfone", "OCR", "Modelos locais"]
+
+
+# ------------------------------------------------------------ voz Letícia (RHVoice)
+
+from iavox_pdf_audio.tts.rhvoice_engine import RHVoiceEngine  # noqa: E402
+from iavox_pdf_audio.tts.selector import get_engine  # noqa: E402
+
+leticia = pytest.mark.skipif(not RHVoiceEngine().is_available(), reason="RHVoice/Letícia não instalada")
+
+
+@leticia
+def test_leticia_gera_audio_com_acentos(tmp_path):
+    import wave
+    saida = RHVoiceEngine().synthesize_to_file("Atenção: questão número três, fotossíntese.", tmp_path / "l.wav")
+    with wave.open(str(saida)) as w:
+        assert w.getnframes() / w.getframerate() > 1.5   # fala de verdade, não silêncio
+
+
+@leticia
+def test_automatico_prefere_leticia():
+    assert get_engine("automatico").name == "Letícia (RHVoice)"
+    assert get_engine("leticia").name == "Letícia (RHVoice)"
+
+
+def test_leticia_ausente_explica_como_instalar(monkeypatch):
+    monkeypatch.setattr("shutil.which", lambda _nome: None)
+    e = RHVoiceEngine()
+    if e.windows:
+        pytest.skip("teste de mensagem do Linux")
+    assert not e.is_available()
+    assert "apt install rhvoice" in e.motivo_indisponivel()
+    with pytest.raises(RuntimeError, match="Letícia"):
+        e.synthesize_to_file("x", "/tmp/nao.wav")

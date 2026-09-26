@@ -43,7 +43,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--tts", choices=list(ENGINE_CHOICES), default=None,
-        help="Motor de voz: offline, piper, ia ou automatico.",
+        help="Motor de voz: leticia, offline, piper, kokoro, ia ou automatico.",
     )
     parser.add_argument(
         "--salvar-audio", choices=["sim", "nao"], default=None,

@@ -21,7 +21,7 @@ e leitores de tela em geral.
   4. `ia` — Coqui TTS, voz neural gerada por IA local (`pip install TTS`,
      mais pesado — puxa PyTorch).
   5. `automatico` — usa o melhor motor disponível na sua máquina
-     (ia > kokoro > piper > offline).
+     (leticia > ia > kokoro > piper > offline).
 - **Salva o resultado como arquivo de áudio (.wav)** e/ou lê em voz alta na hora.
 
 Tudo roda localmente — nenhuma etapa depende de nuvem ou API paga. Os
@@ -91,6 +91,20 @@ Na interface gráfica, os mesmos caminhos podem ser informados pelo botão
 Se o espeak-ng, Tesseract e Poppler estiverem todos no PATH do Windows
 (instalador padrão costuma cuidar disso), não precisa passar `--tesseract-cmd`
 nem `--poppler-path` — funciona igual ao Linux.
+
+### Recomendado: voz Letícia-F123 (RHVoice) — a mesma do Orca e do NVDA
+
+**Linux:**
+
+```bash
+sudo apt install rhvoice rhvoice-brazilian-portuguese
+```
+
+**Windows:** instale a voz Letícia do RHVoice para SAPI5 (https://rhvoice.org).
+
+Com ela instalada, o motor `automatico` passa a usar a Letícia para ler os
+PDFs e para os avisos falados da interface. Também dá para escolher direto
+com `--tts leticia` ou em Ajustes → Motor de voz padrão.
 
 ### Opcional: voz mais natural (Piper) — Windows e Linux
 

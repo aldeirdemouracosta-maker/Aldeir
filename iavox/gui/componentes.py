@@ -54,26 +54,38 @@ def registrar_erro(onde: str) -> Path | None:
 
 class Falador:
     """
-    Feedback sonoro: fala mensagens curtas com o espeak-ng, sem travar a
-    tela. Uma fala nova interrompe a anterior (como um leitor de tela).
+    Feedback sonoro: fala mensagens curtas sem travar a tela. Uma fala nova
+    interrompe a anterior (como um leitor de tela). Usa a voz Letícia-F123
+    (RHVoice) quando estiver instalada e o motor escolhido permitir; senão,
+    o espeak-ng.
     """
 
-    def __init__(self, ativo: bool = True, binario: str | None = None):
-        from iavox_pdf_audio.tts.espeak_engine import EspeakEngine
-
+    def __init__(self, ativo: bool = True, binario: str | None = None, motor: str = "automatico"):
         self.ativo = ativo
-        self._engine = EspeakEngine(binary_path=binario)
         self._proc: subprocess.Popen | None = None
         self._lock = threading.Lock()
+        self.configurar(binario, motor)
+
+    def configurar(self, binario: str | None = None, motor: str = "automatico") -> None:
+        from iavox_pdf_audio.tts.espeak_engine import EspeakEngine
+        from iavox_pdf_audio.tts.rhvoice_engine import RHVoiceEngine
+
+        self._espeak = EspeakEngine(binary_path=binario or None)
+        self._leticia = None
+        if motor in ("automatico", "leticia"):
+            leticia = RHVoiceEngine()
+            if leticia.is_available():
+                self._leticia = leticia
+
+    @property
+    def voz(self) -> str:
+        if self._leticia:
+            return "Letícia"
+        return "espeak-ng" if self._espeak.is_available() else "nenhuma"
 
     @property
     def disponivel(self) -> bool:
-        return self._engine.is_available()
-
-    def configurar_binario(self, binario: str | None) -> None:
-        from iavox_pdf_audio.tts.espeak_engine import EspeakEngine
-
-        self._engine = EspeakEngine(binary_path=binario or None)
+        return self._leticia is not None or self._espeak.is_available()
 
     def calar(self) -> None:
         with self._lock:
@@ -88,10 +100,14 @@ class Falador:
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         with self._lock:
             try:
-                self._proc = subprocess.Popen(
-                    [self._engine._binary, "-v", self._engine.voice, "-s", str(self._engine.speed_wpm), texto],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags,
-                )
+                if self._leticia:
+                    self._proc = self._leticia.iniciar_fala(texto)
+                else:
+                    e = self._espeak
+                    self._proc = subprocess.Popen(
+                        [e._binary, "-v", e.voice, "-s", str(e.speed_wpm), texto],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags,
+                    )
             except OSError:
                 self._proc = None
 

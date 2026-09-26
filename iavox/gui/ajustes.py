@@ -72,6 +72,14 @@ class DialogoAjustes(QDialog):
             self.motor.addItem(v, userData=k)
         self.motor.setCurrentIndex(max(0, self.motor.findData(config.motor_voz)))
         form.addRow("Motor de voz padrão:", self.motor)
+        from iavox_pdf_audio.tts.rhvoice_engine import RHVoiceEngine
+        leticia = RHVoiceEngine()
+        aviso = (_detectado("ok").replace("detectado automaticamente", "voz Letícia-F123 instalada")
+                 if leticia.is_available()
+                 else f"<span style='color:{theme.AMARELO_FOCO}'>Letícia não instalada — {leticia.motivo_indisponivel()}</span>")
+        lbl_leticia = QLabel(aviso)
+        lbl_leticia.setWordWrap(True)
+        form.addRow("", lbl_leticia)
 
         self.whisper = QComboBox()
         for k, v in MODELOS_WHISPER.items():

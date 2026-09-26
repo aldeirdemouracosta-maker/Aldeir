@@ -2,11 +2,12 @@
 Seletor de motor de TTS do IAVOX.
 
 Implementa as 5 opções escolhidas:
+0. leticia       -> Letícia-F123 (RHVoice, a voz do Orca/F123)
 1. offline       -> espeak-ng (sempre disponível, voz robótica)
 2. piper         -> Piper TTS (offline, voz natural)
 3. kokoro        -> Kokoro (voz neural leve, PT-BR nativo)
 4. ia            -> Coqui TTS (voz neural via IA local, mais pesado)
-5. automatico    -> tenta na ordem ia > kokoro > piper > offline, usando o
+5. automatico    -> tenta na ordem leticia > ia > kokoro > piper > offline, usando o
                      melhor motor realmente disponível na máquina do usuário
 
 Cada motor recebe seus próprios parâmetros por nomes específicos (ex:
@@ -23,10 +24,11 @@ from .base import TTSEngine
 from .espeak_engine import EspeakEngine
 from .kokoro_engine import KokoroEngine
 from .piper_engine import PiperEngine
+from .rhvoice_engine import RHVoiceEngine
 
 logger = logging.getLogger("iavox.tts.selector")
 
-ENGINE_CHOICES = ("offline", "piper", "kokoro", "ia", "automatico")
+ENGINE_CHOICES = ("leticia", "offline", "piper", "kokoro", "ia", "automatico")
 
 
 def _make_espeak(kwargs: dict) -> EspeakEngine:
@@ -82,6 +84,8 @@ def get_engine(choice: str = "automatico", **kwargs) -> TTSEngine:
     if choice not in ENGINE_CHOICES:
         raise ValueError(f"Motor inválido: {choice!r}. Use um de {ENGINE_CHOICES}")
 
+    if choice == "leticia":
+        return RHVoiceEngine()
     if choice == "offline":
         return _make_espeak(kwargs)
     if choice == "piper":
@@ -93,6 +97,7 @@ def get_engine(choice: str = "automatico", **kwargs) -> TTSEngine:
 
     # automático: tenta do melhor pro mais garantido
     candidates = [
+        RHVoiceEngine(),  # Letícia-F123, a voz do Orca/NVDA — preferida quando instalada
         _make_ia(kwargs),
         _make_kokoro(kwargs),
         _make_piper(kwargs),

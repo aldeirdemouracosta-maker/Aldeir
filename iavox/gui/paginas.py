@@ -43,6 +43,7 @@ from .worker import ReaderWorker
 
 TTS_LABELS = {
     "automatico": "Automático (melhor disponível)",
+    "leticia": "Letícia (RHVoice, voz do Orca/F123)",
     "offline": "Offline básico (espeak-ng)",
     "piper": "Offline natural (Piper)",
     "kokoro": "Kokoro (voz neural leve, PT-BR)",

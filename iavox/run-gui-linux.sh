@@ -23,5 +23,10 @@ if ! $PY -c "import sounddevice, faster_whisper" 2>/dev/null; then
         echo "AVISO: a parte de voz não foi instalada; o FalaVox vai pedir para digitar a resposta."
 fi
 
+if ! command -v RHVoice-test >/dev/null 2>&1; then
+    echo "DICA: para usar a voz Letícia (a mesma do Orca), instale:"
+    echo "    sudo apt install rhvoice rhvoice-brazilian-portuguese"
+fi
+
 export PYTHONUTF8=1
 exec $PY run_gui.py "$@"
