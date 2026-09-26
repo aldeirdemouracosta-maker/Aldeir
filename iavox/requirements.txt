@@ -1,0 +1,16 @@
+# Dependências principais (sempre necessárias)
+pdfplumber>=0.11
+pypdf>=5.9
+pillow>=10.0
+requests>=2.31
+
+# OCR (fallback para PDFs escaneados)
+pytesseract>=0.3.13
+pdf2image>=1.17
+
+# Opcional: Kokoro para o motor de voz neural leve com PT-BR nativo (--tts kokoro)
+# pip install kokoro-onnx soundfile
+# (também exige baixar os arquivos de modelo — veja o README)
+
+# Opcional: Coqui TTS para o motor de voz por IA (--tts ia)
+# pip install TTS
