@@ -27,6 +27,7 @@ DICAS = [
     (["Ctrl", "Shift", "M"], "responder com voz"),
     (["Enter"], "confirmar"),
     (["Espaço"], "gravar novamente"),
+    (["Ctrl", "P"], "pausar / continuar"),
     (["Esc"], "cancelar / voltar"),
 ]
 

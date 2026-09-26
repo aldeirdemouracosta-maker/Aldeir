@@ -104,6 +104,8 @@ def get_engine(choice: str = "automatico", **kwargs) -> TTSEngine:
         _make_espeak(kwargs),
     ]
     for engine in candidates:
+        if not getattr(engine, "gera_arquivo", True):
+            continue  # Letícia só no speech-dispatcher: fala ao vivo, não grava o arquivo
         if engine.is_available():
             logger.info("Motor automático selecionado: %s", engine.name)
             return engine

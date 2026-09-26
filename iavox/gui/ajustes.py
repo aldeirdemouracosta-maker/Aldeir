@@ -74,7 +74,7 @@ class DialogoAjustes(QDialog):
         form.addRow("Motor de voz padrão:", self.motor)
         from iavox_pdf_audio.tts.rhvoice_engine import RHVoiceEngine
         leticia = RHVoiceEngine()
-        aviso = (_detectado("ok").replace("detectado automaticamente", "voz Letícia-F123 instalada")
+        aviso = (_detectado("ok").replace("detectado automaticamente", f"voz Letícia-F123 encontrada {leticia.descricao_rota()}")
                  if leticia.is_available()
                  else f"<span style='color:{theme.AMARELO_FOCO}'>Letícia não instalada — {leticia.motivo_indisponivel()}</span>")
         lbl_leticia = QLabel(aviso)

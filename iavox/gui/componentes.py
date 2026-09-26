@@ -5,7 +5,7 @@ import subprocess
 import threading
 from pathlib import Path
 
-from PyQt5.QtCore import QRectF, QSize, Qt, QThread, pyqtSignal
+from PyQt5.QtCore import QObject, QRectF, QSize, Qt, QThread, QTimer, pyqtSignal
 from PyQt5.QtGui import QColor, QPainter, QPainterPath, QPen, QPixmap
 from PyQt5.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
@@ -52,18 +52,48 @@ def registrar_erro(onde: str) -> Path | None:
 
 # ---------------------------------------------------------------- voz
 
-class Falador:
+def dividir_frases(texto: str, maximo: int = 300) -> list[str]:
+    """Quebra o texto em frases (e frases longas em pedaços), para ler, pausar e continuar."""
+    import re
+
+    frases = []
+    for frase in re.split(r"(?<=[.!?;:])\s+|\n+", texto):
+        frase = frase.strip()
+        while len(frase) > maximo:
+            corte = frase.rfind(" ", 0, maximo)
+            corte = corte if corte > 40 else maximo
+            frases.append(frase[:corte].strip())
+            frase = frase[corte:].strip()
+        if frase:
+            frases.append(frase)
+    return frases
+
+
+class Falador(QObject):
     """
-    Feedback sonoro: fala mensagens curtas sem travar a tela. Uma fala nova
-    interrompe a anterior (como um leitor de tela). Usa a voz Letícia-F123
-    (RHVoice) quando estiver instalada e o motor escolhido permitir; senão,
-    o espeak-ng.
+    Voz do IAVOX, sem travar a tela.
+
+    - falar(): mensagens curtas (avisos). Uma nova interrompe a anterior.
+    - ler(): textos longos, frase por frase — pode PAUSAR e CONTINUAR de
+      onde parou (Ctrl+P), ou parar (Esc).
+
+    Usa a voz Letícia-F123 (RHVoice) quando estiver instalada e o motor
+    escolhido permitir; senão, o espeak-ng.
     """
 
+    mudou = pyqtSignal(str)  # "lendo" | "pausado" | "parado"
+
     def __init__(self, ativo: bool = True, binario: str | None = None, motor: str = "automatico"):
+        super().__init__()
         self.ativo = ativo
         self._proc: subprocess.Popen | None = None
         self._lock = threading.Lock()
+        self.frases: list[str] = []
+        self.indice = 0
+        self.estado = "parado"
+        self._timer = QTimer(self)
+        self._timer.setInterval(120)
+        self._timer.timeout.connect(self._verificar)
         self.configurar(binario, motor)
 
     def configurar(self, binario: str | None = None, motor: str = "automatico") -> None:
@@ -87,16 +117,9 @@ class Falador:
     def disponivel(self) -> bool:
         return self._leticia is not None or self._espeak.is_available()
 
-    def calar(self) -> None:
-        with self._lock:
-            if self._proc and self._proc.poll() is None:
-                self._proc.terminate()
-            self._proc = None
+    # ------------------------------------------------------------ processo de fala
 
-    def falar(self, texto: str) -> None:
-        if not (self.ativo and texto and self.disponivel):
-            return
-        self.calar()
+    def _iniciar(self, texto: str) -> None:
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         with self._lock:
             try:
@@ -110,6 +133,125 @@ class Falador:
                     )
             except OSError:
                 self._proc = None
+
+    def _interromper(self) -> None:
+        with self._lock:
+            if self._proc and self._proc.poll() is None:
+                self._proc.terminate()
+            self._proc = None
+        if self._leticia:
+            self._leticia.cancelar()
+
+    def _mudar(self, estado: str) -> None:
+        if estado != self.estado:
+            self.estado = estado
+            self.mudou.emit(estado)
+
+    # ------------------------------------------------------------ avisos curtos
+
+    def falar(self, texto: str) -> None:
+        """Aviso curto (feedback sonoro). Respeita a opção de feedback e para qualquer leitura."""
+        if not (self.ativo and texto and self.disponivel):
+            return
+        self.calar()
+        self._iniciar(texto)
+
+    def calar(self) -> None:
+        self._timer.stop()
+        self._interromper()
+        self.frases, self.indice = [], 0
+        self._mudar("parado")
+
+    # ------------------------------------------------------------ leitura longa
+
+    def ler(self, texto: str, forcar: bool = True) -> None:
+        """Lê um texto longo frase por frase. forcar=False respeita a opção de feedback sonoro."""
+        if not texto or not self.disponivel or (not forcar and not self.ativo):
+            return
+        self.calar()
+        self.frases = dividir_frases(texto)
+        self.indice = 0
+        if self.frases:
+            self._mudar("lendo")
+            self._iniciar(self.frases[0])
+            self._timer.start()
+
+    def pausar_continuar(self) -> str:
+        if self.estado == "lendo":
+            self._timer.stop()
+            self._interromper()
+            self._mudar("pausado")
+        elif self.estado == "pausado" and self.indice < len(self.frases):
+            self._mudar("lendo")
+            self._iniciar(self.frases[self.indice])   # retoma do início da frase atual
+            self._timer.start()
+        return self.estado
+
+    def voltar_frase(self) -> None:
+        if self.frases and self.estado != "parado":
+            self.indice = max(0, self.indice - 1)
+            self._reiniciar_frase()
+
+    def avancar_frase(self) -> None:
+        if self.frases and self.estado != "parado" and self.indice + 1 < len(self.frases):
+            self.indice += 1
+            self._reiniciar_frase()
+
+    def _reiniciar_frase(self) -> None:
+        self._interromper()
+        self._mudar("lendo")
+        self._iniciar(self.frases[self.indice])
+        self._timer.start()
+
+    def _verificar(self) -> None:
+        with self._lock:
+            terminou = self._proc is None or self._proc.poll() is not None
+        if not terminou:
+            return
+        self.indice += 1
+        if self.indice < len(self.frases):
+            self._iniciar(self.frases[self.indice])
+        else:
+            self._timer.stop()
+            self.frases, self.indice = [], 0
+            self._mudar("parado")
+
+
+class ControlesLeitura(QWidget):
+    """Botões Pausar/Continuar (Ctrl+P), frase anterior/próxima e Parar, ligados ao Falador."""
+
+    def __init__(self, falador: Falador):
+        super().__init__()
+        from PyQt5.QtWidgets import QPushButton
+
+        self.falador = falador
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(8)
+        self.b_voltar = QPushButton("⏮")
+        self.b_voltar.setAccessibleName("Frase anterior (Ctrl+Seta para cima)")
+        self.b_voltar.setToolTip("Frase anterior (Ctrl+Seta para cima)")
+        self.b_pausa = QPushButton("⏸  Pausar (Ctrl+P)")
+        self.b_avancar = QPushButton("⏭")
+        self.b_avancar.setAccessibleName("Próxima frase (Ctrl+Seta para baixo)")
+        self.b_avancar.setToolTip("Próxima frase (Ctrl+Seta para baixo)")
+        self.b_parar = QPushButton("⏹  Parar")
+        self.b_parar.setAccessibleName("Parar a leitura")
+        self.b_voltar.clicked.connect(falador.voltar_frase)
+        self.b_pausa.clicked.connect(falador.pausar_continuar)
+        self.b_avancar.clicked.connect(falador.avancar_frase)
+        self.b_parar.clicked.connect(falador.calar)
+        for b in (self.b_voltar, self.b_pausa, self.b_avancar, self.b_parar):
+            lay.addWidget(b)
+        falador.mudou.connect(self._atualizar)
+        self._atualizar(falador.estado)
+
+    def _atualizar(self, estado: str) -> None:
+        self.b_pausa.setText("▶  Continuar (Ctrl+P)" if estado == "pausado" else "⏸  Pausar (Ctrl+P)")
+        self.b_pausa.setAccessibleName("Continuar a leitura" if estado == "pausado" else "Pausar a leitura")
+        ativo = estado != "parado"
+        for b in (self.b_voltar, self.b_pausa, self.b_avancar, self.b_parar):
+            b.setEnabled(ativo)
 
 
 # ---------------------------------------------------------------- cartões

@@ -159,3 +159,39 @@ def test_leitor_le_pdf_e_mostra_resumo_do_mockup(janela):
     assert etapas[-1].startswith("[ok] Áudio salvo em")
     assert Path(leitor.audio_atual).stat().st_size > 1000
     assert "Acessibilidade" in leitor.saida.toPlainText()
+
+
+def test_leitura_pausa_continua_de_onde_parou_e_esc_para(janela):
+    from gui.componentes import dividir_frases
+
+    assert dividir_frases("Primeira frase. Segunda frase! Terceira?\nQuarta") == [
+        "Primeira frase.", "Segunda frase!", "Terceira?", "Quarta"]
+    assert all(len(f) <= 300 for f in dividir_frases("palavra " * 200))
+
+    f = janela.ctx.falador
+    if not f.disponivel:
+        pytest.skip("nenhuma voz instalada")
+    tecla(janela, Qt.Key_F1)
+    leitor = janela.paginas["leitor"]
+    texto = " ".join(f"Esta é a frase número {i} do teste de leitura." for i in range(1, 8))
+    leitor.saida.setPlainText(texto)
+    leitor.ouvir.click()
+    assert f.estado == "lendo" and len(f.frases) == 7
+    assert esperar(lambda: f.indice >= 1, 15000)       # avançou sozinho para a 2ª frase
+
+    tecla(janela, Qt.Key_P, Qt.ControlModifier)          # Ctrl+P pausa
+    assert f.estado == "pausado"
+    parou_em = f.indice
+    QTest.qWait(600)
+    assert f.indice == parou_em                          # pausado não avança
+    tecla(janela, Qt.Key_P, Qt.ControlModifier)          # Ctrl+P continua da mesma frase
+    assert f.estado == "lendo" and f.indice == parou_em
+
+    tecla(janela, Qt.Key_Up, Qt.ControlModifier)         # volta uma frase
+    assert f.indice == max(0, parou_em - 1)
+
+    tecla(janela, Qt.Key_Escape)                         # 1º Esc só para a leitura
+    assert f.estado == "parado"
+    assert janela.pilha.currentWidget() is leitor
+    tecla(janela, Qt.Key_Escape)                         # 2º Esc volta ao início
+    assert janela.pilha.currentWidget() is janela.inicio

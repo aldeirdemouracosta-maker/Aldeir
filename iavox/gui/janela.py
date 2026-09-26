@@ -239,13 +239,24 @@ class JanelaIAVOX(QMainWindow):
         QShortcut(QKeySequence("Ctrl+Shift+M"), self, activated=self._falar_por_voz)
         QShortcut(QKeySequence("Ctrl+R"), self, activated=lambda: self.ctx.falador.falar(self._ultima_fala))
         QShortcut(QKeySequence("Ctrl+."), self, activated=self.ctx.falador.calar)
+        QShortcut(QKeySequence("Ctrl+P"), self, activated=self._pausar)
+        QShortcut(QKeySequence("Ctrl+Up"), self, activated=self.ctx.falador.voltar_frase)
+        QShortcut(QKeySequence("Ctrl+Down"), self, activated=self.ctx.falador.avancar_frase)
+
+    def _pausar(self) -> None:
+        atual = self.pilha.currentWidget()
+        if hasattr(atual, "pausar") and atual.pausar():
+            return
+        self.ctx.falador.pausar_continuar()
 
     def _esc(self) -> None:
+        """Esc: para a leitura e cancela o que estiver em andamento; se não havia nada, volta ao início."""
+        estava_lendo = self.ctx.falador.estado != "parado"
         self.ctx.falador.calar()
         atual = self.pilha.currentWidget()
         if hasattr(atual, "cancelar") and atual.cancelar():
             return
-        if atual is not self.inicio:
+        if not estava_lendo and atual is not self.inicio:
             self.navegar("inicio")
 
     def _falar_por_voz(self) -> None:

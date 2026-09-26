@@ -36,7 +36,7 @@ from iavox_pdf_audio.suite.olhavox import descrever_imagem, ler_texto_imagem
 
 from . import theme
 from .audio_player import AudioPlayer
-from .componentes import ESTADOS_ROBO, Robo, Tarefa
+from .componentes import ESTADOS_ROBO, ControlesLeitura, Robo, Tarefa
 from .contexto import Contexto
 from .icones import pixmap
 from .worker import ReaderWorker
@@ -155,7 +155,7 @@ class PaginaModulo(QWidget):
         caixa.setPlainText(texto)
         self.ctx.definir_estado("confirmando")
         self.ctx.registrar(self.nome_modulo, texto)
-        self.ctx.falador.falar(falar or texto)
+        self.ctx.falador.ler(falar or texto, forcar=False)
         caixa.setFocus()
 
     # hooks da janela ------------------------------------------------------
@@ -187,6 +187,9 @@ class PaginaLeitor(PaginaModulo):
         self.audio_atual: str | None = None
         self.worker: ReaderWorker | None = None
         self.player = AudioPlayer()
+        self._audio_carregado = False
+        if self.player.has_inline_playback:
+            self.player.qt_player.stateChanged.connect(self._estado_audio)
 
         corpo = QHBoxLayout()
         corpo.setSpacing(18)
@@ -267,10 +270,11 @@ class PaginaLeitor(PaginaModulo):
         self.play.setEnabled(False)
         self.play.clicked.connect(self._tocar)
         acoes.addWidget(self.play)
-        ouvir = QPushButton("Ouvir texto agora")
-        ouvir.setAccessibleName("Ler o texto do resultado em voz alta agora")
-        ouvir.clicked.connect(lambda: ctx.falador.falar(self.saida.toPlainText()))
-        acoes.addWidget(ouvir)
+        self.ouvir = QPushButton(f"Ouvir agora ({ctx.falador.voz})")
+        self.ouvir.setAccessibleName(f"Ler o texto em voz alta agora, com a voz {ctx.falador.voz}")
+        self.ouvir.clicked.connect(lambda: ctx.falador.ler(self.saida.toPlainText()))
+        acoes.addWidget(self.ouvir)
+        acoes.addWidget(ControlesLeitura(ctx.falador))
         acoes.addStretch(1)
         principal.addLayout(acoes)
 
@@ -398,6 +402,7 @@ class PaginaLeitor(PaginaModulo):
 
     def _audio_pronto(self, caminho: str) -> None:
         self.audio_atual = caminho
+        self._audio_carregado = False
         ultimo = self.etapas.item(self.etapas.count() - 1)
         if ultimo:
             ultimo.setText(f"[ok] Áudio salvo em {caminho}")
@@ -411,12 +416,41 @@ class PaginaLeitor(PaginaModulo):
         self.erro(mensagem)
 
     def _tocar(self) -> None:
-        if self.audio_atual:
-            self.ctx.falador.calar()
-            try:
-                self.player.play(self.audio_atual)
-            except Exception as exc:  # noqa: BLE001
-                self.erro(str(exc))
+        """▶ toca o áudio gerado; durante a reprodução vira ⏸ (pausa) e depois continua."""
+        if not self.audio_atual:
+            return
+        qt = self.player.qt_player if self.player.has_inline_playback else None
+        if qt is not None and self._audio_carregado:
+            from PyQt5.QtMultimedia import QMediaPlayer
+            if qt.state() == QMediaPlayer.PlayingState:
+                qt.pause()
+                return
+            if qt.state() == QMediaPlayer.PausedState:
+                qt.play()
+                return
+        self.ctx.falador.calar()
+        try:
+            self.player.play(self.audio_atual)
+            self._audio_carregado = True
+        except Exception as exc:  # noqa: BLE001
+            self.erro(str(exc))
+
+    def _estado_audio(self, estado) -> None:
+        from PyQt5.QtMultimedia import QMediaPlayer
+        tocando = estado == QMediaPlayer.PlayingState
+        self.play.setText("⏸" if tocando else "▶")
+        self.play.setAccessibleName("Pausar o áudio (Ctrl+P)" if tocando else "Ouvir o áudio gerado (Ctrl+P)")
+
+    def pausar(self) -> bool:
+        """Ctrl+P: pausa/continua o áudio gerado, se ele estiver tocando ou pausado."""
+        qt = self.player.qt_player if self.player.has_inline_playback else None
+        if qt is None or not self._audio_carregado:
+            return False
+        from PyQt5.QtMultimedia import QMediaPlayer
+        if qt.state() in (QMediaPlayer.PlayingState, QMediaPlayer.PausedState):
+            self._tocar()
+            return True
+        return False
 
     # ---- imagem e tela
     def _escolher_imagem(self) -> None:
@@ -758,6 +792,7 @@ class PaginaOlha(PaginaModulo):
         self.saida = caixa_resultado("Descrição da imagem")
         corpo.addWidget(self.saida, 3)
         self.raiz.addLayout(corpo, 1)
+        self.raiz.addWidget(ControlesLeitura(ctx.falador), 0, Qt.AlignLeft)
 
     def ao_entrar(self) -> None:
         self.b_abrir.setFocus()
@@ -846,6 +881,7 @@ class PaginaEstuda(PaginaModulo):
 
         self.saida = caixa_resultado("Resumo e perguntas")
         self.raiz.addWidget(self.saida, 3)
+        self.raiz.addWidget(ControlesLeitura(ctx.falador), 0, Qt.AlignLeft)
 
     def ao_entrar(self) -> None:
         self.b_abrir.setFocus()
@@ -1001,7 +1037,7 @@ class PaginaAtividade(PaginaModulo):
 
     def _ler_pergunta(self) -> None:
         if self.perguntas and self.indice < len(self.perguntas):
-            self.ctx.falador.falar(
+            self.ctx.falador.ler(
                 f"Pergunta {self.indice + 1} de {len(self.perguntas)}. {self.perguntas[self.indice]}. "
                 "Para responder, pressione Control Shift M."
             )
@@ -1068,7 +1104,7 @@ class PaginaCaderno(PaginaModulo):
         super().__init__(ctx, "Mini Caderno", "Registro cronológico do que foi feito, para o professor acompanhar. Texto leve, até 30 itens na tela.", "atividade", "")
         botoes = QHBoxLayout()
         self.b_ler = QPushButton("Ler Caderno")
-        self.b_ler.clicked.connect(lambda: ctx.falador.falar(ctx.caderno.como_fala()))
+        self.b_ler.clicked.connect(lambda: ctx.falador.ler(ctx.caderno.como_fala()))
         b_txt = QPushButton("Salvar TXT")
         b_txt.clicked.connect(self._salvar)
         b_ed = QPushButton("Abrir no EDIVOX")
@@ -1079,6 +1115,7 @@ class PaginaCaderno(PaginaModulo):
         b_limpar.clicked.connect(self._limpar)
         for b in (self.b_ler, b_txt, b_ed, b_limpar):
             botoes.addWidget(b)
+        botoes.addWidget(ControlesLeitura(ctx.falador))
         botoes.addStretch(1)
         self.contagem = QLabel()
         self.contagem.setObjectName("textoSuave")
@@ -1088,7 +1125,7 @@ class PaginaCaderno(PaginaModulo):
         self.lista = QListWidget()
         self.lista.setAccessibleName("Itens do Mini Caderno")
         self.lista.setWordWrap(True)
-        self.lista.itemActivated.connect(lambda it: ctx.falador.falar(it.data(Qt.UserRole)))
+        self.lista.itemActivated.connect(lambda it: ctx.falador.ler(it.data(Qt.UserRole)))
         self.raiz.addWidget(self.lista, 1)
         dica = QLabel("Enter em um item lê o texto completo.")
         dica.setObjectName("textoSuave")
@@ -1158,7 +1195,9 @@ AJUDA_HTML = f"""
 <tr><td><b>Ctrl+Shift+M</b></td><td>começar e terminar a gravação da resposta</td></tr>
 <tr><td><b>Enter</b></td><td>confirmar a resposta</td></tr>
 <tr><td><b>Espaço</b></td><td>gravar a resposta de novo</td></tr>
-<tr><td><b>Esc</b></td><td>cancelar; se não houver nada para cancelar, volta ao início</td></tr>
+<tr><td><b>Esc</b></td><td>para a leitura; cancela; se não houver nada, volta ao início</td></tr>
+<tr><td><b>Ctrl+P</b></td><td>pausar e continuar a leitura (continua de onde parou)</td></tr>
+<tr><td><b>Ctrl+Seta ↑ / ↓</b></td><td>voltar ou avançar uma frase na leitura</td></tr>
 <tr><td><b>Ctrl+R</b></td><td>repetir a última mensagem falada</td></tr>
 <tr><td><b>Ctrl+.</b></td><td>calar a voz</td></tr>
 <tr><td><b>Tab</b></td><td>passar pelos botões (o foco fica em amarelo)</td></tr>

@@ -199,3 +199,36 @@ def test_leticia_ausente_explica_como_instalar(monkeypatch):
     assert "apt install rhvoice" in e.motivo_indisponivel()
     with pytest.raises(RuntimeError, match="Letícia"):
         e.synthesize_to_file("x", "/tmp/nao.wav")
+
+
+def test_detecta_leticia_na_listagem_do_speechd():
+    from iavox_pdf_audio.tts.rhvoice_engine import voz_no_speechd
+    saida = (
+        "                     NAME                 LANGUAGE                  VARIANT\n"
+        "                   Anna                         ru                     none\n"
+        "           Leticia-F123                      pt-BR                     none\n"
+    )
+    assert voz_no_speechd(saida) == "Leticia-F123"
+    assert voz_no_speechd("  Portuguese (Brazil)+Alex   pt-BR   Alex\n") is None
+
+
+def test_leticia_pelo_speechd_fala_mas_nao_gera_arquivo(monkeypatch):
+    import subprocess as sp
+    from iavox_pdf_audio.tts import rhvoice_engine as rh
+
+    if rh.platform.system() == "Windows":
+        pytest.skip("rota do Linux")
+    monkeypatch.setattr(rh.shutil, "which", lambda n: "/usr/bin/spd-say" if n == "spd-say" else None)
+    listagem = sp.CompletedProcess([], 0, stdout=b"NAME LANGUAGE VARIANT\nLeticia-F123 pt-BR none\n")
+    monkeypatch.setattr(rh.subprocess, "run", lambda *a, **k: listagem)
+    e = rh.RHVoiceEngine()
+    assert e.rota == "speechd" and e.is_available() and not e.gera_arquivo
+    args, entrada = e.comando_fala("Olá")
+    assert args[:5] == ["/usr/bin/spd-say", "-o", "rhvoice", "-y", "Leticia-F123"] and args[-1] == "Olá"
+    assert "-w" in args and entrada is None
+    with pytest.raises(RuntimeError, match="speech-dispatcher"):
+        e.synthesize_to_file("x", "/tmp/nao.wav")
+    # o motor automático não usa a Letícia para gerar o arquivo nesse caso
+    from iavox_pdf_audio.tts import selector
+    monkeypatch.setattr(selector, "RHVoiceEngine", lambda: e)
+    assert selector.get_engine("automatico").name != "Letícia (RHVoice)"

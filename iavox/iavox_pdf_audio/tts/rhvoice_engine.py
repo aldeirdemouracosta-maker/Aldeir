@@ -45,13 +45,35 @@ $s.Speak((Get-Content -LiteralPath $env:IAVOX_TXT -Encoding UTF8 -Raw))
 
 
 def _pasta_da_voz(voz: str) -> Path | None:
+    """Procura a pasta da voz sem diferenciar maiúsculas (versões antigas usam 'leticia-f123')."""
     for base in PASTAS_VOZES:
-        if (base / voz).is_dir():
-            return base / voz
+        try:
+            for pasta in base.iterdir():
+                if pasta.is_dir() and pasta.name.lower() == voz.lower():
+                    return pasta
+        except OSError:
+            continue
+    return None
+
+
+def voz_no_speechd(listagem: str, busca: str = "leticia") -> str | None:
+    """Acha o nome da voz na saída de 'spd-say -o rhvoice -L' (1ª coluna)."""
+    for linha in listagem.splitlines():
+        partes = linha.split()
+        if partes and busca in partes[0].lower():
+            return partes[0]
     return None
 
 
 class RHVoiceEngine(TTSEngine):
+    """
+    Três caminhos, na ordem:
+      1. RHVoice-test  (Linux, pacote 'rhvoice') — fala e gera arquivo de áudio
+      2. speech-dispatcher com o módulo rhvoice — o mesmo caminho do Orca;
+         fala ao vivo (não gera arquivo)
+      3. SAPI5 (Windows) — fala e gera arquivo
+    """
+
     name = "Letícia (RHVoice)"
 
     def __init__(self, voice: str = VOZ_PADRAO, rate_percent: int = 55):
@@ -59,34 +81,77 @@ class RHVoiceEngine(TTSEngine):
         self.rate_percent = rate_percent          # 0-100 (50 = normal)
         self.windows = platform.system() == "Windows"
         self._binario = None if self.windows else shutil.which("RHVoice-test")
-        self._disponivel: bool | None = None
+        self._spd = None if self.windows else shutil.which("spd-say")
+        self._voz_spd: str | None = None
+        self._rota: str | None = None
+        self._verificado = False
 
     # ---------------------------------------------------------------- disponibilidade
 
-    def is_available(self) -> bool:
-        if self._disponivel is None:
+    @property
+    def rota(self) -> str | None:
+        """'rhvoice-test', 'speechd', 'sapi' ou None."""
+        if not self._verificado:
+            self._verificado = True
             if self.windows:
-                self._disponivel = self._sapi("", listar=True) == 0
-            else:
-                self._disponivel = bool(self._binario and _pasta_da_voz(self.voice))
-        return self._disponivel
+                self._rota = "sapi" if self._sapi("", listar=True) == 0 else None
+            elif self._binario and _pasta_da_voz(self.voice):
+                self._rota = "rhvoice-test"
+            elif self._spd:
+                try:
+                    r = subprocess.run([self._spd, "-o", "rhvoice", "-L"], capture_output=True, timeout=10)
+                    self._voz_spd = voz_no_speechd(r.stdout.decode("utf-8", "replace"))
+                except (OSError, subprocess.TimeoutExpired):
+                    self._voz_spd = None
+                self._rota = "speechd" if self._voz_spd else None
+        return self._rota
+
+    def is_available(self) -> bool:
+        return self.rota is not None
+
+    @property
+    def gera_arquivo(self) -> bool:
+        """Pelo speech-dispatcher a Letícia só fala ao vivo; não grava arquivo de áudio."""
+        return self.rota in ("rhvoice-test", "sapi")
+
+    def descricao_rota(self) -> str:
+        return {
+            "rhvoice-test": "pelo RHVoice",
+            "speechd": "pelo speech-dispatcher, como o Orca (só leitura ao vivo)",
+            "sapi": "pelas vozes do Windows (SAPI5)",
+        }.get(self.rota or "", "")
 
     def motivo_indisponivel(self) -> str:
         if self.windows:
             return "Instale a voz Letícia do RHVoice para Windows (SAPI5), em rhvoice.org."
-        if not self._binario:
-            return "Instale com: sudo apt install rhvoice rhvoice-brazilian-portuguese"
-        return f"A voz {self.voice} não foi encontrada. Instale: sudo apt install rhvoice-brazilian-portuguese"
+        return ("Instale com: sudo apt install rhvoice rhvoice-brazilian-portuguese "
+                "(ou, para o speech-dispatcher: speech-dispatcher-rhvoice)")
 
     # ---------------------------------------------------------------- síntese
 
-    def comando_fala(self) -> list[str]:
-        """Comando que fala o texto recebido pela entrada padrão (usado pelo feedback sonoro)."""
-        return [self._binario, "-p", self.voice, "-r", str(self.rate_percent)]
+    def comando_fala(self, texto: str) -> tuple[list[str], bytes | None]:
+        """Comando que fala `texto` ao vivo e termina quando acabar; e o que mandar na entrada padrão."""
+        if self.rota == "speechd":
+            taxa = (self.rate_percent - 50) * 2  # speech-dispatcher: -100..100
+            return [self._spd, "-o", "rhvoice", "-y", self._voz_spd, "-r", str(taxa), "-w", texto], None
+        return [self._binario, "-p", self.voice, "-r", str(self.rate_percent)], texto.encode("utf-8")
+
+    def cancelar(self) -> None:
+        """Cala a fala em andamento (no speech-dispatcher, matar o spd-say não basta)."""
+        if self.rota == "speechd":
+            try:
+                subprocess.run([self._spd, "-C"], capture_output=True, timeout=5)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
 
     def synthesize_to_file(self, text: str, output_path: str | Path) -> Path:
         if not self.is_available():
             raise RuntimeError(f"Voz Letícia indisponível. {self.motivo_indisponivel()}")
+        if not self.gera_arquivo:
+            raise RuntimeError(
+                "A Letícia está instalada só no speech-dispatcher, que fala ao vivo mas não grava "
+                "arquivo. Use 'Ouvir com a Letícia agora' ou instale: sudo apt install rhvoice"
+            )
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         if self.windows:
@@ -94,10 +159,8 @@ class RHVoiceEngine(TTSEngine):
             if codigo != 0:
                 raise RuntimeError(f"A síntese com a voz Letícia (SAPI5) falhou (código {codigo}).")
         else:
-            subprocess.run(
-                self.comando_fala() + ["-o", str(output_path)],
-                input=text.encode("utf-8"), check=True, capture_output=True,
-            )
+            args, entrada = self.comando_fala(text)
+            subprocess.run(args + ["-o", str(output_path)], input=entrada, check=True, capture_output=True)
         return output_path
 
     def speak(self, text: str) -> None:
@@ -106,7 +169,8 @@ class RHVoiceEngine(TTSEngine):
         if self.windows:
             self._sapi(text)
         else:
-            subprocess.run(self.comando_fala(), input=text.encode("utf-8"), check=True)
+            args, entrada = self.comando_fala(text)
+            subprocess.run(args, input=entrada, check=True)
 
     def iniciar_fala(self, texto: str) -> subprocess.Popen:
         """Começa a falar sem esperar terminar; o processo pode ser interrompido (feedback sonoro)."""
@@ -117,13 +181,15 @@ class RHVoiceEngine(TTSEngine):
                 [powershell, "-NoProfile", "-NonInteractive", "-Command", script], env=env,
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=_SEM_JANELA,
             )
-        proc = subprocess.Popen(self.comando_fala(), stdin=subprocess.PIPE,
+        args, entrada = self.comando_fala(texto)
+        proc = subprocess.Popen(args, stdin=subprocess.PIPE if entrada else subprocess.DEVNULL,
                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        try:
-            proc.stdin.write(texto.encode("utf-8"))
-            proc.stdin.close()
-        except OSError:
-            pass
+        if entrada:
+            try:
+                proc.stdin.write(entrada)
+                proc.stdin.close()
+            except OSError:
+                pass
         return proc
 
     # ---------------------------------------------------------------- Windows
