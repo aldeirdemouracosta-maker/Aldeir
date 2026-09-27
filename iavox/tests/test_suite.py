@@ -59,7 +59,9 @@ def test_caderno_txt_fala_e_limpar(tmp_path):
     cad.registrar("FalaVox", "Resposta sobre células-tronco")
     cad.registrar("OlhaVox", "Gráfico de barras colorido")
     txt = cad.salvar_txt(tmp_path / "caderno.txt")
-    conteudo = txt.read_text(encoding="utf-8")
+    # no Windows o TXT sai em ANSI (cp1252), que é o que o EDIVOX/DOSVOX lê
+    import platform
+    conteudo = txt.read_text(encoding="cp1252" if platform.system() == "Windows" else "utf-8")
     assert "MINI CADERNO IAVOX" in conteudo and "células-tronco" in conteudo
     assert cad.como_fala().startswith("Mini Caderno com 2 itens. OlhaVox")
     cad.limpar()
