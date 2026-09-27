@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="ms-token" content="__MS_TOKEN__" />
+  <title>MagicSlides</title>
+  <link rel="icon" href="/icon.png" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><img class="logo" src="/icon.png" alt="" /><div><strong>MagicSlides</strong><small id="versionLabel">apresentações com IA</small></div></div>
+    <input id="projectTitle" class="title-input" aria-label="Título da apresentação" value="Nova apresentação" />
+    <div class="actions">
+      <button class="magic" id="generateBtn" title="Gerar apresentação com IA (Ctrl+G)">✨ Gerar com IA</button>
+      <button id="newBtn" title="Nova apresentação">Novo</button>
+      <button id="openBtn" title="Abrir projeto (Ctrl+O)">Abrir</button>
+      <button id="saveBtn" title="Salvar projeto (Ctrl+S)">Salvar</button>
+      <button id="presentBtn" title="Apresentar (F5)">▶ Apresentar</button>
+      <div class="menu-wrap">
+        <button class="primary" id="exportBtn" aria-haspopup="true">Exportar ▾</button>
+        <div class="menu" id="exportMenu" hidden>
+          <button data-export="pptx">PowerPoint (.pptx)</button>
+          <button data-export="html">Página HTML (apresentável / PDF)</button>
+          <button data-export="json">Projeto MagicSlides (.json)</button>
+        </div>
+      </div>
+      <button id="settingsBtn" class="icon-btn" title="Configurações">⚙</button>
+      <input id="fileInput" type="file" accept="application/json,.json" hidden />
+      <input id="imageInput" type="file" accept="image/*" hidden />
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="sidebar">
+      <div class="sidebar-head"><b>Slides</b><span id="slideCount" class="muted"></span><button id="addSlideBtn" class="icon-btn" title="Adicionar slide">＋</button></div>
+      <div id="slideList" class="slide-list"></div>
+    </aside>
+
+    <section class="center">
+      <div class="toolbar">
+        <button id="addTextBtn" title="Adicionar texto">T Texto</button>
+        <button id="addShapeBtn" title="Adicionar forma">▭ Forma</button>
+        <button id="addWebImageBtn" title="Buscar imagem na internet">🔎 Imagem web</button>
+        <button id="addImageBtn" title="Imagem do computador">🖼 Do PC</button>
+        <span class="divider"></span>
+        <button id="undoBtn" class="icon-btn" title="Desfazer (Ctrl+Z)">↶</button>
+        <button id="redoBtn" class="icon-btn" title="Refazer (Ctrl+Y)">↷</button>
+        <span class="divider"></span>
+        <button id="duplicateBtn" title="Duplicar slide (Ctrl+D)">⧉ Duplicar</button>
+        <button id="deleteSlideBtn" title="Excluir slide">🗑 Excluir</button>
+        <span id="status" class="status">Pronto</span>
+      </div>
+      <div class="stage-wrap" id="stageWrap"><div id="stage" class="stage slide-surface" aria-label="Slide atual"></div></div>
+    </section>
+
+    <aside class="inspector">
+      <nav class="tabs" role="tablist">
+        <button class="tab active" data-tab="element">Elemento</button>
+        <button class="tab" data-tab="slide">Slide</button>
+        <button class="tab" data-tab="theme">Tema</button>
+      </nav>
+
+      <section class="tab-panel" data-panel="element">
+        <div id="noSelection" class="empty">Clique em um elemento do slide para editar.<br><br>Dica: clique duas vezes em um texto para digitar direto no slide.</div>
+        <form id="inspectorForm" class="form" hidden onsubmit="return false">
+          <div id="textProps">
+            <label>Texto<textarea id="propText" rows="5"></textarea></label>
+            <div class="grid2">
+              <label>Tamanho<input id="propFontSize" type="number" min="6" max="200" /></label>
+              <label>Cor<input id="propColor" type="color" /></label>
+            </div>
+            <label>Fonte<select id="propFont"></select></label>
+            <div class="chips">
+              <label class="chip"><input id="propBold" type="checkbox" /> <b>N</b></label>
+              <label class="chip"><input id="propItalic" type="checkbox" /> <i>I</i></label>
+              <label class="chip"><input id="propBullets" type="checkbox" /> • Tópicos</label>
+            </div>
+            <div class="grid2">
+              <label>Alinhamento<select id="propAlign"><option value="left">Esquerda</option><option value="center">Centro</option><option value="right">Direita</option></select></label>
+              <label>Vertical<select id="propValign"><option value="top">Topo</option><option value="middle">Meio</option><option value="bottom">Base</option></select></label>
+            </div>
+          </div>
+          <div id="shapeProps" hidden>
+            <button type="button" class="magic full" id="shapeToImageBtn" hidden>🔎 Colocar imagem aqui</button>
+            <div class="grid2">
+              <label>Preenchimento<input id="propFill" type="color" /></label>
+              <label>Forma<select id="propShape"><option value="rect">Retângulo</option><option value="ellipse">Elipse</option></select></label>
+            </div>
+            <label>Opacidade <input id="propOpacity" type="range" min="0" max="1" step="0.05" /></label>
+            <div class="grid2">
+              <label>Arredondar<input id="propRadius" type="number" min="0" max="20" step="0.5" /></label>
+              <label>Contorno<input id="propStroke" type="color" /></label>
+            </div>
+            <label class="chip"><input id="propStrokeOn" type="checkbox" /> Mostrar contorno</label>
+          </div>
+          <div id="imageProps" hidden>
+            <img id="propImagePreview" class="img-preview" alt="" />
+            <div class="grid2">
+              <button type="button" id="replaceWebImageBtn">🔎 Trocar</button>
+              <button type="button" id="replaceLocalImageBtn">🖼 Do PC</button>
+            </div>
+            <label>Texto alternativo<input id="propAlt" /></label>
+            <p id="propCredit" class="credit"></p>
+          </div>
+          <details class="pos" open>
+            <summary>Posição e tamanho</summary>
+            <div class="grid2">
+              <label>X<input id="propX" type="number" step="0.5" /></label><label>Y<input id="propY" type="number" step="0.5" /></label>
+              <label>Largura<input id="propW" type="number" step="0.5" min="1" /></label><label>Altura<input id="propH" type="number" step="0.5" min="1" /></label>
+            </div>
+          </details>
+          <div class="grid2">
+            <button type="button" id="frontBtn">Trazer p/ frente</button>
+            <button type="button" id="backBtn">Enviar p/ trás</button>
+            <button type="button" id="dupElementBtn">Duplicar</button>
+            <button type="button" class="danger" id="deleteElementBtn">Excluir</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="tab-panel" data-panel="slide" hidden>
+        <div class="form">
+          <div class="grid2">
+            <label>Fundo<input id="slideBg" type="color" /></label>
+            <label>&nbsp;<button type="button" id="slideBgReset">Usar do tema</button></label>
+          </div>
+          <label>Notas do apresentador<textarea id="slideNotes" rows="10" placeholder="O que falar neste slide…"></textarea></label>
+          <p class="muted small" id="slideLayoutInfo"></p>
+        </div>
+      </section>
+
+      <section class="tab-panel" data-panel="theme" hidden>
+        <div id="themeGrid" class="theme-grid"></div>
+        <h4>Personalizar</h4>
+        <div class="form">
+          <div class="grid2">
+            <label>Fundo<input id="themeBg" type="color" /></label>
+            <label>Texto<input id="themeFg" type="color" /></label>
+            <label>Texto secundário<input id="themeMuted" type="color" /></label>
+            <label>Destaque<input id="themeAccent" type="color" /></label>
+            <label>Cartões<input id="themeSurface" type="color" /></label>
+          </div>
+          <label>Fonte do texto<select id="themeFont"></select></label>
+          <label>Fonte dos títulos<select id="themeHeadingFont"></select></label>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <!-- Gerar com IA -->
+  <dialog id="generateDialog" class="dialog wide">
+    <form method="dialog" id="generateForm">
+      <h2>✨ Criar apresentação</h2>
+      <label>Sobre o que é a apresentação?
+        <textarea id="genPrompt" rows="6" placeholder="Ex.: Energia solar para pequenas empresas&#10;&#10;…ou cole aqui um texto, artigo ou tópicos que a IA transforma em slides."></textarea>
+      </label>
+      <div class="grid4">
+        <label>Slides<input id="genSlides" type="number" min="3" max="40" value="8" /></label>
+        <label>Idioma<select id="genLanguage">
+          <option>Português do Brasil</option><option>Português de Portugal</option><option>English</option><option>Español</option><option>Français</option><option>Deutsch</option><option>Italiano</option>
+        </select></label>
+        <label>Estilo<select id="genTone">
+          <option value="profissional e claro">Profissional</option><option value="didático, para aula">Didático / aula</option>
+          <option value="inspirador e envolvente">Inspirador</option><option value="descontraído e divertido">Descontraído</option>
+          <option value="técnico e detalhado">Técnico</option><option value="persuasivo, pitch de vendas">Vendas / pitch</option>
+        </select></label>
+        <label>&nbsp;<span class="chips"><label class="chip"><input id="genImages" type="checkbox" checked /> Imagens da internet</label></span></label>
+      </div>
+      <label class="chip inline"><input id="genCredits" type="checkbox" checked /> Adicionar slide com créditos das imagens</label>
+      <h4>Tema</h4>
+      <div id="genThemeGrid" class="theme-grid compact"></div>
+      <p id="genProvider" class="provider-line"></p>
+      <div class="dialog-actions">
+        <button value="cancel" formnovalidate>Cancelar</button>
+        <button class="magic" id="genSubmit" value="default">✨ Gerar apresentação</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Progresso -->
+  <div id="progressOverlay" class="overlay" hidden>
+    <div class="progress-card">
+      <div class="sparkle">✨</div>
+      <h3 id="progressMessage">Gerando…</h3>
+      <div class="bar"><div id="progressBar"></div></div>
+      <button id="progressCancel">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- Imagens -->
+  <dialog id="imageDialog" class="dialog wide">
+    <form method="dialog" id="imageSearchForm">
+      <h2 id="imageDialogTitle">Imagem da internet</h2>
+      <div class="search-row">
+        <input id="imgQuery" placeholder="Ex.: painéis solares, sala de aula, cidade à noite…" />
+        <select id="imgSource"></select>
+        <button class="primary" id="imgSearchBtn" value="search">Buscar</button>
+      </div>
+      <p class="muted small">Dica: termos em inglês costumam trazer mais resultados. Respeite a licença de cada imagem — o crédito é salvo automaticamente.</p>
+      <div id="imgResults" class="img-results"></div>
+      <div class="dialog-actions">
+        <button type="button" id="imgFromPcBtn">🖼 Enviar do computador</button>
+        <button value="cancel" formnovalidate>Fechar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Configurações -->
+  <dialog id="settingsDialog" class="dialog wide">
+    <form method="dialog" id="settingsForm">
+      <h2>⚙ Configurações</h2>
+      <h4>Inteligência artificial</h4>
+      <div class="provider-options">
+        <label class="option"><input type="radio" name="provider" value="anthropic" /> <span><b>Claude (Anthropic)</b><small>Melhor qualidade. Requer chave de API.</small></span></label>
+        <label class="option"><input type="radio" name="provider" value="openai" /> <span><b>IA local ou compatível</b><small>Ollama, LM Studio, llama.cpp, OpenAI, Groq, OpenRouter…</small></span></label>
+        <label class="option"><input type="radio" name="provider" value="offline" /> <span><b>Sem IA (offline)</b><small>Organiza em slides o texto que você colar.</small></span></label>
+      </div>
+      <fieldset data-provider="anthropic">
+        <label>Chave de API da Anthropic <input id="setAnthropicKey" type="password" autocomplete="off" placeholder="sk-ant-…" /></label>
+        <div class="grid2">
+          <label>Modelo<input id="setAnthropicModel" list="anthropicModels" /></label>
+          <label>Esforço<select id="setAnthropicEffort"><option value="low">Rápido</option><option value="medium">Equilibrado</option><option value="high">Caprichado</option></select></label>
+        </div>
+        <datalist id="anthropicModels"><option value="claude-opus-5">Claude Opus 5 (recomendado)</option><option value="claude-sonnet-5">Claude Sonnet 5 (mais barato)</option><option value="claude-haiku-4-5">Claude Haiku 4.5 (mais rápido)</option></datalist>
+        <p class="muted small">Crie uma chave em console.anthropic.com. A chave fica só neste computador.</p>
+      </fieldset>
+      <fieldset data-provider="openai">
+        <div class="presets" id="openaiPresets">
+          <button type="button" data-url="http://localhost:11434/v1" data-model="llama3.1">Ollama</button>
+          <button type="button" data-url="http://localhost:1234/v1" data-model="">LM Studio</button>
+          <button type="button" data-url="http://localhost:8080/v1" data-model="local">llama.cpp</button>
+          <button type="button" data-url="https://api.openai.com/v1" data-model="gpt-4o-mini">OpenAI</button>
+          <button type="button" data-url="https://api.groq.com/openai/v1" data-model="llama-3.3-70b-versatile">Groq</button>
+          <button type="button" data-url="https://openrouter.ai/api/v1" data-model="">OpenRouter</button>
+        </div>
+        <label>Endereço do servidor<input id="setOpenaiUrl" placeholder="http://localhost:11434/v1" /></label>
+        <div class="grid2">
+          <label>Modelo<input id="setOpenaiModel" placeholder="llama3.1" /></label>
+          <label>Chave (se precisar)<input id="setOpenaiKey" type="password" autocomplete="off" /></label>
+        </div>
+        <p class="muted small">Grátis e offline: instale o Ollama (ollama.com) e rode <code>ollama pull llama3.1</code>.</p>
+      </fieldset>
+      <h4>Fontes de imagens</h4>
+      <div class="chips">
+        <label class="chip"><input type="checkbox" name="imgsrc" value="openverse" /> Openverse (Creative Commons)</label>
+        <label class="chip"><input type="checkbox" name="imgsrc" value="wikimedia" /> Wikimedia Commons</label>
+      </div>
+      <p class="muted small">Opcional — chaves gratuitas trazem fotos de banco de imagens de alta qualidade:</p>
+      <div class="grid3">
+        <label>Pexels<input id="setPexels" type="password" autocomplete="off" placeholder="pexels.com/api" /></label>
+        <label>Unsplash (Access Key)<input id="setUnsplash" type="password" autocomplete="off" placeholder="unsplash.com/developers" /></label>
+        <label>Pixabay<input id="setPixabay" type="password" autocomplete="off" placeholder="pixabay.com/api/docs" /></label>
+      </div>
+      <h4>Geral</h4>
+      <div class="grid2">
+        <label>Idioma padrão<select id="setLanguage">
+          <option>Português do Brasil</option><option>Português de Portugal</option><option>English</option><option>Español</option><option>Français</option><option>Deutsch</option><option>Italiano</option>
+        </select></label>
+        <label>Autor<input id="setAuthor" placeholder="Seu nome" /></label>
+      </div>
+      <p class="muted small" id="configPath"></p>
+      <div class="dialog-actions">
+        <button value="cancel" formnovalidate>Cancelar</button>
+        <button class="primary" id="settingsSave" value="default">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Apresentação -->
+  <div id="presenter" class="presenter" hidden>
+    <div id="presenterSlide" class="present-slide slide-surface"></div>
+    <div class="presenter-hud"><span id="presenterCount"></span> · ← → navegar · Esc sair</div>
+  </div>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

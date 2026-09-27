@@ -1,0 +1,81 @@
+name: MagicSlides - build Windows
+
+on:
+  push:
+    paths:
+      - "MagicSlides/**"
+      - ".github/workflows/magicslides-windows.yml"
+  pull_request:
+    paths:
+      - "MagicSlides/**"
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: MagicSlides
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -q
+      - run: node --check magicslides/static/app.js
+
+  windows:
+    needs: test
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: MagicSlides
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar dependências
+        run: pip install -r requirements-dev.txt
+      - name: Testes
+        run: python -m pytest -q
+      - name: PyInstaller
+        run: pyinstaller packaging/MagicSlides.spec --noconfirm --distpath dist --workpath build
+      - name: Teste de fumaça do .exe
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath dist\MagicSlides\MagicSlides.exe -ArgumentList "--no-window","--port","8765" -PassThru
+          $ok = $false
+          for ($i = 0; $i -lt 30; $i++) {
+            Start-Sleep -Seconds 1
+            try { $r = Invoke-RestMethod http://127.0.0.1:8765/api/health; if ($r.ok) { $ok = $true; break } } catch {}
+          }
+          Stop-Process -Id $p.Id -Force
+          if (-not $ok) { throw "MagicSlides.exe não respondeu" }
+      - name: Instalador (Inno Setup)
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" packaging\installer.iss
+      - name: Pacote portátil (.zip)
+        shell: pwsh
+        run: Compress-Archive -Path dist\MagicSlides\* -DestinationPath dist\MagicSlides-portatil-windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MagicSlides-Windows
+          path: |
+            MagicSlides/dist/MagicSlides-Setup-*.exe
+            MagicSlides/dist/MagicSlides-portatil-windows.zip
+      - name: Anexar à release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            MagicSlides/dist/MagicSlides-Setup-*.exe
+            MagicSlides/dist/MagicSlides-portatil-windows.zip

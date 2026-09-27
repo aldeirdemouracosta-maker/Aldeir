@@ -1,0 +1,5 @@
+python-pptx==1.0.2
+Pillow>=10.0
+anthropic>=1.8.0
+# Janela nativa (Edge WebView2 no Windows). No Linux/macOS o app abre no navegador se não estiver instalado.
+pywebview>=5.0; sys_platform == "win32"
