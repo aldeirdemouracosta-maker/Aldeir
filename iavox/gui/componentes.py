@@ -101,14 +101,18 @@ class Falador(QObject):
 
     def configurar(self, binario: str | None = None, motor: str = "automatico") -> None:
         from iavox_pdf_audio.tts.espeak_engine import EspeakEngine
-        from iavox_pdf_audio.tts.rhvoice_engine import RHVoiceEngine
+        from iavox_pdf_audio.tts.rhvoice_engine import RHVoiceEngine, VozWindowsEngine
 
         self._espeak = EspeakEngine(binary_path=binario or None)
+        # _leticia = voz "de verdade" para falar: a Letícia; no Windows, sem ela, a voz pt-BR do sistema
         self._leticia = None
-        if motor in ("automatico", "leticia"):
-            leticia = RHVoiceEngine()
-            if leticia.is_available():
-                self._leticia = leticia
+        candidatas = {"automatico": [RHVoiceEngine, VozWindowsEngine], "leticia": [RHVoiceEngine],
+                      "windows": [VozWindowsEngine]}.get(motor, [])
+        for classe in candidatas:
+            voz = classe()
+            if voz.is_available():
+                self._leticia = voz
+                break
         self._aplicar_velocidade()
 
     # ------------------------------------------------------------ velocidade
@@ -143,7 +147,7 @@ class Falador(QObject):
     @property
     def voz(self) -> str:
         if self._leticia:
-            return "Letícia"
+            return "Letícia" if type(self._leticia).__name__ == "RHVoiceEngine" else "voz do Windows"
         return "espeak-ng" if self._espeak.is_available() else "nenhuma"
 
     @property

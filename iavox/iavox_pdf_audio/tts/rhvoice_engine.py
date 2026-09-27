@@ -29,12 +29,13 @@ PASTAS_VOZES = [
 ]
 _SEM_JANELA = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
-# PowerShell: fala (ou grava em WAV) com a primeira voz SAPI5 cujo nome contém "Leticia".
+# PowerShell: fala (ou grava em WAV) com a primeira voz SAPI5 que passa no {filtro}
+# (a Letícia pelo nome, ou qualquer voz em português do Brasil).
 _PS_SAPI = r"""
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Speech
 $s = New-Object System.Speech.Synthesis.SpeechSynthesizer
-$v = $s.GetInstalledVoices() | ForEach-Object { $_.VoiceInfo.Name } | Where-Object { $_ -like '*{busca}*' } | Select-Object -First 1
+$v = $s.GetInstalledVoices() | Where-Object { $_.Enabled -and ({filtro}) } | ForEach-Object { $_.VoiceInfo.Name } | Select-Object -First 1
 if (-not $v) { exit 3 }
 if ($env:IAVOX_LISTAR) { Write-Output $v; exit 0 }
 $s.SelectVoice($v)
@@ -75,6 +76,11 @@ class RHVoiceEngine(TTSEngine):
     """
 
     name = "Letícia (RHVoice)"
+
+    @property
+    def filtro_sapi(self) -> str:
+        """Filtro PowerShell para escolher a voz SAPI5 (Windows)."""
+        return "$_.VoiceInfo.Name -like '*%s*'" % self.voice.split("-")[0].replace("'", "")
 
     def __init__(self, voice: str = VOZ_PADRAO, rate_percent: int = 60):
         self.voice = voice
@@ -196,7 +202,7 @@ class RHVoiceEngine(TTSEngine):
 
     def _preparar_sapi(self, texto: str, wav: Path | None = None, listar: bool = False):
         taxa = round((self.rate_percent - 50) / 5)  # SAPI: -10..10
-        script = _PS_SAPI.replace("{busca}", self.voice.split("-")[0]).replace("{taxa}", str(taxa))
+        script = _PS_SAPI.replace("{filtro}", self.filtro_sapi).replace("{taxa}", str(taxa))
         with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as f:
             f.write(texto)
         env = dict(os.environ, IAVOX_TXT=f.name)
@@ -222,3 +228,29 @@ class RHVoiceEngine(TTSEngine):
             return 1
         finally:
             Path(txt).unlink(missing_ok=True)
+
+
+class VozWindowsEngine(RHVoiceEngine):
+    """
+    Voz em português do Brasil que já vem no Windows (ex.: Microsoft Maria ou
+    Daniel), pela SAPI5. Usada quando a Letícia não está instalada, para o
+    IAVOX nunca ficar mudo no Windows. Fora do Windows, fica indisponível.
+    """
+
+    name = "Voz do Windows (português do Brasil)"
+
+    @property
+    def filtro_sapi(self) -> str:
+        return "$_.VoiceInfo.Culture.Name -eq 'pt-BR'"
+
+    @property
+    def rota(self) -> str | None:
+        if not self.windows:
+            return None
+        return super().rota
+
+    def motivo_indisponivel(self) -> str:
+        if not self.windows:
+            return "Só existe no Windows."
+        return ("Nenhuma voz em português do Brasil no Windows. Instale em Configurações > "
+                "Hora e idioma > Fala > Adicionar vozes > Português (Brasil).")

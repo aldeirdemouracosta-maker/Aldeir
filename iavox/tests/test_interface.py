@@ -145,6 +145,9 @@ def test_falavox_espaco_regrava_enter_envia(janela, tmp_path, monkeypatch):
 
 
 def test_leitor_le_pdf_e_mostra_resumo_do_mockup(janela):
+    from iavox_pdf_audio.tts.espeak_engine import EspeakEngine
+    if not EspeakEngine().is_available():
+        pytest.skip("espeak-ng não instalado")
     tecla(janela, Qt.Key_F1)
     leitor = janela.paginas["leitor"]
     leitor.descrever.setChecked(False)

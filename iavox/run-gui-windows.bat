@@ -4,6 +4,7 @@ REM Tenta o launcher "py" primeiro (mais confiavel no Windows), com
 REM fallback para "python", ja que em algumas instalacoes o comando
 REM "python" fica preso no atalho da Microsoft Store.
 cd /d "%~dp0"
+set PYTHONUTF8=1
 
 where py >nul 2>&1
 if %errorlevel%==0 (
