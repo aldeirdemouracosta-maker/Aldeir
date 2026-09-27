@@ -1,0 +1,69 @@
+name: Gerar APK Lumivox Android
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master, "claude/**" ]
+
+jobs:
+  build-apk:
+    name: Validar e compilar APK Android
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Baixar código do repositório
+        uses: actions/checkout@v7
+
+      - name: Configurar Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Configurar Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '8.10.2'
+          cache-provider: basic
+
+      - name: Validar estrutura do Lumivox
+        run: |
+          test -f settings.gradle
+          test -f build.gradle
+          test -f app/build.gradle
+          test -f app/src/main/AndroidManifest.xml
+          test -f app/src/main/java/br/com/aee/lumivox/MainActivity.java
+          test -f app/src/main/assets/www/index.html
+          test -f app/src/main/assets/www/app.js
+          test -f app/src/main/assets/www/style.css
+          test -f app/src/main/res/values/strings.xml
+          test -f app/release/lumivox-release.keystore
+          grep -q 'LumivoxAndroid' app/src/main/assets/www/app.js
+          grep -q 'TextToSpeech' app/src/main/java/br/com/aee/lumivox/MainActivity.java
+          grep -q 'android.intent.action.MAIN' app/src/main/AndroidManifest.xml
+          grep -q 'assembleRelease' build_apk_debug.sh || true
+
+      - name: Conferir SDK Android
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME/platforms" | tail -n 10 || true
+
+      - name: Compilar APK debug e release assinado
+        run: |
+          gradle :app:assembleDebug :app:assembleRelease --stacktrace
+
+      - name: Renomear APKs
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/*.apk dist/Lumivox-Android-debug.apk
+          cp app/build/outputs/apk/release/*.apk dist/Lumivox-Android-release-assinado.apk
+          ls -lh dist
+
+      - name: Enviar APKs para download
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lumivox-Android-APK
+          path: dist/*.apk
+          retention-days: 14

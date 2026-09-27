@@ -1,0 +1,72 @@
+name: IAVOX - Windows (IAVOX.exe)
+
+on:
+  workflow_dispatch:
+  push:
+    paths: [ "iavox/**", ".github/workflows/iavox-windows.yml" ]
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: iavox
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Dependências Python
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-gui.txt -r requirements-voz.txt pytest pyinstaller
+
+      - name: Testes no Windows (módulos + interface pelo teclado)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest tests/test_suite.py tests/test_interface.py -v
+
+      - name: Gerar IAVOX.exe (PyInstaller)
+        run: |
+          pyinstaller --noconfirm --windowed --name IAVOX `
+            --add-data "gui/assets;gui/assets" `
+            --collect-submodules gui --collect-submodules iavox_pdf_audio `
+            --collect-data faster_whisper --collect-all ctranslate2 `
+            --exclude-module onnxruntime --exclude-module pytest --exclude-module _pytest `
+            --collect-data pdfplumber --collect-all sounddevice `
+            --hidden-import PyQt5.QtSvg --hidden-import PyQt5.QtMultimedia `
+            run_gui.py
+          if ($LASTEXITCODE -ne 0) { throw "PyInstaller falhou (código $LASTEXITCODE)" }
+          Copy-Item README.md dist/IAVOX/LEIA-ME.md
+
+      - name: Verificar o IAVOX.exe gerado
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $p = Start-Process -FilePath dist/IAVOX/IAVOX.exe -ArgumentList "--verificar" -Wait -PassThru
+          if (Test-Path verificar_exe.txt) { Get-Content verificar_exe.txt -Encoding UTF8 }
+          if ($p.ExitCode -ne 0) { throw "IAVOX.exe --verificar falhou (código $($p.ExitCode))" }
+          if (-not (Select-String -Path verificar_exe.txt -Pattern "IAVOX OK")) { throw "IAVOX.exe não confirmou OK" }
+
+      - name: Gerar instalador (Inno Setup)
+        run: |
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) {
+            choco install innosetup -y --no-progress
+            $env:PATH += ";C:\Program Files (x86)\Inno Setup 6"
+          }
+          iscc windows/iavox.iss
+
+      - name: Compactar versão portátil
+        run: Compress-Archive -Path dist/IAVOX -DestinationPath dist/IAVOX-Windows-portatil.zip
+
+      - name: Enviar para download
+        uses: actions/upload-artifact@v4
+        with:
+          name: IAVOX-Windows
+          path: |
+            iavox/dist/IAVOX-Instalador.exe
+            iavox/dist/IAVOX-Windows-portatil.zip
+          retention-days: 30

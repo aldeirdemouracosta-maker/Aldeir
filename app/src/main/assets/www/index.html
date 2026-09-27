@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#061425" />
+  <meta name="description" content="Lumivox - assistente acessível para leitura, voz, Braille e atividades escolares." />
+  <title>Lumivox - Assistente Acessível</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">PULAR PARA O MENU PRINCIPAL</a>
+  <div class="app-shell" id="app">
+    <header class="hero" role="banner">
+      <div class="brand" aria-label="Lumivox assistente acessível">
+        <div class="logo-pulse" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div>
+          <h1>LUMIVOX</h1>
+          <p>ASSISTENTE ACESSÍVEL</p>
+        </div>
+      </div>
+      <button id="settingsBtn" class="icon-btn" aria-label="Abrir recursos de acessibilidade">⚙</button>
+    </header>
+
+    <section class="listen-panel" aria-labelledby="listen-title">
+      <button id="voiceBtn" class="mic-button" aria-label="Falar agora">
+        <span aria-hidden="true">🎙️</span>
+      </button>
+      <div>
+        <h2 id="listen-title">OUVINDO...</h2>
+        <p id="statusText" aria-live="polite">TOQUE EM UM BOTÃO OU DIGITE UM COMANDO.</p>
+      </div>
+    </section>
+
+    <main id="main" class="grid" aria-label="Menu principal do Lumivox">
+      <button class="tile blue" data-action="texto" aria-describedby="desc-texto">
+        <span class="tile-icon" aria-hidden="true">🔊</span>
+        <span>OUVIR<br>TEXTO</span>
+        <small id="desc-texto">Digite um texto para o aplicativo ler em voz alta.</small>
+      </button>
+      <button class="tile red" data-action="pdf" aria-describedby="desc-pdf">
+        <span class="tile-icon" aria-hidden="true">📄</span>
+        <span>LER<br>PDF</span>
+        <small id="desc-pdf">Seleciona um arquivo PDF e avisa o nome para leitura assistida.</small>
+      </button>
+      <button class="tile green" data-action="imagem" aria-describedby="desc-imagem">
+        <span class="tile-icon" aria-hidden="true">📷</span>
+        <span>DESCREVER<br>IMAGEM</span>
+        <small id="desc-imagem">Abre seleção de imagem e simula descrição acessível.</small>
+      </button>
+      <button class="tile purple" data-action="atividade" aria-describedby="desc-atividade">
+        <span class="tile-icon" aria-hidden="true">✏️</span>
+        <span>CRIAR<br>ATIVIDADE</span>
+        <small id="desc-atividade">Cria um modelo simples de atividade adaptada.</small>
+      </button>
+      <button class="tile gold" data-action="braille" aria-describedby="desc-braille">
+        <span class="tile-icon braille-dots" aria-hidden="true">⠿</span>
+        <span>BRAILLE</span>
+        <small id="desc-braille">Converte texto básico em Braille Unicode.</small>
+      </button>
+      <button class="tile cyan" data-action="calc" aria-describedby="desc-calc">
+        <span class="tile-icon" aria-hidden="true">🧮</span>
+        <span>CALCULADORA<br>FALADA</span>
+        <small id="desc-calc">Calcula e fala o resultado.</small>
+      </button>
+      <button class="tile navy" data-action="biblioteca" aria-describedby="desc-biblioteca">
+        <span class="tile-icon" aria-hidden="true">📚</span>
+        <span>BIBLIOTECA</span>
+        <small id="desc-biblioteca">Abre atividades salvas localmente no celular.</small>
+      </button>
+      <button class="tile dark" data-action="ajuda" aria-describedby="desc-ajuda">
+        <span class="tile-icon" aria-hidden="true">❔</span>
+        <span>AJUDA</span>
+        <small id="desc-ajuda">Explica como usar o aplicativo.</small>
+      </button>
+    </main>
+
+    <footer class="bottom-bar" role="contentinfo">
+      <button id="speakIntro" class="pill">🔊 LER MENU</button>
+      <button id="contrastToggle" class="pill">ALTO CONTRASTE</button>
+      <button id="fontToggle" class="pill">FONTE +</button>
+    </footer>
+  </div>
+
+  <dialog id="modal" aria-labelledby="modalTitle">
+    <form method="dialog" class="modal-card">
+      <header>
+        <h2 id="modalTitle">RECURSO</h2>
+        <button value="cancel" class="close" aria-label="Fechar">×</button>
+      </header>
+      <div id="modalContent"></div>
+      <menu class="modal-actions">
+        <button id="modalSpeak" type="button">🔊 OUVIR</button>
+        <button value="ok">FECHAR</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <input id="filePdf" type="file" accept="application/pdf" hidden />
+  <input id="fileImage" type="file" accept="image/*" capture="environment" hidden />
+
+  <script src="app.js" defer></script>
+</body>
+</html>

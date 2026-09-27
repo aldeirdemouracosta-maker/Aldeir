@@ -1,0 +1,43 @@
+RELATORIO DE SIMULACAO E TESTES - LUMIVOX
+Formato: PWA instalavel no celular Android pelo navegador
+Simulacao: Chromium em viewport de celular 390x844 pixels, com HTML/CSS/JS carregados em memoria por restricao do ambiente a localhost/file
+Total de testes: 24 | OK: 24 | Falhas: 0
+
+[OK] abertura da tela inicial
+[OK] 8 botoes principais
+    Detalhe: botoes=8
+[OK] manifest acessivel
+[OK] modal ouvir texto abre
+[OK] conversor braille responde
+    Detalhe: ⠎⠕⠋⠊⠁  ⠼⠁⠼⠃⠼⠉
+[OK] calculadora falada calcula
+    Detalhe: RESULTADO: 28
+[OK] gerador de atividade cria modelo
+    Detalhe: ATIVIDADE ADAPTADA - QUIMICA
+NÍVEL: INICIAL
+
+1. OBSERVE O SÍMBOLO E MARQUE A RES
+[OK] biblioteca local armazena atividade
+    Detalhe: [{"title":"ATIVIDADE - QUIMICA","content":"ATIVIDADE ADAPTADA - QUIMICA\nNÍVEL: 
+[OK] biblioteca exibe atividade salva
+    Detalhe: 1. ATIVIDADE - QUIMICA
+10/07/2026, 12:56:49
+ATIVIDADE ADAPTADA - QUIMICA
+NÍVEL: INICIAL
+
+1. OBSERVE O SÍMBOLO E MARQUE A
+[OK] alto contraste ativa classe
+[OK] fonte ampliada aplica escala
+[OK] simulacao em navegador Chromium
+[OK] arquivo index.html existe
+[OK] arquivo style.css existe
+[OK] arquivo app.js existe
+[OK] arquivo manifest.webmanifest existe
+[OK] arquivo service-worker.js existe
+[OK] arquivo icons/icon-192.png existe
+[OK] arquivo icons/icon-512.png existe
+[OK] JavaScript app.js sem erro de sintaxe
+[OK] service worker sem erro de sintaxe
+[OK] manifest modo instalavel
+[OK] manifest idioma pt-BR
+[OK] service worker referencia arquivos principais
