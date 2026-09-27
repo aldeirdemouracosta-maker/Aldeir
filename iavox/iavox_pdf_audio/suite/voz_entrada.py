@@ -83,7 +83,12 @@ class Transcritor:
             from faster_whisper import WhisperModel
 
             self._modelo = WhisperModel(self.modelo_nome, device="cpu", compute_type="int8")
-        segmentos, _info = self._modelo.transcribe(str(wav), language="pt", vad_filter=True)
+        # O filtro de silêncio (VAD) usa o onnxruntime, que no Windows conflita com a
+        # biblioteca C++ que o PyQt5 carrega e derruba o programa. Como a gravação já
+        # começa e termina pelo Ctrl+Shift+M, o filtro não é necessário lá.
+        import platform
+        vad = platform.system() != "Windows"
+        segmentos, _info = self._modelo.transcribe(str(wav), language="pt", vad_filter=vad)
         return " ".join(s.text.strip() for s in segmentos).strip()
 
 

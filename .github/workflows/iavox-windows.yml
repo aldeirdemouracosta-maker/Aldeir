@@ -35,9 +35,7 @@ jobs:
             --add-data "gui/assets;gui/assets" `
             --collect-submodules gui --collect-submodules iavox_pdf_audio `
             --collect-data faster_whisper --collect-all ctranslate2 `
-            --collect-binaries onnxruntime --hidden-import onnxruntime.capi._pybind_state `
-            --exclude-module onnxruntime.quantization --exclude-module onnxruntime.transformers `
-            --exclude-module onnxruntime.tools --exclude-module pytest --exclude-module _pytest `
+            --exclude-module onnxruntime --exclude-module pytest --exclude-module _pytest `
             --collect-data pdfplumber --collect-all sounddevice `
             --hidden-import PyQt5.QtSvg --hidden-import PyQt5.QtMultimedia `
             run_gui.py
