@@ -75,11 +75,30 @@ Roteiro (llama.cpp) → cenas/planos/tomadas
   → Render VAAPI → MP4 1080p/4K
 ```
 
+## Decisões de escopo
+
+A interface segue a maquete original: barra superior, menu lateral, dock
+inferior, painel Sistema e Projeto Recente, com todas as seções (Editor de
+Cenas, Rigging e Cenários, Terminal, Lixeira…).
+
+**Entra no MVP:** travar câmera contra flicker, onion skin, grade, alternar ao
+vivo/último, gravação segura de cada quadro, dope sheet (hold por quadro),
+importar fotos, exportação com formatos prontos (16:9, 9:16, 1:1, 4K) usando o
+encoder da RX 580 e a telemetria de VRAM/temperatura.
+
+**Fica para depois:** timeline MLT, remoção de flicker, sincronia labial
+(Rhubarb Lip Sync), remoção de suportes com inpainting, cenários por IA, roteiro
+com LLM, scheduler sched_ext.
+
+**Fora do escopo:** IA em Ring 0, módulo de kernel próprio / eBPF no AMDGPU,
+geração de vídeo por IA, interpolação de quadros (destrói o visual stop motion),
+4K como padrão (padrão 1080p) e distribuição Linux feita do zero (base Ubuntu 24.04).
+
 ## Etapas de implementação
 
-1. Casca do app em Qt6/QML com a navegação da maquete (Início, Captura, ...)
-2. Módulo de Captura: V4L2 + gPhoto2, onion skin, salvar quadros numerados
-3. Player de sequência (12/24 fps) e exportação via FFmpeg VAAPI
+1. ✅ App em Qt6/QML com a navegação da maquete (Início, Captura, ...)
+2. ✅ Captura: webcam, travar câmera, onion skin, grade, quadros salvos com segurança, dope sheet (gPhoto2 para DSLR ainda falta)
+3. ✅ Player (8–30 fps) e exportação FFmpeg VAAPI com fallback x264
 4. Timeline sobre MLT (importar sequências, áudio, cortes, títulos)
 5. IA Local: remoção de fundo, upscale, geração de cenários
 6. Orquestrador de modos + perfis de kernel (cgroups/AMDGPU → sched_ext)

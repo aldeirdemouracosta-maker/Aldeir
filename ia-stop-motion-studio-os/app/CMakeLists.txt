@@ -1,0 +1,54 @@
+cmake_minimum_required(VERSION 3.16)
+project(ia-stop-motion-studio-os VERSION 0.1.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_AUTOMOC ON)
+
+find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Quick Multimedia Test)
+
+# Core logic (projects, export, telemetry) shared by the app and the tests.
+add_library(studio_core STATIC
+    src/projectmanager.h src/projectmanager.cpp
+    src/exporter.h src/exporter.cpp
+    src/systemmonitor.h src/systemmonitor.cpp
+    src/cameracontrol.h src/cameracontrol.cpp
+)
+target_include_directories(studio_core PUBLIC src)
+target_link_libraries(studio_core PUBLIC Qt6::Core Qt6::Gui Qt6::Multimedia)
+
+qt_add_executable(ia-stop-motion-studio src/main.cpp)
+
+set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+
+file(GLOB ICON_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} icons/*.svg)
+
+qt_add_qml_module(ia-stop-motion-studio
+    URI StopMotionStudio
+    VERSION 1.0
+    QML_FILES
+        qml/Main.qml
+        qml/Theme.qml
+        qml/components/TopBar.qml
+        qml/components/Sidebar.qml
+        qml/components/Dock.qml
+        qml/components/SystemPanel.qml
+        qml/components/RingGauge.qml
+        qml/components/Clapperboard.qml
+        qml/components/IconButton.qml
+        qml/pages/HomePage.qml
+        qml/pages/CapturePage.qml
+        qml/pages/RenderPage.qml
+        qml/pages/PlaceholderPage.qml
+    RESOURCES ${ICON_FILES}
+)
+
+target_compile_definitions(ia-stop-motion-studio PRIVATE APP_VERSION="${PROJECT_VERSION}")
+target_link_libraries(ia-stop-motion-studio PRIVATE studio_core Qt6::Quick)
+
+enable_testing()
+qt_add_executable(tst_project tests/tst_project.cpp)
+target_link_libraries(tst_project PRIVATE studio_core Qt6::Test)
+add_test(NAME tst_project COMMAND tst_project)
+
+install(TARGETS ia-stop-motion-studio RUNTIME DESTINATION bin)
