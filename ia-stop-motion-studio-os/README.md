@@ -83,8 +83,10 @@ cai para x264 na CPU se falhar.
 - trilha de **vídeo** com cenas capturadas (de qualquer projeto), vídeos e fotos,
   com **dissolver** entre clipes; trilha de **títulos** e trilha de **áudio**
   (música, narração, efeitos) com volume
-- **dividir** no cursor (`S`), aparar arrastando a borda direita, mover clipes,
-  arrastar títulos e áudios no tempo, zoom, quadro a quadro (`←` `→`)
+- **dividir** no cursor (`S`), aparar arrastando a borda direita, **reordenar
+  clipes arrastando**, arrastar títulos e áudios no tempo, zoom, quadro a quadro (`←` `→`)
+- **desfazer/refazer** (`Ctrl+Z` / `Ctrl+Shift+Z`, até 100 passos; arrastar um
+  controle deslizante conta como um passo só)
 - monitor de pré-visualização com dissolve e títulos exatamente como no render
 - formatos 16:9, 9:16, 1:1 e 4K; 12/24/25/30 fps
 - **Exportar filme**: cada cena é pré-renderizada (com cache) e o filme é
@@ -139,8 +141,7 @@ Captura de tela sem monitor: `./build/ia-stop-motion-studio --screenshot tela.pn
 
 ## Próximas etapas
 
-1. Desfazer/refazer e reordenar clipes arrastando na Timeline
-2. Legendas automáticas (whisper.cpp) e narração (Piper)
-3. Cenários gerados por IA (stable-diffusion.cpp, Vulkan)
-4. Escalonador sched_ext próprio (`scx_studio`)
-5. ISO do IA Stop-Motion Studio OS
+1. Legendas automáticas (whisper.cpp) e narração (Piper)
+2. Cenários gerados por IA (stable-diffusion.cpp, Vulkan)
+3. Escalonador sched_ext próprio (`scx_studio`)
+4. ISO do IA Stop-Motion Studio OS

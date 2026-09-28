@@ -109,6 +109,8 @@ Item {
     }
 
     Shortcut { sequence: "Space"; onActivated: page.togglePlay() }
+    Shortcut { sequences: [StandardKey.Undo]; onActivated: timeline.undo() }
+    Shortcut { sequences: [StandardKey.Redo, "Ctrl+Shift+Z"]; onActivated: timeline.redo() }
     Shortcut { sequence: "S"; onActivated: page.split() }
     Shortcut { sequence: StandardKey.Delete; onActivated: page.removeSelected() }
     Shortcut { sequence: "Left"; onActivated: page.playhead = Math.max(0, page.playhead - 1) }
@@ -217,6 +219,9 @@ Item {
             IconButton { iconName: "plus"; text: "Título"; onClicked: { timeline.addTitle("Título", page.playhead); page.select("title", timeline.titles.length - 1) } }
             IconButton { iconName: "scenes"; text: "Dividir"; tip: "Divide o clipe no cursor (S)"; onClicked: page.split() }
             IconButton { iconName: "trash"; tip: "Apagar seleção (Delete)"; enabled: page.selIndex >= 0; onClicked: page.removeSelected() }
+            Rectangle { width: 1; height: 26; color: "#33FFFFFF" }
+            IconButton { text: "↶"; tip: "Desfazer (Ctrl+Z)"; enabled: timeline.canUndo; onClicked: timeline.undo() }
+            IconButton { text: "↷"; tip: "Refazer (Ctrl+Shift+Z)"; enabled: timeline.canRedo; onClicked: timeline.redo() }
             Item { Layout.fillWidth: true }
             ComboBox {
                 Layout.preferredWidth: 170
@@ -380,7 +385,7 @@ Item {
                                 Layout.fillWidth: true
                                 wrapMode: Text.WordWrap
                                 color: Theme.textDim; font.pixelSize: 13
-                                text: "Selecione um clipe na timeline.\n\nAtalhos:\nEspaço — reproduzir/pausar\nS — dividir no cursor\nDelete — apagar seleção\n← → — quadro a quadro\n\nArraste títulos e áudios para mudar o início. Arraste a borda direita de um clipe para encurtar ou alongar."
+                                text: "Selecione um clipe na timeline.\n\nAtalhos:\nEspaço — reproduzir/pausar\nS — dividir no cursor\nDelete — apagar seleção\nCtrl+Z / Ctrl+Shift+Z — desfazer / refazer\n← → — quadro a quadro\n\nArraste clipes de vídeo para reordenar; títulos e áudios para mudar o início. Arraste a borda direita de um clipe para encurtar ou alongar."
                             }
                         }
 
@@ -644,8 +649,10 @@ Item {
                             id: vclip
                             readonly property bool selected: page.selType === "video" && page.selIndex === index
                             property real dragLength: -1
-                            x: modelData.start * page.ppf
-                            y: lanes.videoY + (index % 2 ? 4 : 0)
+                            property real dragOffset: 0
+                            x: modelData.start * page.ppf + dragOffset
+                            y: lanes.videoY + (index % 2 ? 4 : 0) - (dragOffset !== 0 ? 6 : 0)
+                            opacity: dragOffset !== 0 ? 0.85 : 1
                             width: Math.max(6, (dragLength >= 0 ? dragLength : modelData.length) * page.ppf)
                             height: 68
                             radius: 6
@@ -653,7 +660,7 @@ Item {
                             color: modelData.type === "scene" ? "#3A6FD8" : modelData.type === "video" ? "#6A4FD0" : "#2F8F7A"
                             border.width: selected ? 2 : 1
                             border.color: selected ? "white" : "#55FFFFFF"
-                            z: selected ? 2 : 1
+                            z: dragOffset !== 0 ? 5 : selected ? 2 : 1
                             Image {
                                 x: 3; y: 3; height: parent.height - 6; width: Math.min(parent.width - 6, height * 1.4)
                                 source: modelData.thumbnail
@@ -682,9 +689,36 @@ Item {
                                     c.beginPath(); c.moveTo(0, height); c.lineTo(width, 0); c.lineTo(0, 0); c.closePath(); c.fill()
                                 }
                             }
+                            // Click selects; dragging sideways reorders the clip.
                             MouseArea {
                                 anchors.fill: parent
-                                onClicked: (m) => { page.select("video", index); page.playhead = modelData.start + Math.round(m.x / page.ppf) }
+                                property real pressX
+                                property bool dragging: false
+                                cursorShape: dragging ? Qt.ClosedHandCursor : Qt.PointingHandCursor
+                                onPressed: (m) => { pressX = mapToItem(lanes, m.x, 0).x; dragging = false }
+                                onPositionChanged: (m) => {
+                                    const dx = mapToItem(lanes, m.x, 0).x - pressX
+                                    if (!dragging && Math.abs(dx) > 8) { dragging = true; page.select("video", index) }
+                                    if (dragging) vclip.dragOffset = dx
+                                }
+                                onReleased: (m) => {
+                                    if (!dragging) {
+                                        page.select("video", index)
+                                        page.playhead = modelData.start + Math.round(m.x / page.ppf)
+                                        return
+                                    }
+                                    // Drop position: the clip's centre among the others' centres.
+                                    const centre = (modelData.start + modelData.length / 2) * page.ppf + vclip.dragOffset
+                                    let target = 0
+                                    const clips = timeline.videoClips
+                                    for (let k = 0; k < clips.length; ++k) {
+                                        if (k === index) continue
+                                        if ((clips[k].start + clips[k].length / 2) * page.ppf < centre) target++
+                                    }
+                                    vclip.dragOffset = 0
+                                    dragging = false
+                                    if (target !== index) { timeline.moveClipTo(index, target); page.select("video", target) }
+                                }
                             }
                             // trim handle
                             Rectangle {

@@ -55,6 +55,7 @@ void Timeline::setFps(int fps)
     fps = qBound(1, fps, 60);
     if (fps == m_fps)
         return;
+    checkpoint(QString());
     // Keep every clip at the same place in seconds.
     const double k = double(fps) / m_fps;
     auto scale = [k](int v) { return int(qRound(v * k)); };
@@ -74,6 +75,7 @@ void Timeline::setFormat(const QString &format)
 {
     if (!Formats::ids().contains(format) || format == m_format)
         return;
+    checkpoint(QString());
     m_format = format;
     for (Title &t : m_titles)
         renderTitleImage(t);
@@ -120,62 +122,67 @@ QVariantList Timeline::availableScenes() const
 
 void Timeline::load()
 {
+    m_undo.clear();
+    m_redo.clear();
+    QJsonObject obj;
+    QFile file(filePath());
+    if (!filePath().isEmpty() && file.open(QIODevice::ReadOnly))
+        obj = QJsonDocument::fromJson(file.readAll()).object();
+    fromJson(obj);
+    for (Title &t : m_titles)
+        renderTitleImage(t);
+    reload();
+    emit undoStateChanged();
+}
+
+void Timeline::fromJson(const QJsonObject &obj)
+{
     m_video.clear();
     m_titles.clear();
     m_audio.clear();
     m_sceneCache.clear();
-    m_fps = 24;
-    m_format = QStringLiteral("youtube");
-
-    QFile file(filePath());
-    if (!filePath().isEmpty() && file.open(QIODevice::ReadOnly)) {
-        const QJsonObject obj = QJsonDocument::fromJson(file.readAll()).object();
-        m_fps = qBound(1, obj.value(QStringLiteral("fps")).toInt(24), 60);
-        m_format = obj.value(QStringLiteral("format")).toString(m_format);
-        for (const QJsonValue &v : obj.value(QStringLiteral("video")).toArray()) {
-            const QJsonObject o = v.toObject();
-            VideoClip c;
-            c.id = o.value(QStringLiteral("id")).toString(newId());
-            c.type = o.value(QStringLiteral("type")).toString();
-            c.source = o.value(QStringLiteral("source")).toString();
-            c.name = o.value(QStringLiteral("name")).toString();
-            c.in = o.value(QStringLiteral("in")).toInt();
-            c.out = o.value(QStringLiteral("out")).toInt();
-            c.sourceLength = o.value(QStringLiteral("sourceLength")).toInt();
-            c.transition = o.value(QStringLiteral("transition")).toInt();
-            c.volume = o.value(QStringLiteral("volume")).toDouble();
-            m_video.append(c);
-        }
-        for (const QJsonValue &v : obj.value(QStringLiteral("titles")).toArray()) {
-            const QJsonObject o = v.toObject();
-            Title t;
-            t.id = o.value(QStringLiteral("id")).toString(newId());
-            t.text = o.value(QStringLiteral("text")).toString();
-            t.start = o.value(QStringLiteral("start")).toInt();
-            t.length = qMax(1, o.value(QStringLiteral("length")).toInt(72));
-            t.position = o.value(QStringLiteral("position")).toString(t.position);
-            t.size = o.value(QStringLiteral("size")).toInt(8);
-            t.color = o.value(QStringLiteral("color")).toString(t.color);
-            t.box = o.value(QStringLiteral("box")).toBool(true);
-            m_titles.append(t);
-        }
-        for (const QJsonValue &v : obj.value(QStringLiteral("audio")).toArray()) {
-            const QJsonObject o = v.toObject();
-            AudioClip a;
-            a.id = o.value(QStringLiteral("id")).toString(newId());
-            a.source = o.value(QStringLiteral("source")).toString();
-            a.name = o.value(QStringLiteral("name")).toString();
-            a.start = o.value(QStringLiteral("start")).toInt();
-            a.in = o.value(QStringLiteral("in")).toInt();
-            a.out = o.value(QStringLiteral("out")).toInt();
-            a.sourceLength = o.value(QStringLiteral("sourceLength")).toInt();
-            a.volume = o.value(QStringLiteral("volume")).toDouble();
-            m_audio.append(a);
-        }
+    m_fps = qBound(1, obj.value(QStringLiteral("fps")).toInt(24), 60);
+    m_format = obj.value(QStringLiteral("format")).toString(QStringLiteral("youtube"));
+    for (const QJsonValue &v : obj.value(QStringLiteral("video")).toArray()) {
+        const QJsonObject o = v.toObject();
+        VideoClip c;
+        c.id = o.value(QStringLiteral("id")).toString(newId());
+        c.type = o.value(QStringLiteral("type")).toString();
+        c.source = o.value(QStringLiteral("source")).toString();
+        c.name = o.value(QStringLiteral("name")).toString();
+        c.in = o.value(QStringLiteral("in")).toInt();
+        c.out = o.value(QStringLiteral("out")).toInt();
+        c.sourceLength = o.value(QStringLiteral("sourceLength")).toInt();
+        c.transition = o.value(QStringLiteral("transition")).toInt();
+        c.volume = o.value(QStringLiteral("volume")).toDouble();
+        m_video.append(c);
     }
-    for (Title &t : m_titles)
-        renderTitleImage(t);
-    reload();
+    for (const QJsonValue &v : obj.value(QStringLiteral("titles")).toArray()) {
+        const QJsonObject o = v.toObject();
+        Title t;
+        t.id = o.value(QStringLiteral("id")).toString(newId());
+        t.text = o.value(QStringLiteral("text")).toString();
+        t.start = o.value(QStringLiteral("start")).toInt();
+        t.length = qMax(1, o.value(QStringLiteral("length")).toInt(72));
+        t.position = o.value(QStringLiteral("position")).toString(t.position);
+        t.size = o.value(QStringLiteral("size")).toInt(8);
+        t.color = o.value(QStringLiteral("color")).toString(t.color);
+        t.box = o.value(QStringLiteral("box")).toBool(true);
+        m_titles.append(t);
+    }
+    for (const QJsonValue &v : obj.value(QStringLiteral("audio")).toArray()) {
+        const QJsonObject o = v.toObject();
+        AudioClip a;
+        a.id = o.value(QStringLiteral("id")).toString(newId());
+        a.source = o.value(QStringLiteral("source")).toString();
+        a.name = o.value(QStringLiteral("name")).toString();
+        a.start = o.value(QStringLiteral("start")).toInt();
+        a.in = o.value(QStringLiteral("in")).toInt();
+        a.out = o.value(QStringLiteral("out")).toInt();
+        a.sourceLength = o.value(QStringLiteral("sourceLength")).toInt();
+        a.volume = o.value(QStringLiteral("volume")).toDouble();
+        m_audio.append(a);
+    }
 }
 
 void Timeline::reload()
@@ -196,10 +203,8 @@ void Timeline::reload()
     emit changed();
 }
 
-void Timeline::save()
+QJsonObject Timeline::toJson() const
 {
-    if (filePath().isEmpty())
-        return;
     QJsonArray video, titles, audio;
     for (const VideoClip &c : m_video) {
         video.append(QJsonObject{{QStringLiteral("id"), c.id}, {QStringLiteral("type"), c.type},
@@ -220,13 +225,65 @@ void Timeline::save()
                                  {QStringLiteral("in"), a.in}, {QStringLiteral("out"), a.out},
                                  {QStringLiteral("sourceLength"), a.sourceLength}, {QStringLiteral("volume"), a.volume}});
     }
-    const QByteArray data = QJsonDocument(QJsonObject{
+    return QJsonObject{
         {QStringLiteral("fps"), m_fps}, {QStringLiteral("format"), m_format},
         {QStringLiteral("video"), video}, {QStringLiteral("titles"), titles}, {QStringLiteral("audio"), audio},
-    }).toJson();
+    };
+}
+
+void Timeline::save()
+{
+    if (filePath().isEmpty())
+        return;
+    const QByteArray data = QJsonDocument(toJson()).toJson();
     QSaveFile file(filePath());
     if (!file.open(QIODevice::WriteOnly) || file.write(data) != data.size() || !file.commit())
         emit errorOccurred(tr("Falha ao salvar timeline.json"));
+}
+
+// ── undo / redo ──────────────────────────────────────────────────────────
+
+void Timeline::checkpoint(const QString &tag)
+{
+    // Continuous edits (a slider being dragged) collapse into one step.
+    if (!tag.isEmpty() && tag == m_lastTag && m_lastCheckpoint.isValid() && m_lastCheckpoint.elapsed() < 1500) {
+        m_lastCheckpoint.restart();
+        return;
+    }
+    m_lastTag = tag;
+    m_lastCheckpoint.restart();
+    m_undo.append(toJson());
+    if (m_undo.size() > 100)
+        m_undo.removeFirst();
+    m_redo.clear();
+    emit undoStateChanged();
+}
+
+void Timeline::restore(const QJsonObject &state)
+{
+    fromJson(state);
+    for (Title &t : m_titles)
+        renderTitleImage(t);
+    m_lastTag.clear();
+    reload();
+    save();
+    emit undoStateChanged();
+}
+
+void Timeline::undo()
+{
+    if (m_undo.isEmpty())
+        return;
+    m_redo.append(toJson());
+    restore(m_undo.takeLast());
+}
+
+void Timeline::redo()
+{
+    if (m_redo.isEmpty())
+        return;
+    m_undo.append(toJson());
+    restore(m_redo.takeLast());
 }
 
 void Timeline::relayout()
@@ -272,6 +329,7 @@ bool Timeline::addScene(const QString &projectDir)
         emit errorOccurred(tr("A cena não tem quadros."));
         return false;
     }
+    checkpoint(QString());
     VideoClip c;
     c.id = newId();
     c.type = QStringLiteral("scene");
@@ -286,6 +344,7 @@ bool Timeline::addScene(const QString &projectDir)
 
 int Timeline::addMedia(const QList<QUrl> &urls, int atFrame)
 {
+    checkpoint(QString());
     int added = 0;
     for (const QUrl &url : urls) {
         const QString file = url.isLocalFile() ? url.toLocalFile() : url.toString();
@@ -323,6 +382,7 @@ int Timeline::addMedia(const QList<QUrl> &urls, int atFrame)
 
 void Timeline::addTitle(const QString &text, int atFrame)
 {
+    checkpoint(QString());
     Title t;
     t.id = newId();
     t.text = text;
@@ -333,11 +393,22 @@ void Timeline::addTitle(const QString &text, int atFrame)
     touch();
 }
 
+void Timeline::moveClipTo(int from, int to)
+{
+    to = qBound(0, to, int(m_video.size()) - 1);
+    if (from < 0 || from >= m_video.size() || from == to)
+        return;
+    checkpoint(QString());
+    m_video.move(from, to);
+    touch();
+}
+
 void Timeline::moveClip(int index, int delta)
 {
     const int to = index + delta;
     if (index < 0 || index >= m_video.size() || to < 0 || to >= m_video.size())
         return;
+    checkpoint(QString());
     m_video.move(index, to);
     touch();
 }
@@ -346,6 +417,7 @@ void Timeline::removeVideo(int index)
 {
     if (index < 0 || index >= m_video.size())
         return;
+    checkpoint(QString());
     m_video.removeAt(index);
     touch();
 }
@@ -354,6 +426,7 @@ void Timeline::removeTitle(int index)
 {
     if (index < 0 || index >= m_titles.size())
         return;
+    checkpoint(QString());
     QFile::remove(m_titles.at(index).image);
     m_titles.removeAt(index);
     touch();
@@ -363,6 +436,7 @@ void Timeline::removeAudio(int index)
 {
     if (index < 0 || index >= m_audio.size())
         return;
+    checkpoint(QString());
     m_audio.removeAt(index);
     touch();
 }
@@ -374,11 +448,13 @@ bool Timeline::splitAt(int frame)
         const int local = frame - c.start;
         if (local <= 0 || local >= c.out - c.in)
             continue;
-        VideoClip second = c;
+        checkpoint(QString());
+        VideoClip &clip = m_video[i]; // re-fetch: checkpoint does not touch the list
+        VideoClip second = clip;
         second.id = newId();
-        second.in = c.in + local;
+        second.in = clip.in + local;
         second.transition = 0;
-        c.out = c.in + local;
+        clip.out = clip.in + local;
         m_video.insert(i + 1, second);
         touch();
         return true;
@@ -390,6 +466,7 @@ void Timeline::setVideoProperty(int index, const QString &key, const QVariant &v
 {
     if (index < 0 || index >= m_video.size())
         return;
+    checkpoint(QStringLiteral("v%1:%2").arg(index).arg(key));
     VideoClip &c = m_video[index];
     const int limit = c.sourceLength > 0 ? c.sourceLength : 3600 * m_fps;
     if (key == QLatin1String("in"))
@@ -411,6 +488,7 @@ void Timeline::setTitleProperty(int index, const QString &key, const QVariant &v
 {
     if (index < 0 || index >= m_titles.size())
         return;
+    checkpoint(QStringLiteral("t%1:%2").arg(index).arg(key));
     Title &t = m_titles[index];
     if (key == QLatin1String("text"))
         t.text = value.toString();
@@ -434,6 +512,7 @@ void Timeline::setAudioProperty(int index, const QString &key, const QVariant &v
 {
     if (index < 0 || index >= m_audio.size())
         return;
+    checkpoint(QStringLiteral("a%1:%2").arg(index).arg(key));
     AudioClip &a = m_audio[index];
     const int limit = a.sourceLength > 0 ? a.sourceLength : 3600 * m_fps;
     if (key == QLatin1String("start"))

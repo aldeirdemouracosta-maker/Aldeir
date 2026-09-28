@@ -1,6 +1,8 @@
 #pragma once
 
+#include <QElapsedTimer>
 #include <QHash>
+#include <QJsonObject>
 #include <QSize>
 #include <QObject>
 #include <QUrl>
@@ -28,6 +30,8 @@ class Timeline : public QObject
     Q_PROPERTY(QVariantList audioClips READ audioClips NOTIFY changed)
     Q_PROPERTY(int duration READ duration NOTIFY changed)
     Q_PROPERTY(QVariantList availableScenes READ availableScenes NOTIFY scenesChanged)
+    Q_PROPERTY(bool canUndo READ canUndo NOTIFY undoStateChanged)
+    Q_PROPERTY(bool canRedo READ canRedo NOTIFY undoStateChanged)
 
 public:
     struct VideoClip {
@@ -76,6 +80,8 @@ public:
     QVariantList audioClips() const;
     int duration() const;
     QVariantList availableScenes() const;
+    bool canUndo() const { return !m_undo.isEmpty(); }
+    bool canRedo() const { return !m_redo.isEmpty(); }
 
     const QList<VideoClip> &videoList() const { return m_video; }
     const QList<Title> &titleList() const { return m_titles; }
@@ -87,6 +93,9 @@ public:
     Q_INVOKABLE int addMedia(const QList<QUrl> &urls, int atFrame = -1);
     Q_INVOKABLE void addTitle(const QString &text, int atFrame);
     Q_INVOKABLE void moveClip(int index, int delta);
+    Q_INVOKABLE void moveClipTo(int from, int to);
+    Q_INVOKABLE void undo();
+    Q_INVOKABLE void redo();
     Q_INVOKABLE void removeVideo(int index);
     Q_INVOKABLE void removeTitle(int index);
     Q_INVOKABLE void removeAudio(int index);
@@ -104,10 +113,15 @@ signals:
     void changed();
     void scenesChanged();
     void errorOccurred(const QString &message);
+    void undoStateChanged();
 
 private:
     void load();
     void save();
+    QJsonObject toJson() const;
+    void fromJson(const QJsonObject &obj);
+    void checkpoint(const QString &tag);
+    void restore(const QJsonObject &state);
     void relayout();
     void touch(); // relayout + save + changed
     void renderTitleImage(Title &title);
@@ -122,4 +136,8 @@ private:
     QList<Title> m_titles;
     QList<AudioClip> m_audio;
     QHash<QString, Scene> m_sceneCache;
+    QList<QJsonObject> m_undo;
+    QList<QJsonObject> m_redo;
+    QString m_lastTag;
+    QElapsedTimer m_lastCheckpoint;
 };

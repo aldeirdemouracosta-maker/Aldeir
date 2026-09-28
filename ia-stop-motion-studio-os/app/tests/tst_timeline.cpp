@@ -97,6 +97,57 @@ private slots:
         QCOMPARE(reopened.titleList().first().text, QStringLiteral("Cena 1"));
     }
 
+    void undoRedoAndReorder()
+    {
+        ProjectManager pm;
+        const QString a = makeScene(pm, QStringLiteral("UA"), Qt::red, 12);
+        const QString b = makeScene(pm, QStringLiteral("UB"), Qt::blue, 24);
+        const QString c = makeScene(pm, QStringLiteral("UC"), Qt::green, 6);
+        pm.newProject(QStringLiteral("Filme Undo"));
+        Timeline tl(&pm);
+        QVERIFY(!tl.canUndo());
+        tl.addScene(a);
+        tl.addScene(b);
+        tl.addScene(c);
+        auto names = [&] {
+            QStringList n;
+            for (const auto &clip : tl.videoList()) n << clip.name;
+            return n.join(QLatin1Char(','));
+        };
+        QCOMPARE(names(), QStringLiteral("UA,UB,UC"));
+
+        tl.moveClipTo(2, 0); // drag the last clip to the front
+        QCOMPARE(names(), QStringLiteral("UC,UA,UB"));
+        tl.removeVideo(1);
+        QCOMPARE(names(), QStringLiteral("UC,UB"));
+
+        tl.undo();
+        QCOMPARE(names(), QStringLiteral("UC,UA,UB"));
+        tl.undo();
+        QCOMPARE(names(), QStringLiteral("UA,UB,UC"));
+        QVERIFY(tl.canRedo());
+        tl.redo();
+        QCOMPARE(names(), QStringLiteral("UC,UA,UB"));
+
+        // A slider drag (many volume changes) is a single undo step.
+        tl.addTitle(QStringLiteral("T"), 0);
+        for (int i = 1; i <= 10; ++i)
+            tl.setTitleProperty(0, QStringLiteral("size"), 8 + i);
+        QCOMPARE(tl.titleList().first().size, 18);
+        tl.undo();
+        QCOMPARE(tl.titleList().first().size, 8);
+        tl.undo();
+        QVERIFY(tl.titleList().isEmpty());
+
+        // A new edit clears redo; the state on disk follows undo.
+        tl.redo();
+        tl.setVideoProperty(0, QStringLiteral("length"), 4);
+        QVERIFY(!tl.canRedo());
+        tl.undo();
+        Timeline reopened(&pm);
+        QCOMPARE(reopened.videoList().first().out - reopened.videoList().first().in, 12);
+    }
+
     void renderFilm()
     {
         if (!haveTools())
