@@ -1,4 +1,4 @@
-# IA Stop-Motion Studio — arquitetura híbrida (kernel + sistema)
+# IA Stop-Motion Studio OS — arquitetura híbrida (kernel + sistema)
 
 Sistema para criar vídeos stop motion quadro a quadro com bonecos de pano,
 montagem e edição estilo Clipchamp, com IA local. Hardware alvo: Xeon X79 +
@@ -12,7 +12,7 @@ certa em cada modo. Aplicativo, IA e edição rodam em espaço de usuário.
 
 ```
 ┌─────────────────────────── ESPAÇO DE USUÁRIO ───────────────────────────┐
-│  IA Stop-Motion Studio (Qt6/QML)                                        │
+│  IA Stop-Motion Studio OS — app principal (Qt6/QML)                     │
 │  Início · Captura · Editor de Cenas · Timeline · Biblioteca · IA Local  │
 │  Personagens · Cenários · Renderização · Terminal                       │
 │                                                                         │
@@ -83,4 +83,4 @@ Roteiro (llama.cpp) → cenas/planos/tomadas
 4. Timeline sobre MLT (importar sequências, áudio, cortes, títulos)
 5. IA Local: remoção de fundo, upscale, geração de cenários
 6. Orquestrador de modos + perfis de kernel (cgroups/AMDGPU → sched_ext)
-7. Imagem ISO do sistema com o Studio como sessão principal
+7. Imagem ISO do IA Stop-Motion Studio OS com o app como sessão principal
