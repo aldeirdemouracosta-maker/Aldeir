@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.16)
-project(ia-stop-motion-studio-os VERSION 0.3.0 LANGUAGES CXX)
+project(ia-stop-motion-studio-os VERSION 0.4.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Quick Multimedia Test)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Concurrent Quick Multimedia Test)
 
 # Core logic (projects, export, telemetry) shared by the app and the tests.
 add_library(studio_core STATIC
@@ -15,13 +15,15 @@ add_library(studio_core STATIC
     src/cameracontrol.h src/cameracontrol.cpp
     src/formats.h
     src/audiotrack.h src/audiotrack.cpp
+    src/imagetools.h src/imagetools.cpp
+    src/frametools.h src/frametools.cpp
     src/scene.h src/scene.cpp
     src/timeline.h src/timeline.cpp
     src/timelinerenderer.h src/timelinerenderer.cpp
     src/titlerenderer.h src/titlerenderer.cpp
 )
 target_include_directories(studio_core PUBLIC src)
-target_link_libraries(studio_core PUBLIC Qt6::Core Qt6::Gui Qt6::Multimedia)
+target_link_libraries(studio_core PUBLIC Qt6::Core Qt6::Gui Qt6::Concurrent Qt6::Multimedia)
 
 qt_add_executable(ia-stop-motion-studio src/main.cpp)
 
@@ -48,6 +50,7 @@ qt_add_qml_module(ia-stop-motion-studio
         qml/pages/CapturePage.qml
         qml/pages/RenderPage.qml
         qml/pages/TimelinePage.qml
+        qml/pages/AiPage.qml
         qml/pages/PlaceholderPage.qml
     RESOURCES ${ICON_FILES}
 )
@@ -65,6 +68,9 @@ add_test(NAME tst_timeline COMMAND tst_timeline)
 qt_add_executable(tst_audio tests/tst_audio.cpp)
 target_link_libraries(tst_audio PRIVATE studio_core Qt6::Test)
 add_test(NAME tst_audio COMMAND tst_audio)
-set_tests_properties(tst_project tst_timeline tst_audio PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+qt_add_executable(tst_imagetools tests/tst_imagetools.cpp)
+target_link_libraries(tst_imagetools PRIVATE studio_core Qt6::Test)
+add_test(NAME tst_imagetools COMMAND tst_imagetools)
+set_tests_properties(tst_project tst_timeline tst_audio tst_imagetools PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 install(TARGETS ia-stop-motion-studio RUNTIME DESTINATION bin)

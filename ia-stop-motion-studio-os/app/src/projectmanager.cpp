@@ -76,9 +76,13 @@ QVariantList ProjectManager::frames() const
     QVariantList list;
     list.reserve(m_frames.size());
     for (const Frame &f : m_frames) {
+        QUrl url = QUrl::fromLocalFile(m_path + QLatin1Char('/') + f.file);
+        if (const int rev = m_revisions.value(f.file))
+            url.setQuery(QStringLiteral("v=%1").arg(rev));
         list.append(QVariantMap{
-            {QStringLiteral("url"), QUrl::fromLocalFile(m_path + QLatin1Char('/') + f.file)},
+            {QStringLiteral("url"), url},
             {QStringLiteral("hold"), f.hold},
+            {QStringLiteral("edited"), QFileInfo::exists(m_path + QStringLiteral("/originais/") + QFileInfo(f.file).fileName())},
         });
     }
     return list;
@@ -158,12 +162,15 @@ bool ProjectManager::newProject(const QString &name)
     m_audio.clear();
     m_audioOffset = 0;
     m_deflicker = false;
+    m_plateNext = false;
+    m_revisions.clear();
     saveManifest();
     emit projectChanged();
     emit fpsChanged();
     emit framesChanged();
     emit audioChanged();
     emit deflickerChanged();
+    emit cleanPlateChanged();
     emit recentProjectsChanged();
     return true;
 }
@@ -182,6 +189,7 @@ bool ProjectManager::openProject(const QString &path)
     emit framesChanged();
     emit audioChanged();
     emit deflickerChanged();
+    emit cleanPlateChanged();
     return true;
 }
 
@@ -202,6 +210,8 @@ bool ProjectManager::loadManifest()
         m_audio.clear();
     m_audioOffset = obj.value(QStringLiteral("audioOffset")).toInt(0);
     m_deflicker = obj.value(QStringLiteral("deflicker")).toBool(false);
+    m_plateNext = false;
+    m_revisions.clear();
     m_frames.clear();
     for (const QJsonValue &v : obj.value(QStringLiteral("frames")).toArray()) {
         const QJsonObject f = v.toObject();
@@ -256,7 +266,14 @@ void ProjectManager::attachImageCapture(QObject *imageCapture)
         disconnect(m_capture, nullptr, this, nullptr);
     m_capture = capture;
     connect(capture, &QImageCapture::imageCaptured, this,
-            [this](int, const QImage &image) { addFrame(image); });
+            [this](int, const QImage &image) {
+                if (m_plateNext) {
+                    m_plateNext = false;
+                    setCleanPlate(image);
+                } else {
+                    addFrame(image);
+                }
+            });
     connect(capture, &QImageCapture::errorOccurred, this,
             [this](int, QImageCapture::Error, const QString &msg) { fail(msg); });
 }
@@ -339,7 +356,10 @@ QUrl ProjectManager::frameUrl(int index) const
 {
     if (index < 0 || index >= m_frames.size())
         return {};
-    return QUrl::fromLocalFile(frameFile(index));
+    QUrl url = QUrl::fromLocalFile(frameFile(index));
+    if (const int rev = m_revisions.value(m_frames.at(index).file))
+        url.setQuery(QStringLiteral("v=%1").arg(rev));
+    return url;
 }
 
 QString ProjectManager::frameFile(int index) const
@@ -416,6 +436,101 @@ void ProjectManager::removeAudio()
     m_audio.clear();
     saveManifest();
     emit audioChanged();
+}
+
+QString ProjectManager::cleanPlateFile() const
+{
+    return m_path.isEmpty() ? QString() : m_path + QStringLiteral("/placa_limpa.png");
+}
+
+QUrl ProjectManager::cleanPlateUrl() const
+{
+    const QString file = cleanPlateFile();
+    if (file.isEmpty() || !QFileInfo::exists(file))
+        return {};
+    QUrl url = QUrl::fromLocalFile(file);
+    url.setQuery(QStringLiteral("v=%1").arg(m_plateRev));
+    return url;
+}
+
+void ProjectManager::captureCleanPlateNext(bool on)
+{
+    m_plateNext = on;
+    emit cleanPlateChanged();
+}
+
+bool ProjectManager::setCleanPlate(const QImage &image)
+{
+    if (image.isNull())
+        return false;
+    if (m_path.isEmpty() && !newProject(QStringLiteral("Novo Projeto")))
+        return false;
+    if (!writeAtomically(cleanPlateFile(), [&](QSaveFile &f) { return image.save(&f, "PNG"); })) {
+        fail(tr("Falha ao gravar a placa limpa."));
+        return false;
+    }
+    ++m_plateRev;
+    emit cleanPlateChanged();
+    return true;
+}
+
+bool ProjectManager::setCleanPlateFromFrame(int index)
+{
+    return setCleanPlate(QImage(frameFile(index)));
+}
+
+bool ProjectManager::setCleanPlateFromUrl(const QUrl &url)
+{
+    QImageReader reader(url.isLocalFile() ? url.toLocalFile() : url.toString());
+    reader.setAutoTransform(true);
+    return setCleanPlate(reader.read());
+}
+
+QString ProjectManager::originalFile(int index) const
+{
+    if (index < 0 || index >= m_frames.size())
+        return {};
+    return m_path + QStringLiteral("/originais/") + QFileInfo(m_frames.at(index).file).fileName();
+}
+
+bool ProjectManager::backupOriginal(int index)
+{
+    const QString backup = originalFile(index);
+    if (backup.isEmpty())
+        return false;
+    if (QFileInfo::exists(backup))
+        return true; // keep the very first original
+    QDir().mkpath(QFileInfo(backup).absolutePath());
+    return QFile::copy(frameFile(index), backup);
+}
+
+bool ProjectManager::hasOriginal(int index) const
+{
+    const QString backup = originalFile(index);
+    return !backup.isEmpty() && QFileInfo::exists(backup);
+}
+
+bool ProjectManager::restoreOriginal(int index)
+{
+    if (!hasOriginal(index))
+        return false;
+    const QString target = frameFile(index);
+    QFile::remove(target);
+    if (!QFile::rename(originalFile(index), target))
+        return false;
+    framesModified({index});
+    return true;
+}
+
+void ProjectManager::framesModified(const QList<int> &indices)
+{
+    for (int i : indices) {
+        if (i >= 0 && i < m_frames.size())
+            ++m_revisions[m_frames.at(i).file];
+    }
+    if (!m_frames.isEmpty())
+        m_resolution = QImageReader(frameFile(0)).size();
+    emit framesChanged();
 }
 
 void ProjectManager::fail(const QString &message)

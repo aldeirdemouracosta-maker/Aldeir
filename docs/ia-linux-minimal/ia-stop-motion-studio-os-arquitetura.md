@@ -100,6 +100,6 @@ geração de vídeo por IA, interpolação de quadros (destrói o visual stop mo
 3. ✅ Player (8–30 fps) e exportação FFmpeg VAAPI com fallback x264
 4. ✅ Timeline sobre MLT: cenas, vídeos, fotos, títulos, áudio, dissolver, dividir/aparar, render VAAPI/x264 e exportação .mlt para Shotcut/Kdenlive
 5. ✅ Dope sheet com trilha de áudio, sincronia labial (Rhubarb) e remoção de flicker
-6. IA Local: remoção de fundo, upscale, geração de cenários
+6. ✅ IA Local: limpar suportes (placa limpa/preenchimento), chroma key, upscale Real-ESRGAN (Vulkan); falta remoção de fundo por IA e cenários gerados
 7. Orquestrador de modos + perfis de kernel (cgroups/AMDGPU → sched_ext)
 8. Imagem ISO do IA Stop-Motion Studio OS com o app como sessão principal

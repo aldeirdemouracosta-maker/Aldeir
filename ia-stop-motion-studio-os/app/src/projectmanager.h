@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QImage>
+#include <QHash>
 #include <QPointer>
 #include <QStringList>
 #include <QUrl>
@@ -32,6 +33,8 @@ class ProjectManager : public QObject
     Q_PROPERTY(QString audioName READ audioName NOTIFY audioChanged)
     Q_PROPERTY(int audioOffset READ audioOffset WRITE setAudioOffset NOTIFY audioChanged)
     Q_PROPERTY(bool deflicker READ deflicker WRITE setDeflicker NOTIFY deflickerChanged)
+    Q_PROPERTY(QUrl cleanPlateUrl READ cleanPlateUrl NOTIFY cleanPlateChanged)
+    Q_PROPERTY(bool capturingCleanPlate READ capturingCleanPlate NOTIFY cleanPlateChanged)
 
 public:
     explicit ProjectManager(QObject *parent = nullptr);
@@ -54,6 +57,9 @@ public:
     void setAudioOffset(int frames);
     bool deflicker() const { return m_deflicker; }
     void setDeflicker(bool on);
+    QString cleanPlateFile() const;
+    QUrl cleanPlateUrl() const;
+    bool capturingCleanPlate() const { return m_plateNext; }
 
     Q_INVOKABLE bool newProject(const QString &name);
     Q_INVOKABLE bool openProject(const QString &path);
@@ -71,6 +77,21 @@ public:
     Q_INVOKABLE bool setAudio(const QUrl &url);
     Q_INVOKABLE void removeAudio();
 
+    // Clean plate: the set photographed without puppet and rigs, used to
+    // erase supports. The next camera capture can be routed to it.
+    Q_INVOKABLE void captureCleanPlateNext(bool on = true);
+    Q_INVOKABLE bool setCleanPlate(const QImage &image);
+    Q_INVOKABLE bool setCleanPlateFromFrame(int index);
+    Q_INVOKABLE bool setCleanPlateFromUrl(const QUrl &url);
+
+    // Edited photos keep their original in <projeto>/originais/.
+    Q_INVOKABLE QString originalFile(int index) const;
+    Q_INVOKABLE bool backupOriginal(int index);
+    Q_INVOKABLE bool hasOriginal(int index) const;
+    Q_INVOKABLE bool restoreOriginal(int index);
+    // Tells views that these photos changed on disk (refreshes thumbnails).
+    Q_INVOKABLE void framesModified(const QList<int> &indices);
+
 signals:
     void projectChanged();
     void framesChanged();
@@ -79,6 +100,7 @@ signals:
     void frameSaved(int index);
     void audioChanged();
     void deflickerChanged();
+    void cleanPlateChanged();
     void errorOccurred(const QString &message);
 
 private:
@@ -102,6 +124,9 @@ private:
     QString m_audio; // relative to project dir
     int m_audioOffset = 0; // project frame where the audio starts
     bool m_deflicker = false;
+    bool m_plateNext = false;
+    int m_plateRev = 0;
+    QHash<QString, int> m_revisions; // frame file → edit counter (cache busting)
     QString m_lastError;
     QPointer<QImageCapture> m_capture;
 };

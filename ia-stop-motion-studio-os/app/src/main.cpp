@@ -8,6 +8,7 @@
 #include "audiotrack.h"
 #include "cameracontrol.h"
 #include "exporter.h"
+#include "frametools.h"
 #include "projectmanager.h"
 #include "systemmonitor.h"
 #include "timeline.h"
@@ -30,6 +31,7 @@ int main(int argc, char *argv[])
     SystemMonitor monitor(project.baseDir());
     CameraControl cameraControl;
     AudioTrack audioTrack(&project);
+    FrameTools frameTools(&project);
     Timeline timeline(&project);
     TimelineRenderer timelineRenderer(&timeline);
 
@@ -45,6 +47,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("cameraControl"), &cameraControl);
     engine.rootContext()->setContextProperty(QStringLiteral("timeline"), &timeline);
     engine.rootContext()->setContextProperty(QStringLiteral("audioTrack"), &audioTrack);
+    engine.rootContext()->setContextProperty(QStringLiteral("frameTools"), &frameTools);
     engine.rootContext()->setContextProperty(QStringLiteral("timelineRenderer"), &timelineRenderer);
     engine.rootContext()->setContextProperty(QStringLiteral("appVersion"), QStringLiteral(APP_VERSION));
 

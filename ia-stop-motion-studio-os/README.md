@@ -8,7 +8,7 @@ Arquitetura completa: [`../docs/ia-linux-minimal/ia-stop-motion-studio-os-arquit
 
 ![Início](docs/screenshots/inicio.png)
 
-## O que já funciona (v0.3)
+## O que já funciona (v0.4)
 
 **Interface da maquete original:** barra superior, menu lateral, dock inferior,
 painel Sistema (CPU, RAM, GPU, VRAM e temperatura da RX 580, armazenamento) e
@@ -39,6 +39,21 @@ Projeto Recente.
   Instale com `scripts/instalar-rhubarb.sh`.
 
 ![Captura](docs/screenshots/captura.png)
+
+**IA Local** (menu lateral ou dock → IA Local), sempre guardando o original em
+`<projeto>/originais/` (botão **Restaurar original**):
+- **Limpar suportes e fios**: pinte sobre o suporte; com uma **placa limpa**
+  (foto do cenário sem boneco — pode ser a próxima foto da Captura, um quadro ou
+  um arquivo) a área vira o cenário real, com borda suavizada; sem placa, a área
+  é preenchida a partir dos arredores (bom para fios finos)
+- **Trocar fundo** (chroma key verde/azul) com conta-gotas, tolerância,
+  suavidade de borda, remoção do reflexo verde no boneco e novo cenário (ou
+  transparente)
+- **Upscale IA 2×/4×** com [Real-ESRGAN ncnn-vulkan](https://github.com/xinntao/Real-ESRGAN),
+  rodando na RX 580 via Vulkan. Instale com `scripts/instalar-realesrgan.sh`
+- prévia **antes/depois** no quadro atual e aplicação em lote nos quadros selecionados
+
+![IA Local](docs/screenshots/ia-local.png)
 
 **Renderização:** opção **Remover flicker** (filtro `deflicker` do FFmpeg, iguala
 o brilho entre fotos) e a trilha de áudio do projeto entra no vídeo. Exporta MP4 em YouTube 16:9, Reels/TikTok 9:16, Quadrado 1:1 ou
@@ -77,7 +92,8 @@ cmake --build build -j
 ./build/ia-stop-motion-studio
 ```
 
-Testes: `ctest --test-dir build --output-on-failure` (projeto, exportação, render da timeline com MLT, áudio, deflicker).
+Testes: `ctest --test-dir build --output-on-failure` (projeto, exportação, render da timeline com MLT, áudio, deflicker, ferramentas de imagem).
+O teste de upscale roda com `IA_SMS_REALESRGAN=<caminho do realesrgan-ncnn-vulkan>`.
 O teste de sincronia labial roda com `IA_SMS_RHUBARB=<caminho do rhubarb>` e `IA_SMS_TEST_SPEECH=<wav com fala>`.
 
 Projetos ficam em `~/IA-StopMotion/Projetos/<nome>/` (`project.json`, `frames/`,
@@ -89,6 +105,7 @@ Captura de tela sem monitor: `./build/ia-stop-motion-studio --screenshot tela.pn
 
 3. Captura direta de DSLR via gPhoto2; biblioteca de bocas por personagem
 4. Desfazer/refazer e reordenar arrastando na Timeline
+5. Remoção de fundo por IA sem tela verde (rembg/U²-Net) e inpainting por IA (LaMa)
 5. IA local: remover suportes/fundo, sincronia labial (Rhubarb), legendas (whisper.cpp)
 6. Modos do sistema (Captura / Edição / IA / Render) com cgroups e perfis AMDGPU, depois sched_ext
 7. ISO do IA Stop-Motion Studio OS
