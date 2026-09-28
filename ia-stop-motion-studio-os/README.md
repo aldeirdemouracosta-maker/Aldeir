@@ -8,7 +8,7 @@ Arquitetura completa: [`../docs/ia-linux-minimal/ia-stop-motion-studio-os-arquit
 
 ![Início](docs/screenshots/inicio.png)
 
-## O que já funciona (v0.8)
+## O que já funciona (v0.9)
 
 **Interface da maquete original:** barra superior, menu lateral, dock inferior,
 painel Sistema (CPU, RAM, GPU, VRAM e temperatura da RX 580, armazenamento) e
@@ -73,6 +73,16 @@ Vem com um "Boneco padrão" de bocas desenhadas em feltro.
   sincronia labial (originais guardados)
 
 ![Personagens](docs/screenshots/personagens.png)
+
+**Cenários** (menu lateral ou dock): biblioteca de fundos compartilhada entre
+projetos. Gere cenários com IA local ([stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp)
+com Vulkan na RX 580, modelo SD 1.5) em estilos de stop motion — **feltro e
+tecido, massinha, maquete de papelão, papel recortado, cenário pintado** — ou
+importe fotos. Cada cenário vai para a **Timeline** ou vira o **novo fundo na IA
+Local** com um clique. O prompt e a semente ficam salvos ao lado da imagem.
+Instale com `scripts/instalar-cenarios.sh`.
+
+![Cenários](docs/screenshots/cenarios.png)
 
 **Renderização:** opção **Remover flicker** (filtro `deflicker` do FFmpeg, iguala
 o brilho entre fotos) e a trilha de áudio do projeto entra no vídeo. Exporta MP4 em YouTube 16:9, Reels/TikTok 9:16, Quadrado 1:1 ou
@@ -151,6 +161,5 @@ Captura de tela sem monitor: `./build/ia-stop-motion-studio --screenshot tela.pn
 
 ## Próximas etapas
 
-1. Cenários gerados por IA (stable-diffusion.cpp, Vulkan)
-2. Escalonador sched_ext próprio (`scx_studio`)
-3. ISO do IA Stop-Motion Studio OS
+1. Escalonador sched_ext próprio (`scx_studio`)
+2. ISO do IA Stop-Motion Studio OS

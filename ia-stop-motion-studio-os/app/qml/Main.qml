@@ -37,6 +37,8 @@ ApplicationWindow {
     readonly property var modeContext: [currentPage, exporter.busy || timelineRenderer.busy, frameTools.busy]
     onModeContextChanged: systemModes.updateContext(currentPage, exporter.busy || timelineRenderer.busy, frameTools.busy)
     property bool autoPlay: false
+    // Scenery chosen in Cenários to be used as the new background in IA Local.
+    property url pendingBackground: ""
 
     function navigate(page) {
         // The dock's "Player" opens the capture screen already playing.
@@ -48,7 +50,6 @@ ApplicationWindow {
         editor: { title: "Editor de Cenas", icon: "scenes", step: 5, text: "Composição de cenários, chroma key dos bonecos de pano, remoção de suportes e fios com inpainting." },
         biblioteca: { title: "Biblioteca", icon: "library", step: 4, text: "Fotos, sons, trilhas, títulos e recursos reutilizáveis entre projetos." },
         projetos: { title: "Projetos", icon: "folder", step: 2, text: "Lista de projetos em " + project.baseDir + "/Projetos." },
-        cenarios: { title: "Cenários", icon: "image", step: 5, text: "Cenários fotografados e gerados por IA com estilo feltro/pano." },
         configuracoes: { title: "Configurações", icon: "settings", step: 6, text: "Câmera, pasta de projetos, perfis de desempenho do kernel (Captura, Edição, IA, Render)." },
         terminal: { title: "Terminal", icon: "terminal", step: 6, text: "Acesso ao terminal do sistema." },
         lixeira: { title: "Lixeira", icon: "trash", step: 2, text: "Quadros apagados ficam em <projeto>/lixeira e podem ser recuperados." },
@@ -99,6 +100,7 @@ ApplicationWindow {
             case "timeline": return timelinePage
             case "ia": return aiPage
             case "personagens": return charactersPage
+            case "cenarios": return sceneryPage
             default: return placeholderPage
             }
         }
@@ -110,6 +112,10 @@ ApplicationWindow {
     Component { id: timelinePage; TimelinePage {} }
     Component { id: aiPage; AiPage {} }
     Component { id: charactersPage; CharactersPage {} }
+    Component {
+        id: sceneryPage
+        SceneryPage { onUseAsBackground: (image) => { window.pendingBackground = image; window.navigate("ia") } }
+    }
     Component {
         id: placeholderPage
         PlaceholderPage {

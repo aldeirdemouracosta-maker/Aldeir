@@ -70,6 +70,14 @@ Item {
     }
 
     onCurrentChanged: frameTools.clearPreview()
+    Component.onCompleted: {
+        // Arriving from Cenários with a background to use.
+        if (window.pendingBackground.toString() !== "") {
+            tool = "fundo"
+            background = window.pendingBackground
+            window.pendingBackground = ""
+        }
+    }
     onToolChanged: { frameTools.clearPreview(); picking = false }
 
     FileDialog {

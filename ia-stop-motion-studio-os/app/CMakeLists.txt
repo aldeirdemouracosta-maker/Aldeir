@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(ia-stop-motion-studio-os VERSION 0.8.0 LANGUAGES CXX)
+project(ia-stop-motion-studio-os VERSION 0.9.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -21,6 +21,7 @@ add_library(studio_core STATIC
     src/systemmodes.h src/systemmodes.cpp
     src/characters.h src/characters.cpp
     src/speechtools.h src/speechtools.cpp
+    src/scenery.h src/scenery.cpp
     src/scene.h src/scene.cpp
     src/timeline.h src/timeline.cpp
     src/timelinerenderer.h src/timelinerenderer.cpp
@@ -56,6 +57,7 @@ qt_add_qml_module(ia-stop-motion-studio
         qml/pages/TimelinePage.qml
         qml/pages/AiPage.qml
         qml/pages/CharactersPage.qml
+        qml/pages/SceneryPage.qml
         qml/pages/PlaceholderPage.qml
     RESOURCES ${ICON_FILES}
 )
@@ -92,7 +94,11 @@ target_compile_definitions(tst_speech PRIVATE
     MOCK_WHISPER="${CMAKE_CURRENT_SOURCE_DIR}/tests/mock-whisper-cli.sh"
     MOCK_PIPER="${CMAKE_CURRENT_SOURCE_DIR}/tests/mock-piper.sh")
 add_test(NAME tst_speech COMMAND tst_speech)
+qt_add_executable(tst_scenery tests/tst_scenery.cpp)
+target_link_libraries(tst_scenery PRIVATE studio_core Qt6::Test)
+target_compile_definitions(tst_scenery PRIVATE MOCK_SD="${CMAKE_CURRENT_SOURCE_DIR}/tests/mock-sd-cli.sh")
+add_test(NAME tst_scenery COMMAND tst_scenery)
 add_test(NAME ia_sms_modo COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../system/test-ia-sms-modo.sh)
-set_tests_properties(tst_project tst_timeline tst_audio tst_imagetools tst_dslr tst_modes tst_characters tst_speech PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+set_tests_properties(tst_project tst_timeline tst_audio tst_imagetools tst_dslr tst_modes tst_characters tst_speech tst_scenery PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 install(TARGETS ia-stop-motion-studio RUNTIME DESTINATION bin)
