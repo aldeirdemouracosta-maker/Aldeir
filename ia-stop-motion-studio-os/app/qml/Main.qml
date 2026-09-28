@@ -49,9 +49,8 @@ ApplicationWindow {
         cenarios: { title: "Cenários", icon: "image", step: 5, text: "Cenários fotografados e gerados por IA com estilo feltro/pano." },
         configuracoes: { title: "Configurações", icon: "settings", step: 6, text: "Câmera, pasta de projetos, perfis de desempenho do kernel (Captura, Edição, IA, Render)." },
         terminal: { title: "Terminal", icon: "terminal", step: 6, text: "Acesso ao terminal do sistema." },
-        timeline: { title: "Timeline", icon: "timeline", step: 4, text: "Edição estilo Clipchamp sobre o MLT: cortes, trilhas de áudio, títulos, transições e legendas." },
         lixeira: { title: "Lixeira", icon: "trash", step: 2, text: "Quadros apagados ficam em <projeto>/lixeira e podem ser recuperados." },
-        ajuda: { title: "Ajuda", icon: "help", step: 1, text: "Atalhos da Captura: Espaço captura · Backspace apaga o último · O onion skin · G grade · L ao vivo/último · P reproduzir." }
+        ajuda: { title: "Ajuda", icon: "help", step: 1, text: "Captura: Espaço captura · Backspace apaga o último · O onion skin · G grade · L ao vivo/último · P reproduzir.  Timeline: Espaço reproduz · S divide · Delete apaga · ← → quadro a quadro." }
     })
 
     background: Rectangle {
@@ -95,6 +94,7 @@ ApplicationWindow {
             case "inicio": return homePage
             case "captura": return capturePage
             case "renderizacao": return renderPage
+            case "timeline": return timelinePage
             default: return placeholderPage
             }
         }
@@ -103,6 +103,7 @@ ApplicationWindow {
     Component { id: homePage; HomePage { onNavigate: (page) => window.navigate(page) } }
     Component { id: capturePage; CapturePage { autoPlay: window.autoPlay } }
     Component { id: renderPage; RenderPage {} }
+    Component { id: timelinePage; TimelinePage {} }
     Component {
         id: placeholderPage
         PlaceholderPage {

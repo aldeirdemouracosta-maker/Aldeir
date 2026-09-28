@@ -8,7 +8,7 @@ Arquitetura completa: [`../docs/ia-linux-minimal/ia-stop-motion-studio-os-arquit
 
 ![Início](docs/screenshots/inicio.png)
 
-## O que já funciona (v0.1)
+## O que já funciona (v0.2)
 
 **Interface da maquete original:** barra superior, menu lateral, dock inferior,
 painel Sistema (CPU, RAM, GPU, VRAM e temperatura da RX 580, armazenamento) e
@@ -32,6 +32,20 @@ Projeto Recente.
 4K. Usa o encoder da GPU via VAAPI quando existe `/dev/dri/renderD128` (RX 580) e
 cai para x264 na CPU se falhar.
 
+**Timeline** (dock → Timeline), edição estilo Clipchamp:
+- trilha de **vídeo** com cenas capturadas (de qualquer projeto), vídeos e fotos,
+  com **dissolver** entre clipes; trilha de **títulos** e trilha de **áudio**
+  (música, narração, efeitos) com volume
+- **dividir** no cursor (`S`), aparar arrastando a borda direita, mover clipes,
+  arrastar títulos e áudios no tempo, zoom, quadro a quadro (`←` `→`)
+- monitor de pré-visualização com dissolve e títulos exatamente como no render
+- formatos 16:9, 9:16, 1:1 e 4K; 12/24/25/30 fps
+- **Exportar filme**: cada cena é pré-renderizada (com cache) e o filme é
+  montado pelo **MLT** (`melt`), com encoder da GPU via VAAPI e fallback x264.
+  O projeto também é salvo como `filme.mlt`, que abre no **Shotcut** e no **Kdenlive**.
+
+![Timeline](docs/screenshots/timeline.png)
+
 As demais telas da maquete (Editor de Cenas, Timeline, IA Local, Personagens,
 Cenários…) já existem na navegação e indicam em que etapa serão implementadas.
 
@@ -42,14 +56,15 @@ sudo apt install cmake g++ qt6-base-dev qt6-declarative-dev qt6-multimedia-dev \
   qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts \
   qml6-module-qtquick-window qml6-module-qtquick-dialogs qml6-module-qtmultimedia \
   qml6-module-qtqml-workerscript qml6-module-qtquick-templates \
-  gstreamer1.0-plugins-good gstreamer1.0-plugins-bad ffmpeg v4l-utils
+  gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav \
+  ffmpeg melt v4l-utils
 
 cmake -S app -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ./build/ia-stop-motion-studio
 ```
 
-Testes: `ctest --test-dir build --output-on-failure`
+Testes: `ctest --test-dir build --output-on-failure` (projeto, exportação e render da timeline com MLT)
 
 Projetos ficam em `~/IA-StopMotion/Projetos/<nome>/` (`project.json`, `frames/`,
 `lixeira/`, `export/`). A pasta base pode ser trocada com a variável `IA_SMS_HOME`.
@@ -58,8 +73,8 @@ Captura de tela sem monitor: `./build/ia-stop-motion-studio --screenshot tela.pn
 
 ## Próximas etapas
 
-3. Timeline sobre o MLT (cortes, áudio, títulos, transições) e dope sheet com trilha de áudio
-4. Remoção de flicker e exportação com áudio
+3. Dope sheet com a trilha de áudio visível durante a captura (para sincronia labial)
+4. Remoção de flicker; captura direta de DSLR via gPhoto2
 5. IA local: remover suportes/fundo, sincronia labial (Rhubarb), legendas (whisper.cpp)
 6. Modos do sistema (Captura / Edição / IA / Render) com cgroups e perfis AMDGPU, depois sched_ext
 7. ISO do IA Stop-Motion Studio OS

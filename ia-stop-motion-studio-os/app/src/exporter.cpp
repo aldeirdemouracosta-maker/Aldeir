@@ -1,33 +1,17 @@
 #include "exporter.h"
+#include "formats.h"
 #include "projectmanager.h"
+#include "scene.h"
 
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QRegularExpression>
-#include <QSize>
-#include <QTextStream>
 
 namespace {
 
 const char *kRenderNode = "/dev/dri/renderD128";
-
-QSize presetSize(const QString &preset)
-{
-    if (preset == QLatin1String("vertical"))
-        return {1080, 1920};
-    if (preset == QLatin1String("quadrado"))
-        return {1080, 1080};
-    if (preset == QLatin1String("4k"))
-        return {3840, 2160};
-    return {1920, 1080};
-}
-
-QString escapeConcatPath(QString path)
-{
-    return path.replace(QLatin1Char('\''), QStringLiteral("'\\''"));
-}
 
 } // namespace
 
@@ -59,26 +43,12 @@ bool Exporter::vaapiAvailable() const
 
 QStringList Exporter::presets() const
 {
-    return {QStringLiteral("youtube"), QStringLiteral("vertical"), QStringLiteral("quadrado"), QStringLiteral("4k")};
+    return Formats::ids();
 }
 
 bool Exporter::writeConcatList(const QString &path) const
 {
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
-        return false;
-    QTextStream out(&file);
-    const int fps = qMax(1, m_project->fps());
-    const int count = m_project->frameCount();
-    for (int i = 0; i < count; ++i) {
-        out << "file '" << escapeConcatPath(m_project->frameFile(i)) << "'\n";
-        out << "duration " << QString::number(double(m_project->holdAt(i)) / fps, 'f', 6) << "\n";
-    }
-    // The concat demuxer ignores the duration of the last entry unless the
-    // file is listed once more.
-    if (count > 0)
-        out << "file '" << escapeConcatPath(m_project->frameFile(count - 1)) << "'\n";
-    return true;
+    return Scene::load(m_project->projectPath()).writeConcatList(path);
 }
 
 bool Exporter::exportVideo(const QString &preset, bool preferHardware)
@@ -109,7 +79,7 @@ bool Exporter::exportVideo(const QString &preset, bool preferHardware)
 bool Exporter::start(bool hardware)
 {
     m_usingHardware = hardware;
-    const QSize size = presetSize(m_preset);
+    const QSize size = Formats::size(m_preset);
     const QString fit = QStringLiteral("scale=%1:%2:force_original_aspect_ratio=decrease,"
                                        "pad=%1:%2:(ow-iw)/2:(oh-ih)/2:color=black")
                             .arg(size.width())

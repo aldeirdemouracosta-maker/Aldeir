@@ -9,6 +9,8 @@
 #include "exporter.h"
 #include "projectmanager.h"
 #include "systemmonitor.h"
+#include "timeline.h"
+#include "timelinerenderer.h"
 
 int main(int argc, char *argv[])
 {
@@ -26,6 +28,8 @@ int main(int argc, char *argv[])
     Exporter exporter(&project);
     SystemMonitor monitor(project.baseDir());
     CameraControl cameraControl;
+    Timeline timeline(&project);
+    TimelineRenderer timelineRenderer(&timeline);
 
     // Reopen the most recent project so the studio resumes where it stopped.
     const QVariantList recent = project.recentProjects();
@@ -37,6 +41,8 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("exporter"), &exporter);
     engine.rootContext()->setContextProperty(QStringLiteral("systemMonitor"), &monitor);
     engine.rootContext()->setContextProperty(QStringLiteral("cameraControl"), &cameraControl);
+    engine.rootContext()->setContextProperty(QStringLiteral("timeline"), &timeline);
+    engine.rootContext()->setContextProperty(QStringLiteral("timelineRenderer"), &timelineRenderer);
     engine.rootContext()->setContextProperty(QStringLiteral("appVersion"), QStringLiteral(APP_VERSION));
 
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app,

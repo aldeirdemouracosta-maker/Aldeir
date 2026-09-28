@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(ia-stop-motion-studio-os VERSION 0.1.0 LANGUAGES CXX)
+project(ia-stop-motion-studio-os VERSION 0.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -13,6 +13,11 @@ add_library(studio_core STATIC
     src/exporter.h src/exporter.cpp
     src/systemmonitor.h src/systemmonitor.cpp
     src/cameracontrol.h src/cameracontrol.cpp
+    src/formats.h
+    src/scene.h src/scene.cpp
+    src/timeline.h src/timeline.cpp
+    src/timelinerenderer.h src/timelinerenderer.cpp
+    src/titlerenderer.h src/titlerenderer.cpp
 )
 target_include_directories(studio_core PUBLIC src)
 target_link_libraries(studio_core PUBLIC Qt6::Core Qt6::Gui Qt6::Multimedia)
@@ -36,9 +41,11 @@ qt_add_qml_module(ia-stop-motion-studio
         qml/components/RingGauge.qml
         qml/components/Clapperboard.qml
         qml/components/IconButton.qml
+        qml/components/FrameSpin.qml
         qml/pages/HomePage.qml
         qml/pages/CapturePage.qml
         qml/pages/RenderPage.qml
+        qml/pages/TimelinePage.qml
         qml/pages/PlaceholderPage.qml
     RESOURCES ${ICON_FILES}
 )
@@ -50,5 +57,9 @@ enable_testing()
 qt_add_executable(tst_project tests/tst_project.cpp)
 target_link_libraries(tst_project PRIVATE studio_core Qt6::Test)
 add_test(NAME tst_project COMMAND tst_project)
+qt_add_executable(tst_timeline tests/tst_timeline.cpp)
+target_link_libraries(tst_timeline PRIVATE studio_core Qt6::Test)
+add_test(NAME tst_timeline COMMAND tst_timeline)
+set_tests_properties(tst_project tst_timeline PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 install(TARGETS ia-stop-motion-studio RUNTIME DESTINATION bin)
