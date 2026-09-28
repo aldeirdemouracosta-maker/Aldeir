@@ -155,10 +155,15 @@ bool ProjectManager::newProject(const QString &name)
     m_nextIndex = 1;
     m_resolution = {};
     m_frames.clear();
+    m_audio.clear();
+    m_audioOffset = 0;
+    m_deflicker = false;
     saveManifest();
     emit projectChanged();
     emit fpsChanged();
     emit framesChanged();
+    emit audioChanged();
+    emit deflickerChanged();
     emit recentProjectsChanged();
     return true;
 }
@@ -175,6 +180,8 @@ bool ProjectManager::openProject(const QString &path)
     emit projectChanged();
     emit fpsChanged();
     emit framesChanged();
+    emit audioChanged();
+    emit deflickerChanged();
     return true;
 }
 
@@ -190,6 +197,11 @@ bool ProjectManager::loadManifest()
     m_name = obj.value(QStringLiteral("name")).toString(QFileInfo(m_path).fileName());
     m_fps = obj.value(QStringLiteral("fps")).toInt(12);
     m_nextIndex = obj.value(QStringLiteral("nextIndex")).toInt(1);
+    m_audio = obj.value(QStringLiteral("audio")).toString();
+    if (!m_audio.isEmpty() && !QFileInfo::exists(m_path + QLatin1Char('/') + m_audio))
+        m_audio.clear();
+    m_audioOffset = obj.value(QStringLiteral("audioOffset")).toInt(0);
+    m_deflicker = obj.value(QStringLiteral("deflicker")).toBool(false);
     m_frames.clear();
     for (const QJsonValue &v : obj.value(QStringLiteral("frames")).toArray()) {
         const QJsonObject f = v.toObject();
@@ -216,6 +228,9 @@ bool ProjectManager::saveManifest()
         {QStringLiteral("name"), m_name},
         {QStringLiteral("fps"), m_fps},
         {QStringLiteral("nextIndex"), m_nextIndex},
+        {QStringLiteral("audio"), m_audio},
+        {QStringLiteral("audioOffset"), m_audioOffset},
+        {QStringLiteral("deflicker"), m_deflicker},
         {QStringLiteral("updated"), QDateTime::currentDateTime().toString(Qt::ISODate)},
         {QStringLiteral("frames"), frames},
     };
@@ -339,6 +354,68 @@ int ProjectManager::holdAt(int index) const
     if (index < 0 || index >= m_frames.size())
         return 1;
     return m_frames.at(index).hold;
+}
+
+QString ProjectManager::audioFile() const
+{
+    return m_audio.isEmpty() ? QString() : m_path + QLatin1Char('/') + m_audio;
+}
+
+QString ProjectManager::audioName() const
+{
+    return m_audio.isEmpty() ? QString() : QFileInfo(m_audio).fileName();
+}
+
+void ProjectManager::setAudioOffset(int frames)
+{
+    frames = qMax(0, frames);
+    if (frames == m_audioOffset)
+        return;
+    m_audioOffset = frames;
+    saveManifest();
+    emit audioChanged();
+}
+
+void ProjectManager::setDeflicker(bool on)
+{
+    if (on == m_deflicker)
+        return;
+    m_deflicker = on;
+    saveManifest();
+    emit deflickerChanged();
+}
+
+bool ProjectManager::setAudio(const QUrl &url)
+{
+    const QString src = url.isLocalFile() ? url.toLocalFile() : url.toString();
+    if (!QFileInfo::exists(src)) {
+        fail(tr("Arquivo de áudio não encontrado: %1").arg(src));
+        return false;
+    }
+    if (m_path.isEmpty() && !newProject(QStringLiteral("Novo Projeto")))
+        return false;
+    QDir().mkpath(m_path + QStringLiteral("/audio"));
+    QString rel = QStringLiteral("audio/") + QFileInfo(src).fileName();
+    for (int i = 2; QFileInfo::exists(m_path + QLatin1Char('/') + rel) && QFileInfo(m_path + QLatin1Char('/') + rel) != QFileInfo(src); ++i)
+        rel = QStringLiteral("audio/%1_%2.%3").arg(QFileInfo(src).completeBaseName()).arg(i).arg(QFileInfo(src).suffix());
+    const QString dst = m_path + QLatin1Char('/') + rel;
+    if (QFileInfo(dst) != QFileInfo(src) && !QFile::copy(src, dst)) {
+        fail(tr("Falha ao copiar o áudio para o projeto."));
+        return false;
+    }
+    m_audio = rel;
+    saveManifest();
+    emit audioChanged();
+    return true;
+}
+
+void ProjectManager::removeAudio()
+{
+    if (m_audio.isEmpty())
+        return;
+    m_audio.clear();
+    saveManifest();
+    emit audioChanged();
 }
 
 void ProjectManager::fail(const QString &message)

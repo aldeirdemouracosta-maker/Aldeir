@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(ia-stop-motion-studio-os VERSION 0.2.0 LANGUAGES CXX)
+project(ia-stop-motion-studio-os VERSION 0.3.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -14,6 +14,7 @@ add_library(studio_core STATIC
     src/systemmonitor.h src/systemmonitor.cpp
     src/cameracontrol.h src/cameracontrol.cpp
     src/formats.h
+    src/audiotrack.h src/audiotrack.cpp
     src/scene.h src/scene.cpp
     src/timeline.h src/timeline.cpp
     src/timelinerenderer.h src/timelinerenderer.cpp
@@ -42,6 +43,7 @@ qt_add_qml_module(ia-stop-motion-studio
         qml/components/Clapperboard.qml
         qml/components/IconButton.qml
         qml/components/FrameSpin.qml
+        qml/components/DopeSheet.qml
         qml/pages/HomePage.qml
         qml/pages/CapturePage.qml
         qml/pages/RenderPage.qml
@@ -60,6 +62,9 @@ add_test(NAME tst_project COMMAND tst_project)
 qt_add_executable(tst_timeline tests/tst_timeline.cpp)
 target_link_libraries(tst_timeline PRIVATE studio_core Qt6::Test)
 add_test(NAME tst_timeline COMMAND tst_timeline)
-set_tests_properties(tst_project tst_timeline PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+qt_add_executable(tst_audio tests/tst_audio.cpp)
+target_link_libraries(tst_audio PRIVATE studio_core Qt6::Test)
+add_test(NAME tst_audio COMMAND tst_audio)
+set_tests_properties(tst_project tst_timeline tst_audio PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 install(TARGETS ia-stop-motion-studio RUNTIME DESTINATION bin)

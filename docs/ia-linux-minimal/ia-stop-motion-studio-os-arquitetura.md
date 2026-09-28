@@ -86,8 +86,7 @@ vivo/último, gravação segura de cada quadro, dope sheet (hold por quadro),
 importar fotos, exportação com formatos prontos (16:9, 9:16, 1:1, 4K) usando o
 encoder da RX 580 e a telemetria de VRAM/temperatura.
 
-**Fica para depois:** remoção de flicker, sincronia labial
-(Rhubarb Lip Sync), remoção de suportes com inpainting, cenários por IA, roteiro
+**Fica para depois:** remoção de suportes com inpainting, cenários por IA, roteiro
 com LLM, scheduler sched_ext.
 
 **Fora do escopo:** IA em Ring 0, módulo de kernel próprio / eBPF no AMDGPU,
@@ -100,6 +99,7 @@ geração de vídeo por IA, interpolação de quadros (destrói o visual stop mo
 2. ✅ Captura: webcam, travar câmera, onion skin, grade, quadros salvos com segurança, dope sheet (gPhoto2 para DSLR ainda falta)
 3. ✅ Player (8–30 fps) e exportação FFmpeg VAAPI com fallback x264
 4. ✅ Timeline sobre MLT: cenas, vídeos, fotos, títulos, áudio, dissolver, dividir/aparar, render VAAPI/x264 e exportação .mlt para Shotcut/Kdenlive
-5. IA Local: remoção de fundo, upscale, geração de cenários
-6. Orquestrador de modos + perfis de kernel (cgroups/AMDGPU → sched_ext)
-7. Imagem ISO do IA Stop-Motion Studio OS com o app como sessão principal
+5. ✅ Dope sheet com trilha de áudio, sincronia labial (Rhubarb) e remoção de flicker
+6. IA Local: remoção de fundo, upscale, geração de cenários
+7. Orquestrador de modos + perfis de kernel (cgroups/AMDGPU → sched_ext)
+8. Imagem ISO do IA Stop-Motion Studio OS com o app como sessão principal

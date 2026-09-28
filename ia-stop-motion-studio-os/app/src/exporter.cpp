@@ -48,7 +48,7 @@ QStringList Exporter::presets() const
 
 bool Exporter::writeConcatList(const QString &path) const
 {
-    return Scene::load(m_project->projectPath()).writeConcatList(path);
+    return m_scene.writeConcatList(path);
 }
 
 bool Exporter::exportVideo(const QString &preset, bool preferHardware)
@@ -63,14 +63,13 @@ bool Exporter::exportVideo(const QString &preset, bool preferHardware)
 
     const QString exportDir = m_project->projectPath() + QStringLiteral("/export");
     QDir().mkpath(exportDir);
+    m_scene = Scene::load(m_project->projectPath());
     m_listFile = exportDir + QStringLiteral("/.frames.txt");
     if (!writeConcatList(m_listFile)) {
         setStatus(tr("Falha ao preparar a lista de quadros."));
         return false;
     }
-    m_output = exportDir + QStringLiteral("/%1_%2_%3.mp4")
-                               .arg(m_project->projectName(), m_preset,
-                                    QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss")));
+    m_output = Formats::uniqueOutput(exportDir, m_project->projectName() + QLatin1Char('_') + m_preset);
     m_totalSeconds = double(m_project->totalFrames()) / qMax(1, m_project->fps());
     m_cancelled = false;
     return start(preferHardware && vaapiAvailable());
@@ -80,7 +79,7 @@ bool Exporter::start(bool hardware)
 {
     m_usingHardware = hardware;
     const QSize size = Formats::size(m_preset);
-    const QString fit = QStringLiteral("scale=%1:%2:force_original_aspect_ratio=decrease,"
+    const QString fit = m_scene.filterPrefix() + QStringLiteral("scale=%1:%2:force_original_aspect_ratio=decrease,"
                                        "pad=%1:%2:(ow-iw)/2:(oh-ih)/2:color=black")
                             .arg(size.width())
                             .arg(size.height());
@@ -91,6 +90,7 @@ bool Exporter::start(bool hardware)
         args << QStringLiteral("-vaapi_device") << QString::fromLatin1(kRenderNode);
     args << QStringLiteral("-f") << QStringLiteral("concat") << QStringLiteral("-safe") << QStringLiteral("0")
          << QStringLiteral("-i") << m_listFile;
+    args << m_scene.audioInputArgs();
     if (hardware) {
         args << QStringLiteral("-vf") << fit + QStringLiteral(",format=nv12,hwupload")
              << QStringLiteral("-c:v") << QStringLiteral("h264_vaapi")
@@ -101,6 +101,7 @@ bool Exporter::start(bool hardware)
              << QStringLiteral("-preset") << QStringLiteral("medium")
              << QStringLiteral("-crf") << QStringLiteral("18");
     }
+    args << m_scene.audioOutputArgs();
     // The repeated last concat entry would otherwise add one extra frame.
     args << QStringLiteral("-fps_mode") << QStringLiteral("cfr")
          << QStringLiteral("-r") << QString::number(m_project->fps())

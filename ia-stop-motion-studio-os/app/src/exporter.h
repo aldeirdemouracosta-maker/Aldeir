@@ -4,6 +4,8 @@
 #include <QProcess>
 #include <QStringList>
 
+#include "scene.h"
+
 class ProjectManager;
 
 // Turns the frame sequence (with per-frame holds) into an MP4 using FFmpeg.
@@ -47,6 +49,7 @@ private:
     void onFinished(int exitCode, QProcess::ExitStatus status);
 
     ProjectManager *m_project;
+    Scene m_scene; // snapshot of the project taken when the export starts
     QProcess m_process;
     QString m_preset;
     QString m_output;

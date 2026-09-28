@@ -8,7 +8,7 @@ Arquitetura completa: [`../docs/ia-linux-minimal/ia-stop-motion-studio-os-arquit
 
 ![Início](docs/screenshots/inicio.png)
 
-## O que já funciona (v0.2)
+## O que já funciona (v0.3)
 
 **Interface da maquete original:** barra superior, menu lateral, dock inferior,
 painel Sistema (CPU, RAM, GPU, VRAM e temperatura da RX 580, armazenamento) e
@@ -26,9 +26,22 @@ Projeto Recente.
 - reprodução a 8/12/15/24/30 fps (`P`), tira de quadros
 - **Importar fotos** já tiradas (celular, DSLR), respeitando a rotação EXIF
 
+**Dope sheet e sincronia labial** (`D` mostra/esconde):
+- importe a trilha de falas ou música do projeto (fica em `<projeto>/audio/`) e
+  defina em que quadro ela começa
+- forma de onda **por quadro**, blocos das fotos com as exposições e o lugar
+  onde a próxima foto vai cair
+- **Ouvir (A)**: toca o segundo de áudio até o próximo quadro; a reprodução
+  (`P`) toca a animação com o som sincronizado
+- **Sincronia labial** com o [Rhubarb Lip Sync](https://github.com/DanielSWolf/rhubarb-lip-sync)
+  (reconhecedor fonético, funciona com português): cada quadro recebe uma boca
+  A–H/X e a Captura mostra **qual boca colocar no boneco** na próxima foto.
+  Instale com `scripts/instalar-rhubarb.sh`.
+
 ![Captura](docs/screenshots/captura.png)
 
-**Renderização:** exporta MP4 em YouTube 16:9, Reels/TikTok 9:16, Quadrado 1:1 ou
+**Renderização:** opção **Remover flicker** (filtro `deflicker` do FFmpeg, iguala
+o brilho entre fotos) e a trilha de áudio do projeto entra no vídeo. Exporta MP4 em YouTube 16:9, Reels/TikTok 9:16, Quadrado 1:1 ou
 4K. Usa o encoder da GPU via VAAPI quando existe `/dev/dri/renderD128` (RX 580) e
 cai para x264 na CPU se falhar.
 
@@ -64,7 +77,8 @@ cmake --build build -j
 ./build/ia-stop-motion-studio
 ```
 
-Testes: `ctest --test-dir build --output-on-failure` (projeto, exportação e render da timeline com MLT)
+Testes: `ctest --test-dir build --output-on-failure` (projeto, exportação, render da timeline com MLT, áudio, deflicker).
+O teste de sincronia labial roda com `IA_SMS_RHUBARB=<caminho do rhubarb>` e `IA_SMS_TEST_SPEECH=<wav com fala>`.
 
 Projetos ficam em `~/IA-StopMotion/Projetos/<nome>/` (`project.json`, `frames/`,
 `lixeira/`, `export/`). A pasta base pode ser trocada com a variável `IA_SMS_HOME`.
@@ -73,8 +87,8 @@ Captura de tela sem monitor: `./build/ia-stop-motion-studio --screenshot tela.pn
 
 ## Próximas etapas
 
-3. Dope sheet com a trilha de áudio visível durante a captura (para sincronia labial)
-4. Remoção de flicker; captura direta de DSLR via gPhoto2
+3. Captura direta de DSLR via gPhoto2; biblioteca de bocas por personagem
+4. Desfazer/refazer e reordenar arrastando na Timeline
 5. IA local: remover suportes/fundo, sincronia labial (Rhubarb), legendas (whisper.cpp)
 6. Modos do sistema (Captura / Edição / IA / Render) com cgroups e perfis AMDGPU, depois sched_ext
 7. ISO do IA Stop-Motion Studio OS

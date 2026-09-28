@@ -1,4 +1,5 @@
 #include "timelinerenderer.h"
+#include "formats.h"
 #include "scene.h"
 #include "timeline.h"
 
@@ -300,8 +301,7 @@ void TimelineRenderer::nextScene()
             finish(false, tr("Falha ao escrever o projeto MLT."));
             return;
         }
-        m_output = m_timeline->workDir() + QStringLiteral("/filme_%1.mp4")
-                                                .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss")));
+        m_output = Formats::uniqueOutput(m_timeline->workDir(), QStringLiteral("filme"));
         startMelt(m_preferHardware);
         return;
     }
@@ -322,16 +322,17 @@ void TimelineRenderer::nextScene()
 
     m_phase = Phase::Scenes;
     // Near-lossless intermediate at the scene's own frame rate.
-    m_process.start(QStringLiteral("ffmpeg"),
-                    {QStringLiteral("-y"), QStringLiteral("-hide_banner"), QStringLiteral("-loglevel"), QStringLiteral("error"),
+    QStringList args{QStringLiteral("-y"), QStringLiteral("-hide_banner"), QStringLiteral("-loglevel"), QStringLiteral("error"),
                      QStringLiteral("-f"), QStringLiteral("concat"), QStringLiteral("-safe"), QStringLiteral("0"),
-                     QStringLiteral("-i"), list,
-                     QStringLiteral("-vf"), QStringLiteral("scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p"),
-                     QStringLiteral("-c:v"), QStringLiteral("libx264"), QStringLiteral("-preset"), QStringLiteral("veryfast"),
-                     QStringLiteral("-crf"), QStringLiteral("12"),
-                     QStringLiteral("-fps_mode"), QStringLiteral("cfr"), QStringLiteral("-r"), QString::number(scene.fps),
-                     QStringLiteral("-frames:v"), QString::number(scene.totalFrames()),
-                     job.cache + QStringLiteral(".part.mp4")});
+                     QStringLiteral("-i"), list};
+    args << scene.audioInputArgs()
+         << QStringLiteral("-vf") << scene.filterPrefix() + QStringLiteral("scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p")
+         << QStringLiteral("-c:v") << QStringLiteral("libx264") << QStringLiteral("-preset") << QStringLiteral("veryfast")
+         << QStringLiteral("-crf") << QStringLiteral("12")
+         << scene.audioOutputArgs()
+         << QStringLiteral("-fps_mode") << QStringLiteral("cfr") << QStringLiteral("-r") << QString::number(scene.fps)
+         << QStringLiteral("-frames:v") << QString::number(scene.totalFrames());
+    m_process.start(QStringLiteral("ffmpeg"), args << job.cache + QStringLiteral(".part.mp4"));
 }
 
 void TimelineRenderer::startMelt(bool hardware)

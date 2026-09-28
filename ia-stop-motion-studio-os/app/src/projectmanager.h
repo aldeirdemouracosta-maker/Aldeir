@@ -28,6 +28,10 @@ class ProjectManager : public QObject
     Q_PROPERTY(QString baseDir READ baseDir CONSTANT)
     Q_PROPERTY(QVariantList recentProjects READ recentProjects NOTIFY recentProjectsChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY errorOccurred)
+    Q_PROPERTY(QString audioFile READ audioFile NOTIFY audioChanged)
+    Q_PROPERTY(QString audioName READ audioName NOTIFY audioChanged)
+    Q_PROPERTY(int audioOffset READ audioOffset WRITE setAudioOffset NOTIFY audioChanged)
+    Q_PROPERTY(bool deflicker READ deflicker WRITE setDeflicker NOTIFY deflickerChanged)
 
 public:
     explicit ProjectManager(QObject *parent = nullptr);
@@ -44,6 +48,12 @@ public:
     QString baseDir() const { return m_baseDir; }
     QVariantList recentProjects() const;
     QString lastError() const { return m_lastError; }
+    QString audioFile() const;
+    QString audioName() const;
+    int audioOffset() const { return m_audioOffset; }
+    void setAudioOffset(int frames);
+    bool deflicker() const { return m_deflicker; }
+    void setDeflicker(bool on);
 
     Q_INVOKABLE bool newProject(const QString &name);
     Q_INVOKABLE bool openProject(const QString &path);
@@ -56,6 +66,10 @@ public:
     Q_INVOKABLE QUrl frameUrl(int index) const;
     Q_INVOKABLE QString frameFile(int index) const;
     Q_INVOKABLE int holdAt(int index) const;
+    // Reference soundtrack (dialogue/music) the animation is timed against.
+    // The file is copied into <projeto>/audio/.
+    Q_INVOKABLE bool setAudio(const QUrl &url);
+    Q_INVOKABLE void removeAudio();
 
 signals:
     void projectChanged();
@@ -63,6 +77,8 @@ signals:
     void fpsChanged();
     void recentProjectsChanged();
     void frameSaved(int index);
+    void audioChanged();
+    void deflickerChanged();
     void errorOccurred(const QString &message);
 
 private:
@@ -83,6 +99,9 @@ private:
     int m_nextIndex = 1;
     QSize m_resolution;
     QList<Frame> m_frames;
+    QString m_audio; // relative to project dir
+    int m_audioOffset = 0; // project frame where the audio starts
+    bool m_deflicker = false;
     QString m_lastError;
     QPointer<QImageCapture> m_capture;
 };

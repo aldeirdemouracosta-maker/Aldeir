@@ -19,6 +19,11 @@ Item {
     property int playHoldLeft: 0
     property int selected: project.frameCount - 1
     property string toast
+    property bool showDopeSheet: project.audioName.length > 0
+    // Video frame shown during playback (photos advance by their holds).
+    property int playFrame: 0
+    readonly property int nextFrame: project.totalFrames
+    readonly property string nextMouth: audioTrack.mouths.length > nextFrame ? audioTrack.mouths[nextFrame] : ""
 
     readonly property bool hasCamera: mediaDevices.videoInputs.length > 0
     readonly property int count: project.frameCount
@@ -69,9 +74,35 @@ Item {
         if (count === 0) return
         playIndex = 0
         playHoldLeft = project.holdAt(0)
+        playFrame = 0
         playing = true
+        syncAudio(true)
     }
-    function stopPlayback() { playing = false }
+    function stopPlayback() { playing = false; audioPlayer.pause() }
+
+    // Soundtrack position (ms) for a video frame, or -1 before it starts.
+    function audioMs(frame) { return (frame - project.audioOffset) * 1000 / project.fps }
+
+    function syncAudio(restart) {
+        if (!project.audioFile) return
+        const ms = audioMs(playFrame)
+        if (ms < 0 || ms >= audioPlayer.duration) { audioPlayer.pause(); return }
+        if (restart || audioPlayer.playbackState !== MediaPlayer.PlayingState) { audioPlayer.position = ms; audioPlayer.play() }
+        else if (Math.abs(audioPlayer.position - ms) > 120) audioPlayer.position = ms
+    }
+
+    // Plays the second of audio leading up to (and including) the next frame.
+    function listen() {
+        if (!project.audioFile) { notify("Importe uma trilha de áudio no dope sheet."); return }
+        if (playing) stopPlayback()
+        const end = audioMs(nextFrame + 1)
+        const start = Math.max(0, end - 1000)
+        if (end <= 0) { notify("O áudio começa depois deste quadro."); return }
+        audioPlayer.position = start
+        audioPlayer.play()
+        listenStop.interval = end - start
+        listenStop.restart()
+    }
 
     MediaDevices { id: mediaDevices }
 
@@ -91,12 +122,22 @@ Item {
         repeat: true
         running: page.playing
         onTriggered: {
-            if (--page.playHoldLeft > 0) return
+            page.playFrame += 1
+            if (--page.playHoldLeft > 0) { page.syncAudio(false); return }
             page.playIndex = (page.playIndex + 1) % page.count
             page.playHoldLeft = project.holdAt(page.playIndex)
+            if (page.playIndex === 0) { page.playFrame = 0; page.syncAudio(true) }
+            else page.syncAudio(false)
         }
     }
     Timer { id: toastTimer; interval: 3500; onTriggered: page.toast = "" }
+    Timer { id: listenStop; onTriggered: audioPlayer.pause() }
+
+    MediaPlayer {
+        id: audioPlayer
+        source: project.audioFile ? "file://" + project.audioFile : ""
+        audioOutput: AudioOutput {}
+    }
 
     Shortcut { sequence: "Space"; onActivated: page.capture() }
     Shortcut { sequence: "Backspace"; onActivated: project.deleteLastFrame() }
@@ -104,6 +145,8 @@ Item {
     Shortcut { sequence: "G"; onActivated: page.showGrid = !page.showGrid }
     Shortcut { sequence: "L"; onActivated: page.showLastFrame = !page.showLastFrame }
     Shortcut { sequence: "P"; onActivated: page.playing ? page.stopPlayback() : page.startPlayback() }
+    Shortcut { sequence: "A"; onActivated: page.listen() }
+    Shortcut { sequence: "D"; onActivated: page.showDopeSheet = !page.showDopeSheet }
 
     FileDialog {
         id: importDialog
@@ -111,6 +154,13 @@ Item {
         fileMode: FileDialog.OpenFiles
         nameFilters: ["Imagens (*.png *.jpg *.jpeg *.webp *.bmp)"]
         onAccepted: page.notify(project.importImages(selectedFiles) + " foto(s) importada(s)")
+    }
+
+    FileDialog {
+        id: audioDialog
+        title: "Trilha de áudio (falas, música)"
+        nameFilters: ["Áudio (*.wav *.mp3 *.ogg *.flac *.m4a *.opus)"]
+        onAccepted: if (project.setAudio(selectedFile)) page.showDopeSheet = true
     }
 
     Dialog {
@@ -165,6 +215,7 @@ Item {
                 onClicked: page.onionLayers = (page.onionLayers + 1) % 4
             }
             IconButton { iconName: "grid"; highlighted: page.showGrid; tip: "Grade (G)"; onClicked: page.showGrid = !page.showGrid }
+            IconButton { iconName: "timeline"; highlighted: page.showDopeSheet; tip: "Dope sheet com a trilha de áudio (D)"; onClicked: page.showDopeSheet = !page.showDopeSheet }
             IconButton {
                 iconName: "live"; text: page.showLastFrame ? "Último" : "Ao vivo"
                 highlighted: page.showLastFrame
@@ -266,7 +317,30 @@ Item {
                     }
                     Rectangle {
                         radius: 6; color: "#99000000"; width: fc.implicitWidth + 18; height: 26
-                        Text { id: fc; anchors.centerIn: parent; color: "white"; font.pixelSize: 13; text: "Quadro " + (page.count + 1) + "  ·  " + project.durationText }
+                        Text { id: fc; anchors.centerIn: parent; color: "white"; font.pixelSize: 13; text: "Quadro " + (page.nextFrame + 1) + "  ·  " + project.durationText }
+                    }
+                }
+
+                // Lip sync: mouth to put on the puppet for the next photo.
+                Rectangle {
+                    visible: page.nextMouth !== "" && !page.playing
+                    anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 12
+                    radius: 10; color: "#CC111A2B"; border.color: Theme.panelBorder
+                    width: mouthRow.implicitWidth + 24; height: 64
+                    Row {
+                        id: mouthRow
+                        anchors.centerIn: parent
+                        spacing: 12
+                        Rectangle {
+                            width: 44; height: 44; radius: 8
+                            color: dope.shapeColor(page.nextMouth)
+                            Text { anchors.centerIn: parent; text: page.nextMouth; color: "#111"; font.pixelSize: 26; font.weight: Font.Black }
+                        }
+                        Column {
+                            anchors.verticalCenter: parent.verticalCenter
+                            Text { text: "Boca do próximo quadro"; color: Theme.textDim; font.pixelSize: 12 }
+                            Text { text: audioTrack.mouthDescription(page.nextMouth); color: Theme.text; font.pixelSize: 15; font.weight: Font.DemiBold }
+                        }
                     }
                 }
 
@@ -355,10 +429,23 @@ Item {
             }
         }
 
+        DopeSheet {
+            id: dope
+            Layout.fillWidth: true
+            Layout.preferredHeight: 146
+            visible: page.showDopeSheet
+            selected: page.selected
+            playing: page.playing
+            cursorFrame: page.playing ? page.playFrame : page.nextFrame
+            onSelectPhoto: (index) => { page.stopPlayback(); page.selected = index }
+            onImportAudio: audioDialog.open()
+            onListen: page.listen()
+        }
+
         // ── filmstrip ─────────────────────────────────────────
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 104
+            Layout.preferredHeight: page.showDopeSheet ? 84 : 104
             radius: 10
             color: Theme.panel
             border.color: "#1FFFFFFF"

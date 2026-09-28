@@ -28,6 +28,7 @@ Rectangle {
         Text {
             text: (project.projectName || "Sem projeto") + "  ·  " + project.frameCount + " fotos  ·  "
                   + project.totalFrames + " quadros  ·  " + project.fps + " fps  ·  " + project.durationText
+                  + (project.audioName ? "  ·  ♪ " + project.audioName : "")
             color: Theme.textDim; font.pixelSize: 15
         }
 
@@ -54,6 +55,19 @@ Rectangle {
                     }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: page.preset = modelData.id }
                 }
+            }
+        }
+
+        RowLayout {
+            spacing: 10
+            Switch {
+                checked: project.deflicker
+                onToggled: project.deflicker = checked
+                focusPolicy: Qt.NoFocus
+            }
+            Text {
+                text: "Remover flicker (iguala o brilho entre as fotos)"
+                color: Theme.text; font.pixelSize: 14
             }
         }
 
