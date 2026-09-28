@@ -8,7 +8,7 @@ Arquitetura completa: [`../docs/ia-linux-minimal/ia-stop-motion-studio-os-arquit
 
 ![Início](docs/screenshots/inicio.png)
 
-## O que já funciona (v0.9)
+## O que já funciona (v1.0)
 
 **Interface da maquete original:** barra superior, menu lateral, dock inferior,
 painel Sistema (CPU, RAM, GPU, VRAM e temperatura da RX 580, armazenamento) e
@@ -191,6 +191,12 @@ sudo dd if=iso/saida/*.iso of=/dev/sdX bs=4M status=progress   # grava no pendri
 ```
 
 Ao fechar o estúdio, a sessão volta ao terminal; `ia-sms-sessao` abre de novo.
+
+Testado em QEMU: o boot por GRUB chega ao estúdio em tela cheia, e o boot de
+diagnóstico confirma `sched_ext` ativo com o `scx_studio` (`ops=studio`), nenhuma
+biblioteca faltando e o estúdio desenhando a tela.
+
+![ISO em QEMU](docs/screenshots/iso-qemu.png)
 
 ## Próximas etapas
 

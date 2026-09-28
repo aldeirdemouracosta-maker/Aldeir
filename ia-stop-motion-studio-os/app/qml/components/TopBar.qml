@@ -73,9 +73,10 @@ Rectangle {
             color: Theme.text
             font.pixelSize: 14
         }
-        Rectangle { width: 1; height: 22; color: Theme.panelBorder }
-        Image { source: Theme.icon("user"); sourceSize: Qt.size(36, 36); Layout.preferredWidth: 18; Layout.preferredHeight: 18 }
-        Text { text: "IA Stop-Motion Studio OS"; color: Theme.text; font.pixelSize: 14 }
+        // User area only on wide screens (the app name is already on the left).
+        Rectangle { visible: bar.width >= 1500; width: 1; height: 22; color: Theme.panelBorder }
+        Image { visible: bar.width >= 1500; source: Theme.icon("user"); sourceSize: Qt.size(36, 36); Layout.preferredWidth: 18; Layout.preferredHeight: 18 }
+        Text { visible: bar.width >= 1500; text: "IA Stop-Motion Studio OS"; color: Theme.text; font.pixelSize: 14 }
     }
 
     Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: "#22FFFFFF" }
