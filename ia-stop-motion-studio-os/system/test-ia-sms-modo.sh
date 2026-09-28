@@ -47,4 +47,21 @@ t=$(make_tree); rm "$t/class/drm/card0/device/pp_power_profile_mode"; run "$t" r
 # Entradas inválidas são recusadas.
 if IA_SMS_SYSFS="$t" "$HERE/ia-sms-modo" "rm -rf" 2>/dev/null; then fail "aceitou modo inválido"; fi
 if IA_SMS_SYSFS="$t" "$HERE/ia-sms-modo" ia --pid "1;x" 2>/dev/null; then fail "aceitou PID inválido"; fi
+# scx_studio: com os mapas fixados, grava o modo e registra o app (UI) e
+# seus filhos (workers) — bpftool falso registra as chamadas.
+t=$(make_tree); mkdir -p "$t/bpf"; touch "$t/bpf/cfg" "$t/bpf/tasks"
+cat > "$t/bpftool" <<'MOCK'
+#!/bin/sh
+echo "$@" >> "$(dirname "$0")/bpftool.log"
+MOCK
+chmod +x "$t/bpftool"
+sleep 5 & child=$!
+IA_SMS_SYSFS="$t" IA_SMS_STATE_DIR="$t/run" IA_SMS_BPFFS="$t/bpf" IA_SMS_BPFTOOL="$t/bpftool" \
+    "$HERE/ia-sms-modo" ia --pid $$ >/dev/null || fail "scx_studio: saiu com erro"
+kill $child 2>/dev/null || true
+grep -q "map update pinned $t/bpf/cfg key 0 0 0 0 value 3 0 0 0 0 0 0 0" "$t/bpftool.log" || fail "scx_studio: modo"
+pid=$$
+grep -q "map update pinned $t/bpf/tasks key $((pid & 255)) $(((pid >> 8) & 255)) $(((pid >> 16) & 255)) 0 value 1 0 0 0" "$t/bpftool.log" || fail "scx_studio: UI"
+grep -q "map update pinned $t/bpf/tasks key $((child & 255)) $(((child >> 8) & 255)) $(((child >> 16) & 255)) 0 value 2 0 0 0" "$t/bpftool.log" || fail "scx_studio: worker"
+
 echo "ia-sms-modo: todos os testes passaram"

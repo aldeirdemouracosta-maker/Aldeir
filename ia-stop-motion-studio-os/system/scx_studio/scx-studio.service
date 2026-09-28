@@ -1,0 +1,16 @@
+[Unit]
+Description=scx_studio — escalonador sched_ext do IA Stop-Motion Studio OS
+Documentation=file:///usr/local/lib/ia-stop-motion/README-scx_studio.txt
+ConditionPathExists=/sys/kernel/sched_ext
+After=sysinit.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/lib/ia-stop-motion/scx_studio -m normal
+# If the kernel ejects the scheduler (watchdog), start again after a pause;
+# meanwhile the default scheduler keeps the system running.
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

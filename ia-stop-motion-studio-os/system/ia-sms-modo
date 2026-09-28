@@ -9,8 +9,9 @@
 # Render   CPU em "performance", RX 580 no perfil VIDEO (encoder VCE/VAAPI)
 # Normal   tudo de volta ao padrão
 #
-# Com sched_ext (kernel ≥ 6.12) e scx_loader instalados, também troca o
-# escalonador de CPU (scx_lavd para captura/edição, scx_bpfland para IA/render).
+# Com sched_ext (kernel ≥ 6.12), usa o escalonador próprio scx_studio quando
+# ele está rodando (serviço scx-studio); senão, com scx_loader, troca entre
+# scx_lavd (captura/edição) e scx_bpfland (IA/render).
 # Roda como root (via pkexec, liberado pela política polkit instalada).
 # IA_SMS_SYSFS permite apontar para uma árvore sysfs falsa (testes).
 set -euo pipefail
@@ -88,7 +89,28 @@ if [ -n "$PID" ] && [ -d "/proc/$PID" ] && [ -z "${IA_SMS_SYSFS:-}" ]; then
 fi
 
 # ── sched_ext (opcional) ────────────────────────────────────────────────
-if [ -z "${IA_SMS_SYSFS:-}" ] && [ -d /sys/kernel/sched_ext ] && command -v scxctl >/dev/null; then
+# 1) scx_studio (escalonador próprio): troca o modo e registra o app e seus
+#    processos filhos nos mapas fixados em /sys/fs/bpf/scx_studio.
+# 2) Senão, scx_loader (scxctl) com escalonadores prontos.
+BPFFS="${IA_SMS_BPFFS:-/sys/fs/bpf/scx_studio}"
+BPFTOOL="${IA_SMS_BPFTOOL:-}"
+[ -n "$BPFTOOL" ] || { [ -x /usr/local/lib/ia-stop-motion/bpftool ] && BPFTOOL=/usr/local/lib/ia-stop-motion/bpftool; }
+[ -n "$BPFTOOL" ] || BPFTOOL="$(ls /usr/lib/linux-tools/*/bpftool 2>/dev/null | tail -1)"
+[ -n "$BPFTOOL" ] || BPFTOOL="$(command -v bpftool || true)"
+le32() { printf '%d %d %d %d' $(($1 & 255)) $((($1 >> 8) & 255)) $((($1 >> 16) & 255)) $((($1 >> 24) & 255)); }
+
+if [ -e "$BPFFS/cfg" ] && [ -n "$BPFTOOL" ]; then
+    case "$MODE" in normal) m=0 ;; captura) m=1 ;; edicao) m=2 ;; ia) m=3 ;; render) m=4 ;; esac
+    # struct studio_cfg { u32 mode; u32 pad; }
+    "$BPFTOOL" map update pinned "$BPFFS/cfg" key 0 0 0 0 value $(le32 $m) 0 0 0 0
+    if [ -n "$PID" ] && [ -d "/proc/$PID" ]; then
+        "$BPFTOOL" map update pinned "$BPFFS/tasks" key $(le32 "$PID") value $(le32 1)   # UI
+        for child in $(pgrep -P "$PID" || true); do
+            "$BPFTOOL" map update pinned "$BPFFS/tasks" key $(le32 "$child") value $(le32 2)  # worker
+        done
+    fi
+    log "sched_ext: scx_studio (modo $m)"
+elif [ -z "${IA_SMS_SYSFS:-}" ] && [ -d /sys/kernel/sched_ext ] && command -v scxctl >/dev/null; then
     case "$MODE" in
         captura) sched=lavd; mode=lowlatency ;;
         edicao) sched=lavd; mode=gaming ;;

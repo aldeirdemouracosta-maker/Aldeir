@@ -127,9 +127,20 @@ que você está fazendo — no automático, a tela e o trabalho em andamento esc
 
 Os ajustes são feitos pelo helper `system/ia-sms-modo` (root via `pkexec`,
 liberado sem senha pela política polkit). Instale com `scripts/instalar-modos.sh`.
-A troca de escalonador (sched_ext) só acontece em kernel ≥ 6.12 com o
-[scx_loader](https://github.com/sched-ext/scx) instalado; sem isso, os demais
-ajustes continuam valendo.
+
+**Escalonador próprio `scx_studio`** (`system/scx_studio/`, sched_ext em BPF):
+uma fila global por tempo virtual ponderado (como o `scx_simple`) com duas
+classes que o `ia-sms-modo` registra nos mapas fixados em `/sys/fs/bpf/scx_studio`:
+- **UI** (o próprio app): em Captura/Edição recebe fatias curtas (3 ms) e passa
+  à frente, para o ao vivo da câmera e a timeline nunca travarem
+- **Workers** (ffmpeg, melt, sd-cli, whisper-cli, Real-ESRGAN…): em IA/Render
+  recebem fatias longas (20 ms, menos trocas de contexto); em Captura/Edição esperam a UI
+
+Instale com `scripts/instalar-scx-studio.sh` (compila bpftool/libbpf novos,
+pois os do Ubuntu 24.04 são antigos, e ativa o serviço `scx-studio`). Precisa de
+kernel ≥ 6.12 com `CONFIG_SCHED_CLASS_EXT`; se o escalonador falhar, o kernel
+volta sozinho ao padrão. Sem `scx_studio`, o modo usa o
+[scx_loader](https://github.com/sched-ext/scx) (`scx_lavd`/`scx_bpfland`) se houver.
 
 As demais telas da maquete (Editor de Cenas, Timeline, IA Local, Personagens,
 Cenários…) já existem na navegação e indicam em que etapa serão implementadas.
@@ -161,5 +172,4 @@ Captura de tela sem monitor: `./build/ia-stop-motion-studio --screenshot tela.pn
 
 ## Próximas etapas
 
-1. Escalonador sched_ext próprio (`scx_studio`)
-2. ISO do IA Stop-Motion Studio OS
+1. ISO do IA Stop-Motion Studio OS

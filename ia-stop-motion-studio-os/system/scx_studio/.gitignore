@@ -1,0 +1,3 @@
+scx_studio
+*.bpf.o
+*.bpf.skel.h
