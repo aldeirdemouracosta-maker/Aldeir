@@ -58,6 +58,15 @@ jobs:
           }
           Stop-Process -Id $p.Id -Force
           if (-not $ok) { throw "MagicSlides.exe não respondeu" }
+      - name: Autoteste da janela nativa (WebView2)
+        shell: pwsh
+        run: |
+          $env:MAGICSLIDES_HOME = "$env:RUNNER_TEMP\ms-selftest"
+          $p = Start-Process -FilePath dist\MagicSlides\MagicSlides.exe -ArgumentList "--selftest","--port","8766" -PassThru
+          $null = $p.Handle  # necessário para ler o ExitCode depois
+          if (-not $p.WaitForExit(120000)) { Stop-Process -Id $p.Id -Force; throw "A janela travou (sem resposta em 120 s)" }
+          Get-Content "$env:MAGICSLIDES_HOME\magicslides.log" -ErrorAction SilentlyContinue
+          if ($p.ExitCode -ne 0) { throw "Autoteste da janela falhou (código $($p.ExitCode))" }
       - name: Instalador (Inno Setup)
         shell: pwsh
         run: |

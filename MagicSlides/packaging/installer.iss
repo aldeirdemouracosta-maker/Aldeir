@@ -35,6 +35,7 @@ Source: "..\dist\MagicSlides\*"; DestDir: "{app}"; Flags: ignoreversion recurses
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\MagicSlides.exe"
+Name: "{group}\{#AppName} (abrir no navegador)"; Filename: "{app}\MagicSlides.exe"; Parameters: "--browser"
 Name: "{group}\Desinstalar {#AppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\MagicSlides.exe"; Tasks: desktopicon
 

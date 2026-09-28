@@ -24,7 +24,7 @@ from . import __version__
 
 USER_AGENT = f"MagicSlides/{__version__} (desktop presentation app; https://github.com/aldeirdemouracosta-maker/aldeir)"
 MAX_DOWNLOAD = 15 * 1024 * 1024
-TIMEOUT = 20
+TIMEOUT = 12
 
 
 class ImageError(RuntimeError):

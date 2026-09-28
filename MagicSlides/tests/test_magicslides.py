@@ -378,3 +378,20 @@ def test_server_validate_returns_migrated_presentation(live_server):
 def test_server_encode_endpoint(live_server):
     res = json.load(_req(live_server + "/api/images/encode", {"dataUrl": _data_url(50, 50)}))
     assert res["src"].startswith("data:image/")
+
+
+# ----------------------------------------------------------------- desktop ---
+
+def test_desktop_api_exposes_only_methods():
+    """pywebview percorre atributos públicos do js_api; um objeto Window
+    público ali trava a janela no Windows (regressão)."""
+    import inspect
+
+    from magicslides.desktop import DesktopApi
+
+    api = DesktopApi()
+    api.attach(object())
+    public = {n: getattr(api, n) for n in dir(api) if not n.startswith("_")}
+    assert public, "deveria expor save_file"
+    for name, attr in public.items():
+        assert inspect.ismethod(attr), f"atributo público não-método: {name}"
