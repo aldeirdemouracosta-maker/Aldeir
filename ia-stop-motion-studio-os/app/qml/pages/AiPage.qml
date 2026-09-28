@@ -16,14 +16,17 @@ Item {
     property bool showBefore: false
 
     // cleanup
-    property bool usePlate: project.cleanPlateUrl.toString() !== ""
+    // "placa" (clean plate), "preencher" (classic fill) or "ia" (LaMa)
+    property string fillMode: project.cleanPlateUrl.toString() !== "" ? "placa" : (frameTools.aiFillAvailable ? "ia" : "preencher")
+    readonly property bool usePlate: fillMode === "placa"
     property int brush: 28
     property bool eraser: false
     property int feather: 6
     property bool maskEmpty: true
     readonly property string maskPath: project.projectPath + "/export/.mascara.png"
 
-    // chroma
+    // background: "chroma" (green/blue screen) or "ia" (any background)
+    property string bgMethod: frameTools.aiBackgroundAvailable ? "ia" : "chroma"
     property color keyColor: "#14B43C"
     property real tolerance: 0.18
     property real softness: 0.10
@@ -45,14 +48,25 @@ Item {
         return maskCanvas.save(maskPath)
     }
     function preview() {
-        if (tool === "limpeza") { if (saveMask()) frameTools.previewCleanup(current, maskPath, usePlate, feather) }
-        else if (tool === "fundo") frameTools.previewChroma(current, keyColor, tolerance, softness, spill, background)
+        if (tool === "limpeza") {
+            if (!saveMask()) return
+            if (fillMode === "ia") frameTools.previewAiFill(current, maskPath)
+            else frameTools.previewCleanup(current, maskPath, usePlate, feather)
+        } else if (tool === "fundo") {
+            if (bgMethod === "ia") frameTools.previewAiBackground(current, background)
+            else frameTools.previewChroma(current, keyColor, tolerance, softness, spill, background)
+        }
     }
     function apply(all) {
         const list = targets(all)
-        if (tool === "limpeza") { if (saveMask()) frameTools.applyCleanup(list, maskPath, usePlate, feather) }
-        else if (tool === "fundo") frameTools.applyChroma(list, keyColor, tolerance, softness, spill, background)
-        else frameTools.upscale(list, upscaleFactor)
+        if (tool === "limpeza") {
+            if (!saveMask()) return
+            if (fillMode === "ia") frameTools.applyAiFill(list, maskPath)
+            else frameTools.applyCleanup(list, maskPath, usePlate, feather)
+        } else if (tool === "fundo") {
+            if (bgMethod === "ia") frameTools.applyAiBackground(list, background)
+            else frameTools.applyChroma(list, keyColor, tolerance, softness, spill, background)
+        } else frameTools.upscale(list, upscaleFactor)
     }
 
     onCurrentChanged: frameTools.clearPreview()
@@ -242,7 +256,7 @@ Item {
                             Text { text: "Limpar suportes e fios"; color: Theme.text; font.pixelSize: 17; font.weight: Font.DemiBold }
                             Text {
                                 Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.textDim; font.pixelSize: 12
-                                text: "Pinte sobre o suporte, arame ou fio. Com uma placa limpa (foto do cenário sem boneco) a área é trocada pelo cenário real; sem placa, é preenchida a partir dos arredores."
+                                text: "Pinte sobre o suporte, arame ou fio. Com uma placa limpa (foto do cenário sem boneco) a área é trocada pelo cenário real; sem placa, é preenchida a partir dos arredores — ou pela IA (LaMa), melhor para áreas grandes."
                             }
                             SectionTitle { text: "Placa limpa" }
                             RowLayout {
@@ -267,8 +281,14 @@ Item {
                             }
                             SectionTitle { text: "Modo" }
                             RowLayout {
-                                IconButton { text: "Com placa limpa"; highlighted: page.usePlate; enabled: project.cleanPlateUrl.toString() !== ""; onClicked: { page.usePlate = true; frameTools.clearPreview() } }
-                                IconButton { text: "Preencher"; highlighted: !page.usePlate; onClicked: { page.usePlate = false; frameTools.clearPreview() } }
+                                spacing: 4
+                                IconButton { text: "Placa limpa"; highlighted: page.fillMode === "placa"; enabled: project.cleanPlateUrl.toString() !== ""; onClicked: { page.fillMode = "placa"; frameTools.clearPreview() } }
+                                IconButton { text: "Preencher"; highlighted: page.fillMode === "preencher"; onClicked: { page.fillMode = "preencher"; frameTools.clearPreview() } }
+                                IconButton {
+                                    text: "IA (LaMa)"; highlighted: page.fillMode === "ia"; enabled: frameTools.aiFillAvailable
+                                    tip: frameTools.aiFillAvailable ? "Preenchimento por IA: bom para áreas grandes" : "Instale com scripts/instalar-ia.sh"
+                                    onClicked: { page.fillMode = "ia"; frameTools.clearPreview() }
+                                }
                             }
                             LabeledSlider {
                                 label: "Pincel"; valueText: page.brush + " px"
@@ -292,13 +312,25 @@ Item {
                             visible: page.tool === "fundo"
                             Layout.fillWidth: true
                             spacing: 8
-                            Text { text: "Trocar fundo (chroma key)"; color: Theme.text; font.pixelSize: 17; font.weight: Font.DemiBold }
+                            Text { text: page.bgMethod === "ia" ? "Trocar fundo com IA" : "Trocar fundo (chroma key)"; color: Theme.text; font.pixelSize: 17; font.weight: Font.DemiBold }
+                            RowLayout {
+                                spacing: 4
+                                IconButton {
+                                    text: "IA (qualquer fundo)"; highlighted: page.bgMethod === "ia"; enabled: frameTools.aiBackgroundAvailable
+                                    tip: frameTools.aiBackgroundAvailable ? "Recorta o boneco com IA (IS-Net), sem tela verde" : "Instale com scripts/instalar-ia.sh"
+                                    onClicked: { page.bgMethod = "ia"; page.picking = false; frameTools.clearPreview() }
+                                }
+                                IconButton { text: "Tela verde/azul"; highlighted: page.bgMethod === "chroma"; onClicked: { page.bgMethod = "chroma"; frameTools.clearPreview() } }
+                            }
                             Text {
                                 Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.textDim; font.pixelSize: 12
-                                text: "Fotografe os bonecos contra um fundo verde ou azul liso e troque pelo cenário que quiser."
+                                text: page.bgMethod === "ia"
+                                      ? "A IA encontra o boneco na foto e troca o resto pelo cenário — funciona com qualquer fundo. Roda na CPU (alguns segundos por foto). Suportes presos ao boneco podem ficar: limpe-os depois."
+                                      : "Fotografe os bonecos contra um fundo verde ou azul liso e troque pelo cenário que quiser."
                             }
-                            SectionTitle { text: "Cor do fundo" }
+                            SectionTitle { text: "Cor do fundo"; visible: page.bgMethod === "chroma" }
                             RowLayout {
+                                visible: page.bgMethod === "chroma"
                                 spacing: 6
                                 Repeater {
                                     model: ["#14B43C", "#1E5AE6"]
@@ -313,16 +345,19 @@ Item {
                                 IconButton { iconName: "search"; text: "Conta-gotas"; highlighted: page.picking; enabled: project.frameCount > 0; onClicked: page.picking = !page.picking }
                             }
                             LabeledSlider {
+                                visible: page.bgMethod === "chroma"
                                 label: "Tolerância"; valueText: Math.round(page.tolerance * 100)
                                 from: 0.02; to: 0.6; value: page.tolerance
                                 onMoved: (v) => page.tolerance = v
                             }
                             LabeledSlider {
+                                visible: page.bgMethod === "chroma"
                                 label: "Suavidade da borda"; valueText: Math.round(page.softness * 100)
                                 from: 0.01; to: 0.4; value: page.softness
                                 onMoved: (v) => page.softness = v
                             }
                             RowLayout {
+                                visible: page.bgMethod === "chroma"
                                 Switch { checked: page.spill; onToggled: page.spill = checked; focusPolicy: Qt.NoFocus }
                                 Text { text: "Remover reflexo verde/azul no boneco"; color: Theme.text; font.pixelSize: 13; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                             }

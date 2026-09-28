@@ -147,6 +147,61 @@ private slots:
         QVERIFY(pm.capturingCleanPlate());
     }
 
+    // Needs the local AI environment: IA_SMS_PYTHON (python with onnxruntime,
+    // numpy, pillow), IA_SMS_AI_SCRIPT (system/ia-sms-ia.py) and
+    // IA_SMS_AI_MODELS (a folder with u2netp.onnx / isnet-general-use.onnx and
+    // optionally lama_fp32.onnx).
+    void aiBackgroundAndFill()
+    {
+        if (FrameTools::segmentationModel().isEmpty())
+            QSKIP("local AI not configured (see comment)");
+        ProjectManager pm;
+        QVERIFY(pm.newProject(QStringLiteral("IA")));
+        // Puppet (red body, skin head) on a plain green set.
+        QImage frame(640, 360, QImage::Format_RGB32);
+        frame.fill(QColor(24, 176, 64));
+        {
+            QPainter p(&frame);
+            p.fillRect(QRect(270, 130, 100, 140), QColor(192, 57, 43));
+            p.fillRect(QRect(285, 60, 70, 70), QColor(242, 201, 160));
+            p.fillRect(QRect(316, 270, 6, 80), QColor(40, 40, 40)); // support rod
+        }
+        QVERIFY(pm.addFrame(frame));
+        QVERIFY(pm.addFrame(frame));
+        const QString sky = m_home.path() + QStringLiteral("/ceu_ia.png");
+        QImage skyImg(800, 450, QImage::Format_RGB32);
+        skyImg.fill(QColor(90, 150, 230));
+        QVERIFY(skyImg.save(sky));
+
+        FrameTools tools(&pm);
+        QSignalSpy done(&tools, &FrameTools::finished);
+        QVERIFY(tools.previewAiBackground(0, QUrl::fromLocalFile(sky)));
+        QVERIFY(done.wait(120000));
+        QVERIFY2(done.last().at(0).toBool(), qPrintable(tools.status()));
+        QVERIFY(!tools.previewUrl().isEmpty());
+
+        QVERIFY(tools.applyAiBackground({0}, QUrl::fromLocalFile(sky)));
+        QVERIFY(done.wait(120000));
+        QVERIFY2(done.last().at(0).toBool(), qPrintable(tools.status()));
+        const QImage out(pm.frameFile(0));
+        const QRgb corner = out.pixel(20, 20), body = out.pixel(320, 200);
+        QVERIFY2(qBlue(corner) > 180 && qGreen(corner) < 190, qPrintable(QColor(corner).name()));
+        QVERIFY2(qRed(body) > 150 && qGreen(body) < 100, qPrintable(QColor(body).name()));
+        QVERIFY(pm.hasOriginal(0));
+        QCOMPARE(QImage(pm.frameFile(1)).pixel(20, 20), frame.pixel(20, 20)); // untouched
+
+        if (FrameTools::inpaintModel().isEmpty())
+            return;
+        const QString mask = m_home.path() + QStringLiteral("/mascara_ia.png");
+        QVERIFY(bandMask(640, 360, 310, 328).save(mask));
+        QVERIFY(tools.applyAiFill({1}, mask));
+        QVERIFY(done.wait(120000));
+        QVERIFY2(done.last().at(0).toBool(), qPrintable(tools.status()));
+        const QImage filled(pm.frameFile(1));
+        QVERIFY(QColor(filled.pixel(319, 320)) != QColor(40, 40, 40)); // rod gone
+        QCOMPARE(filled.pixel(100, 300), frame.pixel(100, 300));      // far pixels untouched
+    }
+
     void upscaleWithRealEsrgan()
     {
         if (FrameTools::upscalerPath().isEmpty())

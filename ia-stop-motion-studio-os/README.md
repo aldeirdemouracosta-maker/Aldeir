@@ -8,7 +8,7 @@ Arquitetura completa: [`../docs/ia-linux-minimal/ia-stop-motion-studio-os-arquit
 
 ![Início](docs/screenshots/inicio.png)
 
-## O que já funciona (v0.5)
+## O que já funciona (v0.6)
 
 **Interface da maquete original:** barra superior, menu lateral, dock inferior,
 painel Sistema (CPU, RAM, GPU, VRAM e temperatura da RX 580, armazenamento) e
@@ -49,12 +49,17 @@ Projeto Recente.
 - **Limpar suportes e fios**: pinte sobre o suporte; com uma **placa limpa**
   (foto do cenário sem boneco — pode ser a próxima foto da Captura, um quadro ou
   um arquivo) a área vira o cenário real, com borda suavizada; sem placa, a área
-  é preenchida a partir dos arredores (bom para fios finos)
-- **Trocar fundo** (chroma key verde/azul) com conta-gotas, tolerância,
-  suavidade de borda, remoção do reflexo verde no boneco e novo cenário (ou
-  transparente)
+  é preenchida a partir dos arredores (bom para fios finos) ou pela **IA (LaMa)**,
+  melhor para áreas grandes
+- **Trocar fundo com IA** (IS-Net/U²-Net): recorta o boneco de **qualquer fundo**,
+  sem tela verde, e põe o cenário escolhido (ou transparente)
+- **Trocar fundo por tela verde/azul** (chroma key) com conta-gotas, tolerância,
+  suavidade de borda e remoção do reflexo verde no boneco
 - **Upscale IA 2×/4×** com [Real-ESRGAN ncnn-vulkan](https://github.com/xinntao/Real-ESRGAN),
   rodando na RX 580 via Vulkan. Instale com `scripts/instalar-realesrgan.sh`
+- A IA de fundo e de preenchimento roda com ONNX Runtime na CPU (o ROCm atual não
+  suporta a RX 580). Instale com `scripts/instalar-ia.sh` (Python isolado +
+  modelos em `~/IA-StopMotion/ferramentas`)
 - prévia **antes/depois** no quadro atual e aplicação em lote nos quadros selecionados
 
 ![IA Local](docs/screenshots/ia-local.png)
@@ -113,7 +118,8 @@ cmake --build build -j
 ```
 
 Testes: `ctest --test-dir build --output-on-failure` (projeto, exportação, render da timeline com MLT, áudio, deflicker, ferramentas de imagem).
-O teste de upscale roda com `IA_SMS_REALESRGAN=<caminho do realesrgan-ncnn-vulkan>`.
+O teste de upscale roda com `IA_SMS_REALESRGAN=<caminho do realesrgan-ncnn-vulkan>`;
+o de IA com `IA_SMS_PYTHON`, `IA_SMS_AI_SCRIPT` e `IA_SMS_AI_MODELS` (veja `tests/tst_imagetools.cpp`).
 O teste de sincronia labial roda com `IA_SMS_RHUBARB=<caminho do rhubarb>` e `IA_SMS_TEST_SPEECH=<wav com fala>`.
 
 Projetos ficam em `~/IA-StopMotion/Projetos/<nome>/` (`project.json`, `frames/`,
@@ -123,8 +129,9 @@ Captura de tela sem monitor: `./build/ia-stop-motion-studio --screenshot tela.pn
 
 ## Próximas etapas
 
-3. Biblioteca de bocas por personagem
-4. Desfazer/refazer e reordenar arrastando na Timeline
-5. Remoção de fundo por IA sem tela verde (rembg/U²-Net) e inpainting por IA (LaMa)
-5. IA local: remover suportes/fundo, sincronia labial (Rhubarb), legendas (whisper.cpp)
-7. ISO do IA Stop-Motion Studio OS
+1. Biblioteca de bocas por personagem (sincronia labial com troca automática de boca)
+2. Desfazer/refazer e reordenar clipes arrastando na Timeline
+3. Legendas automáticas (whisper.cpp) e narração (Piper)
+4. Cenários gerados por IA (stable-diffusion.cpp, Vulkan)
+5. Escalonador sched_ext próprio (`scx_studio`)
+6. ISO do IA Stop-Motion Studio OS

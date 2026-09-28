@@ -6,6 +6,7 @@
 #include <QFileInfo>
 #include <QImageReader>
 #include <QProcess>
+#include <QRegularExpression>
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QtConcurrent>
@@ -46,11 +47,183 @@ FrameTools::FrameTools(ProjectManager *project, QObject *parent)
         emit finished(error.isEmpty(), m_status);
     });
     connect(project, &ProjectManager::projectChanged, this, &FrameTools::clearPreview);
+
+    m_ai.setProcessChannelMode(QProcess::SeparateChannels);
+    connect(&m_ai, &QProcess::stateChanged, this, &FrameTools::busyChanged);
+    connect(&m_ai, &QProcess::readyReadStandardOutput, this, [this] {
+        static const QRegularExpression re(QStringLiteral("PROGRESS (\\d+) (\\d+)"));
+        auto it = re.globalMatch(QString::fromUtf8(m_ai.readAllStandardOutput()));
+        while (it.hasNext()) {
+            const auto m = it.next();
+            setProgress(m.captured(1).toDouble() / qMax(1.0, m.captured(2).toDouble()));
+            if (!m_aiPreview)
+                setStatus(tr("%1: %2 de %3…").arg(m_aiLabel, m.captured(1), m.captured(2)));
+        }
+    });
+    connect(&m_ai, &QProcess::finished, this, [this](int code, QProcess::ExitStatus st) {
+        const bool ok = st == QProcess::NormalExit && code == 0;
+        if (!ok) {
+            const QString err = QString::fromUtf8(m_ai.readAllStandardError()).trimmed();
+            setStatus(tr("%1 falhou: %2").arg(m_aiLabel, err.right(240)));
+            for (const auto &pair : std::as_const(m_aiPairs))
+                QFile::remove(pair.first);
+        } else if (m_aiPreview) {
+            m_previewUrl = QUrl::fromLocalFile(m_aiPairs.first().first);
+            m_previewUrl.setQuery(QStringLiteral("v=%1").arg(++m_previewRev));
+            emit previewChanged();
+            setStatus(tr("Prévia pronta — compare antes/depois e aplique."));
+        } else {
+            for (const auto &pair : std::as_const(m_aiPairs)) {
+                QFile::remove(pair.second);
+                QFile::rename(pair.first, pair.second);
+            }
+            m_project->framesModified(m_aiIndices);
+            setStatus(tr("%1 concluído em %2 quadro(s). Os originais ficam em originais/.").arg(m_aiLabel).arg(m_aiPairs.size()));
+        }
+        m_aiPairs.clear();
+        m_aiIndices.clear();
+        emit busyChanged();
+        emit finished(ok, m_status);
+    });
 }
 
 FrameTools::~FrameTools()
 {
     m_watcher.waitForFinished();
+    if (m_ai.state() != QProcess::NotRunning) {
+        m_ai.kill();
+        m_ai.waitForFinished(2000);
+    }
+}
+
+namespace {
+QString toolsDir()
+{
+    return qEnvironmentVariable("IA_SMS_HOME", QDir::homePath() + QStringLiteral("/IA-StopMotion")) + QStringLiteral("/ferramentas");
+}
+} // namespace
+
+QString FrameTools::aiPython()
+{
+    const QString env = qEnvironmentVariable("IA_SMS_PYTHON");
+    const QString path = env.isEmpty() ? toolsDir() + QStringLiteral("/ia-python/bin/python") : env;
+    return QFileInfo(path).isExecutable() ? path : QString();
+}
+
+QString FrameTools::aiScript()
+{
+    const QString env = qEnvironmentVariable("IA_SMS_AI_SCRIPT");
+    const QString path = env.isEmpty() ? toolsDir() + QStringLiteral("/ia-sms-ia.py") : env;
+    return QFileInfo::exists(path) ? path : QString();
+}
+
+QString FrameTools::aiModel(const QStringList &candidates)
+{
+    if (aiPython().isEmpty() || aiScript().isEmpty())
+        return {};
+    const QString env = qEnvironmentVariable("IA_SMS_AI_MODELS");
+    const QString dir = env.isEmpty() ? toolsDir() + QStringLiteral("/ia-modelos") : env;
+    for (const QString &name : candidates) {
+        if (QFileInfo::exists(dir + QLatin1Char('/') + name))
+            return dir + QLatin1Char('/') + name;
+    }
+    return {};
+}
+
+QString FrameTools::segmentationModel()
+{
+    // IS-Net is sharper on puppets and props; U²-Net-p is the small fallback.
+    return aiModel({QStringLiteral("isnet-general-use.onnx"), QStringLiteral("u2net.onnx"), QStringLiteral("u2netp.onnx")});
+}
+
+QString FrameTools::inpaintModel()
+{
+    return aiModel({QStringLiteral("lama_fp32.onnx"), QStringLiteral("lama.onnx")});
+}
+
+bool FrameTools::runAi(const QStringList &commandArgs, const QVariantList &indices, int previewIndex, const QString &label)
+{
+    if (busy())
+        return false;
+    const QString work = m_project->projectPath() + QStringLiteral("/export");
+    QDir().mkpath(work);
+    m_aiPairs.clear();
+    m_aiIndices.clear();
+    m_aiPreview = previewIndex >= 0;
+    m_aiLabel = label;
+    QStringList files;
+    if (m_aiPreview) {
+        if (previewIndex >= m_project->frameCount())
+            return false;
+        const QString out = work + QStringLiteral("/.previa_ia.png");
+        m_aiPairs.append({out, QString()});
+        files << m_project->frameFile(previewIndex) << out;
+    } else {
+        for (const QVariant &v : indices) {
+            const int i = v.toInt();
+            if (i < 0 || i >= m_project->frameCount())
+                continue;
+            if (!m_project->backupOriginal(i)) {
+                setStatus(tr("Não foi possível guardar o original do quadro %1.").arg(i + 1));
+                return false;
+            }
+            const QString out = work + QStringLiteral("/.ia_%1.png").arg(i);
+            m_aiPairs.append({out, m_project->frameFile(i)});
+            m_aiIndices << i;
+            files << m_project->frameFile(i) << out;
+        }
+        if (m_aiIndices.isEmpty())
+            return false;
+        clearPreview();
+    }
+    setProgress(0.0);
+    setStatus(m_aiPreview ? tr("Gerando prévia com IA…") : tr("%1: carregando o modelo…").arg(label));
+    m_ai.start(aiPython(), QStringList{aiScript()} + commandArgs + files);
+    return true;
+}
+
+bool FrameTools::previewAiBackground(int index, const QUrl &background)
+{
+    if (!aiBackgroundAvailable()) {
+        setStatus(tr("IA de fundo não instalada: rode scripts/instalar-ia.sh"));
+        return false;
+    }
+    QStringList args{QStringLiteral("remove-bg"), QStringLiteral("--model"), segmentationModel()};
+    if (!background.isEmpty())
+        args << QStringLiteral("--background") << background.toLocalFile();
+    return runAi(args, {}, index, tr("Remoção de fundo (IA)"));
+}
+
+bool FrameTools::applyAiBackground(const QVariantList &indices, const QUrl &background)
+{
+    if (!aiBackgroundAvailable()) {
+        setStatus(tr("IA de fundo não instalada: rode scripts/instalar-ia.sh"));
+        return false;
+    }
+    QStringList args{QStringLiteral("remove-bg"), QStringLiteral("--model"), segmentationModel()};
+    if (!background.isEmpty())
+        args << QStringLiteral("--background") << background.toLocalFile();
+    return runAi(args, indices, -1, tr("Remoção de fundo (IA)"));
+}
+
+bool FrameTools::previewAiFill(int index, const QString &maskPath)
+{
+    if (!aiFillAvailable()) {
+        setStatus(tr("Preenchimento por IA (LaMa) não instalado: rode scripts/instalar-ia.sh"));
+        return false;
+    }
+    return runAi({QStringLiteral("inpaint"), QStringLiteral("--model"), inpaintModel(), QStringLiteral("--mask"), maskPath},
+                 {}, index, tr("Preenchimento (IA)"));
+}
+
+bool FrameTools::applyAiFill(const QVariantList &indices, const QString &maskPath)
+{
+    if (!aiFillAvailable()) {
+        setStatus(tr("Preenchimento por IA (LaMa) não instalado: rode scripts/instalar-ia.sh"));
+        return false;
+    }
+    return runAi({QStringLiteral("inpaint"), QStringLiteral("--model"), inpaintModel(), QStringLiteral("--mask"), maskPath},
+                 indices, -1, tr("Preenchimento (IA)"));
 }
 
 QString FrameTools::upscalerPath()
