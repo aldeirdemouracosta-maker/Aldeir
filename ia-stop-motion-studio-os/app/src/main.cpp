@@ -7,6 +7,7 @@
 
 #include "audiotrack.h"
 #include "cameracontrol.h"
+#include "dslrcamera.h"
 #include "exporter.h"
 #include "frametools.h"
 #include "projectmanager.h"
@@ -32,6 +33,8 @@ int main(int argc, char *argv[])
     CameraControl cameraControl;
     AudioTrack audioTrack(&project);
     FrameTools frameTools(&project);
+    DslrCamera dslr;
+    QObject::connect(&dslr, &DslrCamera::captured, &project, &ProjectManager::ingestCapture);
     Timeline timeline(&project);
     TimelineRenderer timelineRenderer(&timeline);
 
@@ -48,6 +51,8 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("timeline"), &timeline);
     engine.rootContext()->setContextProperty(QStringLiteral("audioTrack"), &audioTrack);
     engine.rootContext()->setContextProperty(QStringLiteral("frameTools"), &frameTools);
+    engine.rootContext()->setContextProperty(QStringLiteral("dslr"), &dslr);
+    engine.addImageProvider(QStringLiteral("dslr"), new DslrImageProvider(&dslr));
     engine.rootContext()->setContextProperty(QStringLiteral("timelineRenderer"), &timelineRenderer);
     engine.rootContext()->setContextProperty(QStringLiteral("appVersion"), QStringLiteral(APP_VERSION));
 

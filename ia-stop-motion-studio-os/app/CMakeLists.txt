@@ -17,13 +17,14 @@ add_library(studio_core STATIC
     src/audiotrack.h src/audiotrack.cpp
     src/imagetools.h src/imagetools.cpp
     src/frametools.h src/frametools.cpp
+    src/dslrcamera.h src/dslrcamera.cpp
     src/scene.h src/scene.cpp
     src/timeline.h src/timeline.cpp
     src/timelinerenderer.h src/timelinerenderer.cpp
     src/titlerenderer.h src/titlerenderer.cpp
 )
 target_include_directories(studio_core PUBLIC src)
-target_link_libraries(studio_core PUBLIC Qt6::Core Qt6::Gui Qt6::Concurrent Qt6::Multimedia)
+target_link_libraries(studio_core PUBLIC Qt6::Core Qt6::Gui Qt6::Concurrent Qt6::Quick Qt6::Multimedia)
 
 qt_add_executable(ia-stop-motion-studio src/main.cpp)
 
@@ -71,6 +72,10 @@ add_test(NAME tst_audio COMMAND tst_audio)
 qt_add_executable(tst_imagetools tests/tst_imagetools.cpp)
 target_link_libraries(tst_imagetools PRIVATE studio_core Qt6::Test)
 add_test(NAME tst_imagetools COMMAND tst_imagetools)
-set_tests_properties(tst_project tst_timeline tst_audio tst_imagetools PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+qt_add_executable(tst_dslr tests/tst_dslr.cpp)
+target_link_libraries(tst_dslr PRIVATE studio_core Qt6::Test)
+target_compile_definitions(tst_dslr PRIVATE MOCK_GPHOTO2="${CMAKE_CURRENT_SOURCE_DIR}/tests/mock-gphoto2.sh")
+add_test(NAME tst_dslr COMMAND tst_dslr)
+set_tests_properties(tst_project tst_timeline tst_audio tst_imagetools tst_dslr PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 install(TARGETS ia-stop-motion-studio RUNTIME DESTINATION bin)

@@ -25,6 +25,10 @@ Projeto Recente.
 - **dope sheet**: cada foto pode ficar 1–24 quadros na tela
 - reprodução a 8/12/15/24/30 fps (`P`), tira de quadros
 - **Importar fotos** já tiradas (celular, DSLR), respeitando a rotação EXIF
+- **Câmeras DSLR/mirrorless** via [gPhoto2](http://gphoto.org/) (2.500+ modelos por USB):
+  aparecem na lista de câmeras (🔍 procura de novo), com visualização ao vivo e
+  foto em resolução total baixada direto para o projeto. Use a câmera em modo
+  manual (M) e foco manual para evitar flicker
 
 **Dope sheet e sincronia labial** (`D` mostra/esconde):
 - importe a trilha de falas ou música do projeto (fica em `<projeto>/audio/`) e
@@ -85,7 +89,7 @@ sudo apt install cmake g++ qt6-base-dev qt6-declarative-dev qt6-multimedia-dev \
   qml6-module-qtquick-window qml6-module-qtquick-dialogs qml6-module-qtmultimedia \
   qml6-module-qtqml-workerscript qml6-module-qtquick-templates \
   gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav \
-  ffmpeg melt v4l-utils
+  ffmpeg melt v4l-utils gphoto2
 
 cmake -S app -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
@@ -103,7 +107,7 @@ Captura de tela sem monitor: `./build/ia-stop-motion-studio --screenshot tela.pn
 
 ## Próximas etapas
 
-3. Captura direta de DSLR via gPhoto2; biblioteca de bocas por personagem
+3. Biblioteca de bocas por personagem
 4. Desfazer/refazer e reordenar arrastando na Timeline
 5. Remoção de fundo por IA sem tela verde (rembg/U²-Net) e inpainting por IA (LaMa)
 5. IA local: remover suportes/fundo, sincronia labial (Rhubarb), legendas (whisper.cpp)

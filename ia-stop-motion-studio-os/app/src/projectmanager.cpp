@@ -266,14 +266,7 @@ void ProjectManager::attachImageCapture(QObject *imageCapture)
         disconnect(m_capture, nullptr, this, nullptr);
     m_capture = capture;
     connect(capture, &QImageCapture::imageCaptured, this,
-            [this](int, const QImage &image) {
-                if (m_plateNext) {
-                    m_plateNext = false;
-                    setCleanPlate(image);
-                } else {
-                    addFrame(image);
-                }
-            });
+            [this](int, const QImage &image) { ingestCapture(image); });
     connect(capture, &QImageCapture::errorOccurred, this,
             [this](int, QImageCapture::Error, const QString &msg) { fail(msg); });
 }
@@ -300,6 +293,15 @@ bool ProjectManager::addFrame(const QImage &image)
     emit framesChanged();
     emit frameSaved(m_frames.size() - 1);
     return true;
+}
+
+bool ProjectManager::ingestCapture(const QImage &image)
+{
+    if (m_plateNext) {
+        m_plateNext = false;
+        return setCleanPlate(image);
+    }
+    return addFrame(image);
 }
 
 int ProjectManager::importImages(const QList<QUrl> &urls)

@@ -65,6 +65,9 @@ public:
     Q_INVOKABLE bool openProject(const QString &path);
     Q_INVOKABLE void attachImageCapture(QObject *imageCapture);
     Q_INVOKABLE bool addFrame(const QImage &image);
+    // A photo from any camera: becomes the clean plate if one was requested,
+    // otherwise the next frame.
+    Q_INVOKABLE bool ingestCapture(const QImage &image);
     Q_INVOKABLE int importImages(const QList<QUrl> &urls);
     Q_INVOKABLE bool deleteFrame(int index);
     Q_INVOKABLE bool deleteLastFrame();

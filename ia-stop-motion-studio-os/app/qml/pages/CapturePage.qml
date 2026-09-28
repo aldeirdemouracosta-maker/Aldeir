@@ -25,11 +25,22 @@ Item {
     readonly property int nextFrame: project.totalFrames
     readonly property string nextMouth: audioTrack.mouths.length > nextFrame ? audioTrack.mouths[nextFrame] : ""
 
-    readonly property bool hasCamera: mediaDevices.videoInputs.length > 0
+    // Webcams (QtMultimedia) and DSLR/mirrorless cameras (gPhoto2).
+    readonly property var sources: {
+        const list = mediaDevices.videoInputs.map((d, i) => ({ kind: "webcam", index: i, label: d.description }))
+        for (const c of dslr.cameras) list.push({ kind: "dslr", port: c.port, label: "📷 " + c.model + " (DSLR)" })
+        return list
+    }
+    readonly property var source: cameraBox.currentIndex >= 0 ? sources[cameraBox.currentIndex] : undefined
+    readonly property bool isDslr: source !== undefined && source.kind === "dslr"
+    readonly property bool hasCamera: sources.length > 0
+    onIsDslrChanged: isDslr ? dslr.startLiveView(source.port) : dslr.stopLiveView()
+    Component.onDestruction: dslr.stopLiveView()
     readonly property int count: project.frameCount
 
     Component.onCompleted: {
         project.attachImageCapture(imageCapture)
+        dslr.detect()
         if (autoPlay && count > 0)
             startPlayback()
         page.forceActiveFocus()
@@ -40,12 +51,22 @@ Item {
         function onFrameSaved(index) { page.selected = index; flash.restart() }
         function onErrorOccurred(message) { page.notify(message) }
     }
+    Connections {
+        target: dslr
+        function onCaptureFailed(message) { page.notify(message) }
+        function onCamerasChanged() { if (dslr.cameras.length && !page.hasWebcamSelected()) cameraBox.currentIndex = Math.max(0, cameraBox.currentIndex) }
+    }
+    function hasWebcamSelected() { return source !== undefined && source.kind === "webcam" }
 
     function notify(text) { toast = text; toastTimer.restart() }
 
     function capture() {
         if (playing) stopPlayback()
         if (!hasCamera) { notify("Nenhuma câmera: conecte uma webcam/DSLR ou importe fotos."); return }
+        if (isDslr) {
+            if (!dslr.capture(source.port)) notify("A DSLR ainda está ocupada com a foto anterior.")
+            return
+        }
         if (!imageCapture.readyForCapture) { notify("Câmera ainda não está pronta."); return }
         imageCapture.capture()
     }
@@ -109,8 +130,8 @@ Item {
     CaptureSession {
         camera: Camera {
             id: camera
-            cameraDevice: cameraBox.currentIndex >= 0 ? mediaDevices.videoInputs[cameraBox.currentIndex] : mediaDevices.defaultVideoInput
-            active: page.hasCamera
+            cameraDevice: page.hasWebcamSelected() ? mediaDevices.videoInputs[page.source.index] : mediaDevices.defaultVideoInput
+            active: page.hasWebcamSelected()
         }
         imageCapture: ImageCapture { id: imageCapture }
         videoOutput: videoOutput
@@ -192,12 +213,18 @@ Item {
             ComboBox {
                 id: cameraBox
                 Layout.preferredWidth: 230
-                model: mediaDevices.videoInputs.map(d => d.description)
+                model: page.sources.map(s => s.label)
                 displayText: page.hasCamera ? currentText : "Nenhuma câmera"
                 enabled: page.hasCamera
                 focusPolicy: Qt.NoFocus
             }
             IconButton {
+                iconName: "search"; tip: "Procurar câmeras DSLR/mirrorless (gPhoto2)"
+                enabled: dslr.available && !dslr.busy
+                onClicked: dslr.detect()
+            }
+            IconButton {
+                visible: !page.isDslr
                 iconName: page.cameraLocked ? "lock" : "unlock"
                 text: page.cameraLocked ? "Travada" : "Travar câmera"
                 highlighted: page.cameraLocked
@@ -250,7 +277,16 @@ Item {
                     id: videoOutput
                     anchors.fill: parent
                     fillMode: VideoOutput.PreserveAspectFit
-                    visible: page.hasCamera && !page.playing
+                    visible: page.hasWebcamSelected() && !page.playing
+                }
+                // DSLR live view (movie stream through gPhoto2).
+                Image {
+                    anchors.fill: parent
+                    fillMode: Image.PreserveAspectFit
+                    visible: page.isDslr && !page.playing
+                    source: page.isDslr ? "image://dslr/" + dslr.frameCounter : ""
+                    cache: false
+                    asynchronous: false
                 }
 
                 // Onion skin: previous frames stacked over the live view.
@@ -312,7 +348,9 @@ Item {
                         Text {
                             id: statusText; anchors.centerIn: parent; color: "white"; font.pixelSize: 13; font.weight: Font.DemiBold
                             text: page.playing ? "▶ " + (page.playIndex + 1) + " / " + page.count
-                                 : page.showLastFrame ? "ÚLTIMO QUADRO" : page.hasCamera ? "● AO VIVO" : "SEM CÂMERA"
+                                 : page.showLastFrame ? "ÚLTIMO QUADRO"
+                                 : page.isDslr ? (dslr.busy ? "FOTOGRAFANDO…" : dslr.liveView ? "● DSLR AO VIVO" : "DSLR")
+                                 : page.hasCamera ? "● AO VIVO" : "SEM CÂMERA"
                         }
                     }
                     Rectangle {
