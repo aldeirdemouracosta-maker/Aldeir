@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QObject>
+#include <QPointF>
 #include <QImage>
 #include <QHash>
 #include <QPointer>
@@ -34,6 +35,10 @@ class ProjectManager : public QObject
     Q_PROPERTY(int audioOffset READ audioOffset WRITE setAudioOffset NOTIFY audioChanged)
     Q_PROPERTY(bool deflicker READ deflicker WRITE setDeflicker NOTIFY deflickerChanged)
     Q_PROPERTY(QUrl cleanPlateUrl READ cleanPlateUrl NOTIFY cleanPlateChanged)
+    // Character used by this project's lip sync and its digital mouth placement.
+    Q_PROPERTY(QString characterPath READ characterPath WRITE setCharacterPath NOTIFY characterChanged)
+    Q_PROPERTY(QPointF mouthCenter READ mouthCenter WRITE setMouthCenter NOTIFY characterChanged)
+    Q_PROPERTY(double mouthWidth READ mouthWidth WRITE setMouthWidth NOTIFY characterChanged)
     Q_PROPERTY(bool capturingCleanPlate READ capturingCleanPlate NOTIFY cleanPlateChanged)
 
 public:
@@ -60,6 +65,12 @@ public:
     QString cleanPlateFile() const;
     QUrl cleanPlateUrl() const;
     bool capturingCleanPlate() const { return m_plateNext; }
+    QString characterPath() const { return m_character; }
+    void setCharacterPath(const QString &path);
+    QPointF mouthCenter() const { return m_mouthCenter; }
+    void setMouthCenter(const QPointF &c);
+    double mouthWidth() const { return m_mouthWidth; }
+    void setMouthWidth(double w);
 
     Q_INVOKABLE bool newProject(const QString &name);
     Q_INVOKABLE bool openProject(const QString &path);
@@ -104,6 +115,7 @@ signals:
     void audioChanged();
     void deflickerChanged();
     void cleanPlateChanged();
+    void characterChanged();
     void errorOccurred(const QString &message);
 
 private:
@@ -128,6 +140,9 @@ private:
     int m_audioOffset = 0; // project frame where the audio starts
     bool m_deflicker = false;
     bool m_plateNext = false;
+    QString m_character;
+    QPointF m_mouthCenter{0.5, 0.45};
+    double m_mouthWidth = 0.12;
     int m_plateRev = 0;
     QHash<QString, int> m_revisions; // frame file → edit counter (cache busting)
     QString m_lastError;

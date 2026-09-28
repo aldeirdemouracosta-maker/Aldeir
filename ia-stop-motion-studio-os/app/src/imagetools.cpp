@@ -1,6 +1,7 @@
 #include "imagetools.h"
 
 #include <QPainter>
+#include <QPainterPath>
 #include <QVector>
 
 #include <algorithm>
@@ -230,4 +231,70 @@ QImage ImageTools::chromaKey(const QImage &frame, const ChromaOptions &o, const 
         }
     }
     return out;
+}
+
+QImage ImageTools::overlay(const QImage &frame, const QImage &overlay, const QPointF &centre, double widthFraction)
+{
+    QImage out = frame.convertToFormat(QImage::Format_RGB32);
+    if (overlay.isNull() || widthFraction <= 0)
+        return out;
+    const int w = qMax(1, int(out.width() * widthFraction));
+    const QImage scaled = overlay.scaledToWidth(w, Qt::SmoothTransformation);
+    QPainter p(&out);
+    p.setRenderHint(QPainter::SmoothPixmapTransform);
+    p.drawImage(QPointF(centre.x() * out.width() - scaled.width() / 2.0, centre.y() * out.height() - scaled.height() / 2.0), scaled);
+    return out;
+}
+
+QImage ImageTools::defaultMouth(const QString &shape, int size)
+{
+    // Dark felt mouth on a transparent canvas, 2:1 aspect.
+    QImage img(size, size / 2, QImage::Format_ARGB32_Premultiplied);
+    img.fill(Qt::transparent);
+    QPainter p(&img);
+    p.setRenderHint(QPainter::Antialiasing);
+    const QColor lip(120, 30, 40), inside(45, 10, 20), teeth(245, 240, 230), tongue(215, 90, 100);
+    const double w = size, h = size / 2.0, cx = w / 2, cy = h / 2;
+    auto ellipse = [&](double rx, double ry, const QColor &fill) {
+        p.setPen(QPen(lip, size * 0.035));
+        p.setBrush(fill);
+        p.drawEllipse(QPointF(cx, cy), rx, ry);
+    };
+    const QString s = shape.toUpper();
+    if (s == QLatin1String("A") || s == QLatin1String("X")) {
+        // closed / rest: a line, slightly curved for rest
+        QPainterPath path;
+        path.moveTo(cx - w * 0.3, cy);
+        path.quadTo(cx, cy + (s == QLatin1String("X") ? h * 0.12 : 0.0), cx + w * 0.3, cy);
+        p.setPen(QPen(lip, size * 0.05, Qt::SolidLine, Qt::RoundCap));
+        p.setBrush(Qt::NoBrush);
+        p.drawPath(path);
+    } else if (s == QLatin1String("B")) {
+        ellipse(w * 0.3, h * 0.16, inside);
+        p.setPen(Qt::NoPen); p.setBrush(teeth);
+        p.drawRect(QRectF(cx - w * 0.24, cy - h * 0.08, w * 0.48, h * 0.16));
+    } else if (s == QLatin1String("C")) {
+        ellipse(w * 0.3, h * 0.26, inside);
+        p.setPen(Qt::NoPen); p.setBrush(teeth);
+        p.drawRect(QRectF(cx - w * 0.22, cy - h * 0.24, w * 0.44, h * 0.1));
+    } else if (s == QLatin1String("D")) {
+        ellipse(w * 0.32, h * 0.4, inside);
+        p.setPen(Qt::NoPen); p.setBrush(teeth);
+        p.drawRect(QRectF(cx - w * 0.22, cy - h * 0.36, w * 0.44, h * 0.1));
+        p.setBrush(tongue);
+        p.drawEllipse(QPointF(cx, cy + h * 0.2), w * 0.16, h * 0.13);
+    } else if (s == QLatin1String("E")) {
+        ellipse(w * 0.18, h * 0.3, inside);
+    } else if (s == QLatin1String("F")) {
+        ellipse(w * 0.1, h * 0.16, inside);
+    } else if (s == QLatin1String("G")) {
+        ellipse(w * 0.28, h * 0.2, inside);
+        p.setPen(Qt::NoPen); p.setBrush(teeth);
+        p.drawRect(QRectF(cx - w * 0.2, cy - h * 0.18, w * 0.4, h * 0.14));
+    } else if (s == QLatin1String("H")) {
+        ellipse(w * 0.3, h * 0.3, inside);
+        p.setPen(Qt::NoPen); p.setBrush(tongue);
+        p.drawEllipse(QPointF(cx, cy - h * 0.08), w * 0.12, h * 0.12);
+    }
+    return img;
 }

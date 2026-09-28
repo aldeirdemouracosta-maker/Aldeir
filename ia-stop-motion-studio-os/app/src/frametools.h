@@ -68,6 +68,13 @@ public:
     Q_INVOKABLE bool previewAiFill(int index, const QString &maskPath);
     Q_INVOKABLE bool applyAiFill(const QVariantList &indices, const QString &maskPath);
 
+    // Digital mouth replacement: composites, on each frame, the character's
+    // mouth for the lip-sync shape given in `shapes` (frame index → "A".."X").
+    // The mouth is centred at (cx, cy) (normalised) with `width` as a
+    // fraction of the frame width.
+    Q_INVOKABLE bool applyMouths(const QVariantList &indices, const QVariantMap &shapes, const QString &characterDir,
+                                 double cx, double cy, double width);
+
     // Colour of a photo at normalised coordinates (eyedropper).
     Q_INVOKABLE QColor colorAt(int index, double nx, double ny) const;
 
@@ -80,7 +87,9 @@ signals:
 
 private:
     using Operation = std::function<QImage(const QImage &)>;
+    using FrameOperation = std::function<QImage(const QImage &, int frameIndex)>;
     bool runBatch(const QVariantList &indices, const QString &label, const Operation &op);
+    bool runBatch(const QVariantList &indices, const QString &label, const FrameOperation &op);
     bool runPreview(int index, const Operation &op);
     void setStatus(const QString &status);
     void setProgress(double progress);

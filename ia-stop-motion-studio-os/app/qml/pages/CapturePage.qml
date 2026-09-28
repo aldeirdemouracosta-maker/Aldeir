@@ -374,6 +374,13 @@ Item {
                             color: dope.shapeColor(page.nextMouth)
                             Text { anchors.centerIn: parent; text: page.nextMouth; color: "#111"; font.pixelSize: 26; font.weight: Font.Black }
                         }
+                        // The character's own mouth, when the project has one.
+                        Rectangle {
+                            readonly property url mouth: project.characterPath ? characters.mouthUrl(project.characterPath, page.nextMouth) : ""
+                            visible: mouth.toString() !== ""
+                            width: 88; height: 44; radius: 8; color: "#F4E9D3"
+                            Image { anchors.fill: parent; anchors.margins: 3; source: parent.mouth; fillMode: Image.PreserveAspectFit; sourceSize.width: 176 }
+                        }
                         Column {
                             anchors.verticalCenter: parent.verticalCenter
                             Text { text: "Boca do próximo quadro"; color: Theme.textDim; font.pixelSize: 12 }

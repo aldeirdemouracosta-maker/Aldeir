@@ -48,7 +48,6 @@ ApplicationWindow {
         editor: { title: "Editor de Cenas", icon: "scenes", step: 5, text: "Composição de cenários, chroma key dos bonecos de pano, remoção de suportes e fios com inpainting." },
         biblioteca: { title: "Biblioteca", icon: "library", step: 4, text: "Fotos, sons, trilhas, títulos e recursos reutilizáveis entre projetos." },
         projetos: { title: "Projetos", icon: "folder", step: 2, text: "Lista de projetos em " + project.baseDir + "/Projetos." },
-        personagens: { title: "Personagens", icon: "user", step: 5, text: "Ficha de cada boneco: fotos de referência, bocas para sincronia labial, olhos e expressões." },
         cenarios: { title: "Cenários", icon: "image", step: 5, text: "Cenários fotografados e gerados por IA com estilo feltro/pano." },
         configuracoes: { title: "Configurações", icon: "settings", step: 6, text: "Câmera, pasta de projetos, perfis de desempenho do kernel (Captura, Edição, IA, Render)." },
         terminal: { title: "Terminal", icon: "terminal", step: 6, text: "Acesso ao terminal do sistema." },
@@ -99,6 +98,7 @@ ApplicationWindow {
             case "renderizacao": return renderPage
             case "timeline": return timelinePage
             case "ia": return aiPage
+            case "personagens": return charactersPage
             default: return placeholderPage
             }
         }
@@ -109,6 +109,7 @@ ApplicationWindow {
     Component { id: renderPage; RenderPage {} }
     Component { id: timelinePage; TimelinePage {} }
     Component { id: aiPage; AiPage {} }
+    Component { id: charactersPage; CharactersPage {} }
     Component {
         id: placeholderPage
         PlaceholderPage {

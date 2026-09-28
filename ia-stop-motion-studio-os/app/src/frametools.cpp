@@ -3,6 +3,7 @@
 #include "projectmanager.h"
 
 #include <QDir>
+#include <QHash>
 #include <QFileInfo>
 #include <QImageReader>
 #include <QProcess>
@@ -287,6 +288,11 @@ bool FrameTools::runPreview(int index, const Operation &op)
 
 bool FrameTools::runBatch(const QVariantList &indices, const QString &label, const Operation &op)
 {
+    return runBatch(indices, label, FrameOperation([op](const QImage &img, int) { return op(img); }));
+}
+
+bool FrameTools::runBatch(const QVariantList &indices, const QString &label, const FrameOperation &op)
+{
     if (busy() || indices.isEmpty())
         return false;
     QList<int> list;
@@ -310,7 +316,7 @@ bool FrameTools::runBatch(const QVariantList &indices, const QString &label, con
     setStatus(tr("%1: 0 de %2…").arg(label).arg(list.size()));
     m_watcher.setFuture(QtConcurrent::run([=]() -> QString {
         for (int k = 0; k < files.size(); ++k) {
-            const QImage result = op(readImage(files.at(k)));
+            const QImage result = op(readImage(files.at(k)), list.at(k));
             if (result.isNull() || !savePng(result, files.at(k)))
                 return tr("%1 falhou no quadro %2.").arg(label).arg(list.at(k) + 1);
             QMetaObject::invokeMethod(this, [this, k, n = files.size(), label] {
@@ -397,6 +403,37 @@ bool FrameTools::upscale(const QVariantList &indices, int factor)
         QFile::remove(out);
         return result;
     });
+}
+
+bool FrameTools::applyMouths(const QVariantList &indices, const QVariantMap &shapes, const QString &characterDir,
+                             double cx, double cy, double width)
+{
+    QHash<QString, QImage> mouths;
+    for (const QString &shape : {QStringLiteral("A"), QStringLiteral("B"), QStringLiteral("C"), QStringLiteral("D"),
+                                 QStringLiteral("E"), QStringLiteral("F"), QStringLiteral("G"), QStringLiteral("H"),
+                                 QStringLiteral("X")}) {
+        const QImage img(characterDir + QStringLiteral("/bocas/") + shape + QStringLiteral(".png"));
+        if (!img.isNull())
+            mouths.insert(shape, img);
+    }
+    if (mouths.isEmpty()) {
+        setStatus(tr("Este personagem ainda não tem bocas."));
+        return false;
+    }
+    QVariantList todo;
+    for (const QVariant &v : indices) {
+        const QString shape = shapes.value(QString::number(v.toInt())).toString();
+        if (mouths.contains(shape))
+            todo << v;
+    }
+    if (todo.isEmpty()) {
+        setStatus(tr("Nenhum quadro com boca definida — rode a sincronia labial no dope sheet."));
+        return false;
+    }
+    return runBatch(todo, tr("Bocas"), FrameOperation([=](const QImage &img, int index) {
+        const QImage mouth = mouths.value(shapes.value(QString::number(index)).toString());
+        return ImageTools::overlay(img, mouth, QPointF(cx, cy), width);
+    }));
 }
 
 int FrameTools::restore(const QVariantList &indices)

@@ -2,6 +2,7 @@
 
 #include <QColor>
 #include <QImage>
+#include <QPointF>
 
 // Pixel operations used by the "IA Local" tools. All functions are pure and
 // thread-safe so they can run in a worker thread.
@@ -29,5 +30,12 @@ struct ChromaOptions {
 // Keys out a green/blue screen and composites over `background` (cropped to
 // fill). With a null background the result keeps an alpha channel.
 QImage chromaKey(const QImage &frame, const ChromaOptions &options, const QImage &background);
+
+// Draws `overlay` (with alpha) centred at the normalised point `centre`,
+// scaled to `widthFraction` of the frame width, keeping its aspect ratio.
+QImage overlay(const QImage &frame, const QImage &overlay, const QPointF &centre, double widthFraction);
+
+// Simple felt-style mouth drawings for the built-in character (Rhubarb shapes).
+QImage defaultMouth(const QString &shape, int size = 256);
 
 } // namespace ImageTools

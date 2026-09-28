@@ -8,7 +8,7 @@ Arquitetura completa: [`../docs/ia-linux-minimal/ia-stop-motion-studio-os-arquit
 
 ![Início](docs/screenshots/inicio.png)
 
-## O que já funciona (v0.6)
+## O que já funciona (v0.7)
 
 **Interface da maquete original:** barra superior, menu lateral, dock inferior,
 painel Sistema (CPU, RAM, GPU, VRAM e temperatura da RX 580, armazenamento) e
@@ -63,6 +63,16 @@ Projeto Recente.
 - prévia **antes/depois** no quadro atual e aplicação em lote nos quadros selecionados
 
 ![IA Local](docs/screenshots/ia-local.png)
+
+**Personagens** (menu lateral ou dock): biblioteca de bonecos compartilhada entre
+projetos, com foto de referência e as **9 bocas** da sincronia labial (A–H, X).
+Vem com um "Boneco padrão" de bocas desenhadas em feltro.
+- Na Captura, o visor mostra a **imagem da boca do personagem** a colocar na próxima foto
+- **Boca digital**, para bonecos sem boca trocável: clique no rosto para
+  posicionar, ajuste o tamanho e aplique — cada quadro recebe a boca da
+  sincronia labial (originais guardados)
+
+![Personagens](docs/screenshots/personagens.png)
 
 **Renderização:** opção **Remover flicker** (filtro `deflicker` do FFmpeg, iguala
 o brilho entre fotos) e a trilha de áudio do projeto entra no vídeo. Exporta MP4 em YouTube 16:9, Reels/TikTok 9:16, Quadrado 1:1 ou
@@ -129,9 +139,8 @@ Captura de tela sem monitor: `./build/ia-stop-motion-studio --screenshot tela.pn
 
 ## Próximas etapas
 
-1. Biblioteca de bocas por personagem (sincronia labial com troca automática de boca)
-2. Desfazer/refazer e reordenar clipes arrastando na Timeline
-3. Legendas automáticas (whisper.cpp) e narração (Piper)
-4. Cenários gerados por IA (stable-diffusion.cpp, Vulkan)
-5. Escalonador sched_ext próprio (`scx_studio`)
-6. ISO do IA Stop-Motion Studio OS
+1. Desfazer/refazer e reordenar clipes arrastando na Timeline
+2. Legendas automáticas (whisper.cpp) e narração (Piper)
+3. Cenários gerados por IA (stable-diffusion.cpp, Vulkan)
+4. Escalonador sched_ext próprio (`scx_studio`)
+5. ISO do IA Stop-Motion Studio OS

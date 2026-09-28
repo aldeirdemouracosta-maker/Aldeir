@@ -164,6 +164,8 @@ bool ProjectManager::newProject(const QString &name)
     m_deflicker = false;
     m_plateNext = false;
     m_revisions.clear();
+    m_mouthCenter = QPointF(0.5, 0.45);
+    m_mouthWidth = 0.12; // keep m_character: new scenes usually star the same puppet
     saveManifest();
     emit projectChanged();
     emit fpsChanged();
@@ -171,6 +173,7 @@ bool ProjectManager::newProject(const QString &name)
     emit audioChanged();
     emit deflickerChanged();
     emit cleanPlateChanged();
+    emit characterChanged();
     emit recentProjectsChanged();
     return true;
 }
@@ -190,6 +193,7 @@ bool ProjectManager::openProject(const QString &path)
     emit audioChanged();
     emit deflickerChanged();
     emit cleanPlateChanged();
+    emit characterChanged();
     return true;
 }
 
@@ -212,6 +216,12 @@ bool ProjectManager::loadManifest()
     m_deflicker = obj.value(QStringLiteral("deflicker")).toBool(false);
     m_plateNext = false;
     m_revisions.clear();
+    m_character = obj.value(QStringLiteral("personagem")).toString();
+    {
+        const QJsonObject boca = obj.value(QStringLiteral("boca")).toObject();
+        m_mouthCenter = QPointF(boca.value(QStringLiteral("x")).toDouble(0.5), boca.value(QStringLiteral("y")).toDouble(0.45));
+        m_mouthWidth = boca.value(QStringLiteral("largura")).toDouble(0.12);
+    }
     m_frames.clear();
     for (const QJsonValue &v : obj.value(QStringLiteral("frames")).toArray()) {
         const QJsonObject f = v.toObject();
@@ -241,6 +251,9 @@ bool ProjectManager::saveManifest()
         {QStringLiteral("audio"), m_audio},
         {QStringLiteral("audioOffset"), m_audioOffset},
         {QStringLiteral("deflicker"), m_deflicker},
+        {QStringLiteral("personagem"), m_character},
+        {QStringLiteral("boca"), QJsonObject{{QStringLiteral("x"), m_mouthCenter.x()}, {QStringLiteral("y"), m_mouthCenter.y()},
+                                             {QStringLiteral("largura"), m_mouthWidth}}},
         {QStringLiteral("updated"), QDateTime::currentDateTime().toString(Qt::ISODate)},
         {QStringLiteral("frames"), frames},
     };
@@ -533,6 +546,35 @@ void ProjectManager::framesModified(const QList<int> &indices)
     if (!m_frames.isEmpty())
         m_resolution = QImageReader(frameFile(0)).size();
     emit framesChanged();
+}
+
+void ProjectManager::setCharacterPath(const QString &path)
+{
+    if (path == m_character)
+        return;
+    m_character = path;
+    saveManifest();
+    emit characterChanged();
+}
+
+void ProjectManager::setMouthCenter(const QPointF &c)
+{
+    const QPointF clamped(qBound(0.0, c.x(), 1.0), qBound(0.0, c.y(), 1.0));
+    if (clamped == m_mouthCenter)
+        return;
+    m_mouthCenter = clamped;
+    saveManifest();
+    emit characterChanged();
+}
+
+void ProjectManager::setMouthWidth(double w)
+{
+    w = qBound(0.02, w, 0.8);
+    if (qFuzzyCompare(w, m_mouthWidth))
+        return;
+    m_mouthWidth = w;
+    saveManifest();
+    emit characterChanged();
 }
 
 void ProjectManager::fail(const QString &message)
