@@ -40,6 +40,25 @@ Item {
         target: timelineRenderer
         function onFinished(ok, output) { page.notify(timelineRenderer.status) }
     }
+    Connections {
+        target: speech
+        function onTranscriptionFinished(results) {
+            const n = timeline.setSubtitles(results)
+            page.notify(n ? n + " legenda(s) adicionada(s) — edite o texto selecionando cada uma." : "Nenhuma fala encontrada no áudio.")
+        }
+        function onNarrationReady(file) {
+            timeline.addMedia(["file://" + file], page.playhead)
+            narrationPopup.close()
+            page.notify("Narração adicionada na trilha de áudio.")
+        }
+        function onFailed(message) { page.notify(message) }
+    }
+
+    function makeSubtitles() {
+        const sources = timeline.speechSources()
+        if (!sources.length) { notify("Não há áudio no filme para legendar."); return }
+        speech.transcribe(sources)
+    }
 
     onPlayheadChanged: { layers = timeline.layersAt(playhead); syncAudio() }
 
@@ -142,6 +161,42 @@ Item {
     }
 
     Popup {
+        id: narrationPopup
+        anchors.centerIn: parent
+        width: 520
+        modal: true
+        padding: 22
+        background: Rectangle { radius: Theme.radius; color: Theme.panelSolid; border.color: Theme.panelBorder }
+        contentItem: ColumnLayout {
+            spacing: 12
+            Text { text: "Narração (voz sintética local)"; color: Theme.text; font.pixelSize: 20; font.weight: Font.DemiBold }
+            Text {
+                Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.textDim; font.pixelSize: 13
+                text: speech.piperAvailable ? "Escreva o texto; a voz do Piper é gerada no computador e entra na trilha de áudio no cursor (" + timeline.timecode(page.playhead) + ")."
+                                            : "Piper não instalado: rode scripts/instalar-voz.sh"
+            }
+            TextArea {
+                id: narrationText
+                Layout.fillWidth: true
+                Layout.preferredHeight: 140
+                wrapMode: TextEdit.Wrap
+                placeholderText: "Era uma vez um boneco de pano…"
+                color: Theme.text
+                background: Rectangle { radius: 6; color: "#1C2740"; border.color: Theme.panelBorder }
+            }
+            RowLayout {
+                IconButton {
+                    iconName: "play"; highlighted: true
+                    text: speech.busy ? "Gerando…" : "Gerar e adicionar"
+                    enabled: speech.piperAvailable && !speech.busy && narrationText.text.trim().length > 0
+                    onClicked: speech.narrate(narrationText.text, project.projectPath + "/audio/narracao_" + Date.now() + ".wav")
+                }
+                IconButton { text: "Cancelar"; onClicked: narrationPopup.close() }
+            }
+        }
+    }
+
+    Popup {
         id: exportPopup
         anchors.centerIn: parent
         width: 520
@@ -211,20 +266,31 @@ Item {
             Text {
                 text: project.projectName ? "· " + project.projectName : ""
                 color: Theme.textDim; font.pixelSize: 16; elide: Text.ElideRight
-                Layout.maximumWidth: 220
+                Layout.maximumWidth: 180
             }
             Item { Layout.preferredWidth: 6 }
             IconButton { iconName: "clapper"; text: "Cena"; tip: "Adicionar uma cena capturada"; onClicked: sceneMenu.popup() }
             IconButton { iconName: "import"; text: "Mídia"; tip: "Vídeos, fotos, música, narração"; onClicked: mediaDialog.open() }
             IconButton { iconName: "plus"; text: "Título"; onClicked: { timeline.addTitle("Título", page.playhead); page.select("title", timeline.titles.length - 1) } }
-            IconButton { iconName: "scenes"; text: "Dividir"; tip: "Divide o clipe no cursor (S)"; onClicked: page.split() }
+            IconButton { iconName: "scenes"; tip: "Dividir o clipe no cursor (S)"; onClicked: page.split() }
+            IconButton {
+                iconName: "chip"; text: speech.busy ? "Legendando…" : "CC"
+                enabled: !speech.busy
+                tip: speech.whisperAvailable ? "Legendas automáticas das falas (whisper.cpp, local)" : "Instale com scripts/instalar-voz.sh"
+                onClicked: page.makeSubtitles()
+            }
+            IconButton {
+                iconName: "live"
+                tip: "Voz sintética local (Piper) a partir de um texto"
+                onClicked: narrationPopup.open()
+            }
             IconButton { iconName: "trash"; tip: "Apagar seleção (Delete)"; enabled: page.selIndex >= 0; onClicked: page.removeSelected() }
             Rectangle { width: 1; height: 26; color: "#33FFFFFF" }
             IconButton { text: "↶"; tip: "Desfazer (Ctrl+Z)"; enabled: timeline.canUndo; onClicked: timeline.undo() }
             IconButton { text: "↷"; tip: "Refazer (Ctrl+Shift+Z)"; enabled: timeline.canRedo; onClicked: timeline.redo() }
             Item { Layout.fillWidth: true }
             ComboBox {
-                Layout.preferredWidth: 170
+                Layout.preferredWidth: 150
                 focusPolicy: Qt.NoFocus
                 model: [{ id: "youtube", t: "16:9 YouTube" }, { id: "vertical", t: "9:16 Reels/TikTok" },
                         { id: "quadrado", t: "1:1 Quadrado" }, { id: "4k", t: "4K 16:9" }]
@@ -233,14 +299,14 @@ Item {
                 onActivated: (i) => timeline.format = model[i].id
             }
             ComboBox {
-                Layout.preferredWidth: 100
+                Layout.preferredWidth: 90
                 focusPolicy: Qt.NoFocus
                 model: [12, 24, 25, 30]
                 displayText: timeline.fps + " fps"
                 currentIndex: model.indexOf(timeline.fps)
                 onActivated: (i) => { timeline.fps = model[i]; page.fitZoom() }
             }
-            IconButton { iconName: "export"; text: "Exportar filme"; highlighted: true; onClicked: exportPopup.open() }
+            IconButton { iconName: "export"; text: "Exportar"; tip: "Exportar o filme"; highlighted: true; onClicked: exportPopup.open() }
         }
 
         // ── monitor + inspector ────────────────────────────────
@@ -751,11 +817,11 @@ Item {
                             y: lanes.titleY + 2
                             width: Math.max(6, (dragLength >= 0 ? dragLength : modelData.length) * page.ppf)
                             height: 36; radius: 6
-                            color: "#C98A1E"
+                            color: modelData.kind === "legenda" ? "#1E8C8C" : "#C98A1E"
                             border.width: selected ? 2 : 1
                             border.color: selected ? "white" : "#55FFFFFF"
                             z: selected ? 2 : 1
-                            Text { anchors.fill: parent; anchors.margins: 6; text: "T  " + modelData.text.replace(/\n/g, " "); color: "white"; font.pixelSize: 12; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter }
+                            Text { anchors.fill: parent; anchors.margins: 6; text: (modelData.kind === "legenda" ? "💬 " : "T  ") + modelData.text.replace(/\n/g, " "); color: "white"; font.pixelSize: 12; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter }
                             MouseArea {
                                 anchors.fill: parent
                                 drag.target: tclip; drag.axis: Drag.XAxis; drag.minimumX: 0

@@ -12,6 +12,8 @@
 #include <QSaveFile>
 #include <QUuid>
 
+#include <algorithm>
+
 namespace {
 
 const QStringList kImageExt{QStringLiteral("png"), QStringLiteral("jpg"), QStringLiteral("jpeg"),
@@ -168,6 +170,7 @@ void Timeline::fromJson(const QJsonObject &obj)
         t.size = o.value(QStringLiteral("size")).toInt(8);
         t.color = o.value(QStringLiteral("color")).toString(t.color);
         t.box = o.value(QStringLiteral("box")).toBool(true);
+        t.kind = o.value(QStringLiteral("kind")).toString();
         m_titles.append(t);
     }
     for (const QJsonValue &v : obj.value(QStringLiteral("audio")).toArray()) {
@@ -217,7 +220,8 @@ QJsonObject Timeline::toJson() const
         titles.append(QJsonObject{{QStringLiteral("id"), t.id}, {QStringLiteral("text"), t.text},
                                   {QStringLiteral("start"), t.start}, {QStringLiteral("length"), t.length},
                                   {QStringLiteral("position"), t.position}, {QStringLiteral("size"), t.size},
-                                  {QStringLiteral("color"), t.color}, {QStringLiteral("box"), t.box}});
+                                  {QStringLiteral("color"), t.color}, {QStringLiteral("box"), t.box},
+                                  {QStringLiteral("kind"), t.kind}});
     }
     for (const AudioClip &a : m_audio) {
         audio.append(QJsonObject{{QStringLiteral("id"), a.id}, {QStringLiteral("source"), a.source},
@@ -391,6 +395,70 @@ void Timeline::addTitle(const QString &text, int atFrame)
     renderTitleImage(t);
     m_titles.append(t);
     touch();
+}
+
+QStringList Timeline::speechSources()
+{
+    QStringList files;
+    for (const VideoClip &c : std::as_const(m_video)) {
+        if (c.type == QLatin1String("video"))
+            files << c.source;
+        else if (c.type == QLatin1String("scene") && !scene(c.source).audio.isEmpty())
+            files << scene(c.source).audio;
+    }
+    for (const AudioClip &a : std::as_const(m_audio))
+        files << a.source;
+    files.removeDuplicates();
+    return files;
+}
+
+int Timeline::subtitleCount() const
+{
+    return int(std::count_if(m_titles.begin(), m_titles.end(), [](const Title &t) { return t.kind == QLatin1String("legenda"); }));
+}
+
+int Timeline::setSubtitles(const QVariantMap &transcripts)
+{
+    checkpoint(QString());
+    m_titles.erase(std::remove_if(m_titles.begin(), m_titles.end(),
+                                  [](const Title &t) { return t.kind == QLatin1String("legenda"); }),
+                   m_titles.end());
+
+    // Places one source's segments; `offset` shifts audio seconds into the
+    // clip's source time; [in, out) is the part of the source that is used.
+    auto place = [&](const QString &file, double offset, int clipStart, int in, int out) {
+        for (const QVariant &v : transcripts.value(file).toList()) {
+            const QVariantMap seg = v.toMap();
+            const int fs = int(qRound((seg.value(QStringLiteral("start")).toDouble() + offset) * m_fps));
+            const int fe = int(qRound((seg.value(QStringLiteral("end")).toDouble() + offset) * m_fps));
+            const int a = qMax(fs, in), b = qMin(fe, out);
+            if (b <= a)
+                continue;
+            Title t;
+            t.id = newId();
+            t.kind = QStringLiteral("legenda");
+            t.text = seg.value(QStringLiteral("text")).toString().trimmed();
+            t.start = clipStart + (a - in);
+            t.length = b - a;
+            t.size = 6;
+            renderTitleImage(t);
+            m_titles.append(t);
+        }
+    };
+    for (const VideoClip &c : std::as_const(m_video)) {
+        if (c.type == QLatin1String("video")) {
+            place(c.source, 0.0, c.start, c.in, c.out);
+        } else if (c.type == QLatin1String("scene")) {
+            const Scene &sc = scene(c.source);
+            if (!sc.audio.isEmpty())
+                place(sc.audio, double(sc.audioOffset) / sc.fps, c.start, c.in, c.out);
+        }
+    }
+    for (const AudioClip &a : std::as_const(m_audio))
+        place(a.source, 0.0, a.start, a.in, a.out);
+    std::sort(m_titles.begin(), m_titles.end(), [](const Title &x, const Title &y) { return x.start < y.start; });
+    touch();
+    return subtitleCount();
 }
 
 void Timeline::moveClipTo(int from, int to)
@@ -573,6 +641,7 @@ QVariantList Timeline::titles() const
             {QStringLiteral("length"), t.length}, {QStringLiteral("position"), t.position},
             {QStringLiteral("size"), t.size}, {QStringLiteral("color"), t.color}, {QStringLiteral("box"), t.box},
             {QStringLiteral("image"), QUrl::fromLocalFile(t.image)},
+            {QStringLiteral("kind"), t.kind},
         });
     }
     return list;

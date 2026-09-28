@@ -55,6 +55,7 @@ public:
         int size = 8; // percent of frame height
         QString color = QStringLiteral("#FFFFFF");
         bool box = true; // dark band behind the text
+        QString kind; // "" = title, "legenda" = automatic subtitle
         QString image; // rendered PNG (computed)
     };
     struct AudioClip {
@@ -92,6 +93,13 @@ public:
     Q_INVOKABLE bool addScene(const QString &projectDir);
     Q_INVOKABLE int addMedia(const QList<QUrl> &urls, int atFrame = -1);
     Q_INVOKABLE void addTitle(const QString &text, int atFrame);
+    // Audio files heard in the film (audio clips, video clips, scene
+    // soundtracks), to be transcribed for subtitles.
+    Q_INVOKABLE QStringList speechSources();
+    // Replaces the automatic subtitles with segments {file: [{start,end,text}]}
+    // mapped onto the timeline; returns how many were placed.
+    Q_INVOKABLE int setSubtitles(const QVariantMap &transcripts);
+    Q_INVOKABLE int subtitleCount() const;
     Q_INVOKABLE void moveClip(int index, int delta);
     Q_INVOKABLE void moveClipTo(int from, int to);
     Q_INVOKABLE void undo();

@@ -12,6 +12,7 @@
 #include "exporter.h"
 #include "frametools.h"
 #include "projectmanager.h"
+#include "speechtools.h"
 #include "systemmodes.h"
 #include "systemmonitor.h"
 #include "timeline.h"
@@ -38,6 +39,7 @@ int main(int argc, char *argv[])
     DslrCamera dslr;
     SystemModes systemModes;
     CharacterLibrary characters;
+    SpeechTools speech;
     characters.ensureDefault();
     QObject::connect(&dslr, &DslrCamera::captured, &project, &ProjectManager::ingestCapture);
     Timeline timeline(&project);
@@ -59,6 +61,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("dslr"), &dslr);
     engine.rootContext()->setContextProperty(QStringLiteral("systemModes"), &systemModes);
     engine.rootContext()->setContextProperty(QStringLiteral("characters"), &characters);
+    engine.rootContext()->setContextProperty(QStringLiteral("speech"), &speech);
     engine.addImageProvider(QStringLiteral("dslr"), new DslrImageProvider(&dslr));
     engine.rootContext()->setContextProperty(QStringLiteral("timelineRenderer"), &timelineRenderer);
     engine.rootContext()->setContextProperty(QStringLiteral("appVersion"), QStringLiteral(APP_VERSION));

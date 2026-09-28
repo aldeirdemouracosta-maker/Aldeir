@@ -8,7 +8,7 @@ Arquitetura completa: [`../docs/ia-linux-minimal/ia-stop-motion-studio-os-arquit
 
 ![Início](docs/screenshots/inicio.png)
 
-## O que já funciona (v0.7)
+## O que já funciona (v0.8)
 
 **Interface da maquete original:** barra superior, menu lateral, dock inferior,
 painel Sistema (CPU, RAM, GPU, VRAM e temperatura da RX 580, armazenamento) e
@@ -88,10 +88,20 @@ cai para x264 na CPU se falhar.
 - **desfazer/refazer** (`Ctrl+Z` / `Ctrl+Shift+Z`, até 100 passos; arrastar um
   controle deslizante conta como um passo só)
 - monitor de pré-visualização com dissolve e títulos exatamente como no render
+- **Legendas automáticas (CC)** com [whisper.cpp](https://github.com/ggml-org/whisper.cpp)
+  (local, Vulkan na RX 580): transcreve as falas das cenas, dos vídeos e da
+  trilha de áudio e coloca cada frase no tempo certo como legenda editável
+  (em verde-azulado na trilha de títulos); rodar de novo substitui as legendas
+- **Narração** com [Piper](https://github.com/rhasspy/piper): digite o texto e a
+  voz sintética (pt-BR) entra na trilha de áudio no cursor
 - formatos 16:9, 9:16, 1:1 e 4K; 12/24/25/30 fps
 - **Exportar filme**: cada cena é pré-renderizada (com cache) e o filme é
   montado pelo **MLT** (`melt`), com encoder da GPU via VAAPI e fallback x264.
   O projeto também é salvo como `filme.mlt`, que abre no **Shotcut** e no **Kdenlive**.
+
+Instale legendas e narração com `scripts/instalar-voz.sh` (compila o whisper.cpp
+com Vulkan quando `libvulkan-dev glslc spirv-headers` estão instalados e baixa o
+modelo `small` e a voz `pt_BR-faber-medium`).
 
 ![Timeline](docs/screenshots/timeline.png)
 
@@ -141,7 +151,6 @@ Captura de tela sem monitor: `./build/ia-stop-motion-studio --screenshot tela.pn
 
 ## Próximas etapas
 
-1. Legendas automáticas (whisper.cpp) e narração (Piper)
-2. Cenários gerados por IA (stable-diffusion.cpp, Vulkan)
-3. Escalonador sched_ext próprio (`scx_studio`)
-4. ISO do IA Stop-Motion Studio OS
+1. Cenários gerados por IA (stable-diffusion.cpp, Vulkan)
+2. Escalonador sched_ext próprio (`scx_studio`)
+3. ISO do IA Stop-Motion Studio OS
