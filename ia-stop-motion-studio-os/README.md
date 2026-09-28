@@ -8,7 +8,7 @@ Arquitetura completa: [`../docs/ia-linux-minimal/ia-stop-motion-studio-os-arquit
 
 ![Início](docs/screenshots/inicio.png)
 
-## O que já funciona (v0.4)
+## O que já funciona (v0.5)
 
 **Interface da maquete original:** barra superior, menu lateral, dock inferior,
 painel Sistema (CPU, RAM, GPU, VRAM e temperatura da RX 580, armazenamento) e
@@ -78,6 +78,22 @@ cai para x264 na CPU se falhar.
 
 ![Timeline](docs/screenshots/timeline.png)
 
+**Modos do sistema** (chip "Modo …" na barra superior): o sistema se ajusta ao
+que você está fazendo — no automático, a tela e o trabalho em andamento escolhem o modo:
+
+| Modo | Quando | O que muda |
+|---|---|---|
+| Captura | tela Captura/Player | app e câmera com prioridade (nice −5), CPU `schedutil`, GPU `auto`, `scx_lavd` baixa latência |
+| Edição | Timeline, Renderização | interface fluida, `scx_lavd` |
+| IA | IA Local ou ferramenta rodando | CPU `performance`, RX 580 no perfil **COMPUTE**, `scx_bpfland` |
+| Render | exportando | CPU `performance`, RX 580 no perfil **VIDEO** (encoder), `scx_bpfland` |
+
+Os ajustes são feitos pelo helper `system/ia-sms-modo` (root via `pkexec`,
+liberado sem senha pela política polkit). Instale com `scripts/instalar-modos.sh`.
+A troca de escalonador (sched_ext) só acontece em kernel ≥ 6.12 com o
+[scx_loader](https://github.com/sched-ext/scx) instalado; sem isso, os demais
+ajustes continuam valendo.
+
 As demais telas da maquete (Editor de Cenas, Timeline, IA Local, Personagens,
 Cenários…) já existem na navegação e indicam em que etapa serão implementadas.
 
@@ -111,5 +127,4 @@ Captura de tela sem monitor: `./build/ia-stop-motion-studio --screenshot tela.pn
 4. Desfazer/refazer e reordenar arrastando na Timeline
 5. Remoção de fundo por IA sem tela verde (rembg/U²-Net) e inpainting por IA (LaMa)
 5. IA local: remover suportes/fundo, sincronia labial (Rhubarb), legendas (whisper.cpp)
-6. Modos do sistema (Captura / Edição / IA / Render) com cgroups e perfis AMDGPU, depois sched_ext
 7. ISO do IA Stop-Motion Studio OS

@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+# IA Stop-Motion Studio OS — aplica um modo de desempenho do sistema.
+#
+#   ia-sms-modo <captura|edicao|ia|render|normal> [--pid PID]
+#
+# Captura  latência baixa: UI e câmera com prioridade, GPU em automático
+# Edição   interface fluida, GPU em automático
+# IA       CPU em "performance", RX 580 no perfil COMPUTE (Vulkan: Real-ESRGAN, llama.cpp…)
+# Render   CPU em "performance", RX 580 no perfil VIDEO (encoder VCE/VAAPI)
+# Normal   tudo de volta ao padrão
+#
+# Com sched_ext (kernel ≥ 6.12) e scx_loader instalados, também troca o
+# escalonador de CPU (scx_lavd para captura/edição, scx_bpfland para IA/render).
+# Roda como root (via pkexec, liberado pela política polkit instalada).
+# IA_SMS_SYSFS permite apontar para uma árvore sysfs falsa (testes).
+set -euo pipefail
+
+SYSFS="${IA_SMS_SYSFS:-/sys}"
+STATE_DIR="${IA_SMS_STATE_DIR:-/run/ia-sms}"
+MODE="${1:-}"
+shift || true
+PID=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --pid) PID="${2:-}"; shift 2 ;;
+        *) echo "argumento desconhecido: $1" >&2; exit 2 ;;
+    esac
+done
+
+case "$MODE" in
+    captura|edicao|ia|render|normal) ;;
+    *) echo "uso: ia-sms-modo <captura|edicao|ia|render|normal> [--pid PID]" >&2; exit 2 ;;
+esac
+if [ -n "$PID" ] && ! [[ "$PID" =~ ^[0-9]+$ ]]; then
+    echo "PID inválido" >&2; exit 2
+fi
+
+log() { echo "ia-sms-modo[$MODE]: $*"; }
+write() { # write <file> <value> — ignora arquivos ausentes/somente leitura
+    if [ -w "$1" ]; then echo "$2" > "$1" && log "$(basename "$(dirname "$1")")/$(basename "$1") = $2"; fi
+}
+
+# ── GPU (amdgpu) ───────────────────────────────────────────────────────
+profile_index() { # profile_index <pp_power_profile_mode> <NOME>
+    { grep -E "^[[:space:]]*[0-9]+[[:space:]]+$2[[:space:]]*\*?:" "$1" 2>/dev/null || true; } | awk '{print $1}' | head -1
+}
+for dev in "$SYSFS"/class/drm/card*/device; do
+    level="$dev/power_dpm_force_performance_level"
+    [ -e "$level" ] || continue
+    case "$MODE" in
+        ia|render)
+            name=$([ "$MODE" = ia ] && echo COMPUTE || echo VIDEO)
+            idx=$(profile_index "$dev/pp_power_profile_mode" "$name")
+            if [ -n "$idx" ]; then
+                write "$level" manual
+                write "$dev/pp_power_profile_mode" "$idx"
+            else
+                write "$level" high
+            fi
+            ;;
+        *) write "$level" auto ;;
+    esac
+done
+
+# ── CPU governor ───────────────────────────────────────────────────────
+for gov in "$SYSFS"/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_governor; do
+    [ -e "$gov" ] || continue
+    avail=$(cat "$(dirname "$gov")/scaling_available_governors" 2>/dev/null || echo "performance schedutil")
+    case "$MODE" in
+        ia|render) want=performance ;;
+        *) want=schedutil; [[ " $avail " == *" schedutil "* ]] || want=ondemand ;;
+    esac
+    [[ " $avail " == *" $want "* ]] && write "$gov" "$want"
+done
+
+# ── prioridade do app (e filhos: ffmpeg, melt, realesrgan…) ─────────────
+if [ -n "$PID" ] && [ -d "/proc/$PID" ] && [ -z "${IA_SMS_SYSFS:-}" ]; then
+    pids="$PID $(pgrep -P "$PID" | tr '\n' ' ')"
+    case "$MODE" in
+        captura|edicao) nice=-5; io=2 ;;  # UI responsiva
+        *) nice=0; io=4 ;;
+    esac
+    for p in $pids; do
+        renice -n "$nice" -p "$p" >/dev/null 2>&1 || true
+        ionice -c 2 -n "$io" -p "$p" >/dev/null 2>&1 || true
+    done
+    log "prioridade: nice $nice para $pids"
+fi
+
+# ── sched_ext (opcional) ────────────────────────────────────────────────
+if [ -z "${IA_SMS_SYSFS:-}" ] && [ -d /sys/kernel/sched_ext ] && command -v scxctl >/dev/null; then
+    case "$MODE" in
+        captura) sched=lavd; mode=lowlatency ;;
+        edicao) sched=lavd; mode=gaming ;;
+        ia|render) sched=bpfland; mode=server ;;
+        normal) sched="" ;;
+    esac
+    if [ -z "$sched" ]; then
+        scxctl stop >/dev/null 2>&1 || true
+        log "sched_ext: escalonador padrão"
+    elif scxctl switch --sched "$sched" --mode "$mode" >/dev/null 2>&1 || scxctl start --sched "$sched" --mode "$mode" >/dev/null 2>&1; then
+        log "sched_ext: scx_$sched ($mode)"
+    fi
+fi
+
+mkdir -p "$STATE_DIR" 2>/dev/null && echo "$MODE" > "$STATE_DIR/modo" 2>/dev/null || true
+log "ok"

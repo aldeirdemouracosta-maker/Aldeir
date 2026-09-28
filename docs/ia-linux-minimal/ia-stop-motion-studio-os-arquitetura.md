@@ -87,7 +87,7 @@ importar fotos, exportação com formatos prontos (16:9, 9:16, 1:1, 4K) usando o
 encoder da RX 580 e a telemetria de VRAM/temperatura.
 
 **Fica para depois:** remoção de suportes com inpainting, cenários por IA, roteiro
-com LLM, scheduler sched_ext.
+com LLM, escalonador sched_ext próprio (scx_studio).
 
 **Fora do escopo:** IA em Ring 0, módulo de kernel próprio / eBPF no AMDGPU,
 geração de vídeo por IA, interpolação de quadros (destrói o visual stop motion),
@@ -101,5 +101,5 @@ geração de vídeo por IA, interpolação de quadros (destrói o visual stop mo
 4. ✅ Timeline sobre MLT: cenas, vídeos, fotos, títulos, áudio, dissolver, dividir/aparar, render VAAPI/x264 e exportação .mlt para Shotcut/Kdenlive
 5. ✅ Dope sheet com trilha de áudio, sincronia labial (Rhubarb) e remoção de flicker
 6. ✅ IA Local: limpar suportes (placa limpa/preenchimento), chroma key, upscale Real-ESRGAN (Vulkan); falta remoção de fundo por IA e cenários gerados
-7. Orquestrador de modos + perfis de kernel (cgroups/AMDGPU → sched_ext)
+7. ✅ Modos do sistema: helper root via polkit (perfis AMDGPU COMPUTE/VIDEO, governor, prioridades, sched_ext opcional) com troca automática pelo app
 8. Imagem ISO do IA Stop-Motion Studio OS com o app como sessão principal

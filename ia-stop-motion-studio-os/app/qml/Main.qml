@@ -32,6 +32,10 @@ ApplicationWindow {
     }
 
     property string currentPage: "inicio"
+
+    // Performance mode follows what the user is doing (see SystemModes).
+    readonly property var modeContext: [currentPage, exporter.busy || timelineRenderer.busy, frameTools.busy]
+    onModeContextChanged: systemModes.updateContext(currentPage, exporter.busy || timelineRenderer.busy, frameTools.busy)
     property bool autoPlay: false
 
     function navigate(page) {

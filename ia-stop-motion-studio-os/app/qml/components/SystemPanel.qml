@@ -12,7 +12,7 @@ ColumnLayout {
 
     Rectangle {
         Layout.fillWidth: true
-        Layout.preferredHeight: 262
+        Layout.preferredHeight: 290
         radius: Theme.radius
         color: Theme.panel
         border.color: "#1FFFFFFF"
@@ -43,6 +43,13 @@ ColumnLayout {
                       ? "VRAM " + (systemMonitor.vramUsedMiB / 1024).toFixed(1) + " / " + (systemMonitor.vramTotalMiB / 1024).toFixed(1)
                         + " GB   ·   " + Math.round(systemMonitor.gpuTemp) + " °C"
                       : "GPU AMD não detectada"
+                color: Theme.textDim; font.pixelSize: 13
+            }
+            Text {
+                Layout.fillWidth: true
+                elide: Text.ElideRight
+                text: "Modo " + systemModes.modeLabel + (systemModes.automatic ? " (automático)" : "")
+                      + (systemModes.available ? "" : " · ajustes do kernel não instalados")
                 color: Theme.textDim; font.pixelSize: 13
             }
             Rectangle { Layout.fillWidth: true; height: 1; color: "#1FFFFFFF" }

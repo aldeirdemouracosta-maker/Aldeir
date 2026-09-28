@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>IA Stop-Motion Studio OS</vendor>
+  <action id="org.iasms.modo">
+    <description>Trocar o modo de desempenho do IA Stop-Motion Studio OS</description>
+    <message>O IA Stop-Motion Studio OS quer ajustar CPU e GPU para o modo de trabalho atual</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <!-- Usuário sentado na máquina troca o modo sem senha. -->
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/local/lib/ia-stop-motion/ia-sms-modo</annotate>
+  </action>
+</policyconfig>

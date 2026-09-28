@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(ia-stop-motion-studio-os VERSION 0.4.0 LANGUAGES CXX)
+project(ia-stop-motion-studio-os VERSION 0.5.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -18,6 +18,7 @@ add_library(studio_core STATIC
     src/imagetools.h src/imagetools.cpp
     src/frametools.h src/frametools.cpp
     src/dslrcamera.h src/dslrcamera.cpp
+    src/systemmodes.h src/systemmodes.cpp
     src/scene.h src/scene.cpp
     src/timeline.h src/timeline.cpp
     src/timelinerenderer.h src/timelinerenderer.cpp
@@ -76,6 +77,10 @@ qt_add_executable(tst_dslr tests/tst_dslr.cpp)
 target_link_libraries(tst_dslr PRIVATE studio_core Qt6::Test)
 target_compile_definitions(tst_dslr PRIVATE MOCK_GPHOTO2="${CMAKE_CURRENT_SOURCE_DIR}/tests/mock-gphoto2.sh")
 add_test(NAME tst_dslr COMMAND tst_dslr)
-set_tests_properties(tst_project tst_timeline tst_audio tst_imagetools tst_dslr PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+qt_add_executable(tst_modes tests/tst_modes.cpp)
+target_link_libraries(tst_modes PRIVATE studio_core Qt6::Test)
+add_test(NAME tst_modes COMMAND tst_modes)
+add_test(NAME ia_sms_modo COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../system/test-ia-sms-modo.sh)
+set_tests_properties(tst_project tst_timeline tst_audio tst_imagetools tst_dslr tst_modes PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 install(TARGETS ia-stop-motion-studio RUNTIME DESTINATION bin)
