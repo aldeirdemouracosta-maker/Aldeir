@@ -170,6 +170,29 @@ Projetos ficam em `~/IA-StopMotion/Projetos/<nome>/` (`project.json`, `frames/`,
 
 Captura de tela sem monitor: `./build/ia-stop-motion-studio --screenshot tela.png captura`
 
+## ISO do IA Stop-Motion Studio OS
+
+`iso/construir-iso.sh` gera uma ISO inicializável (BIOS e UEFI) baseada no
+Ubuntu 24.04 com kernel HWE:
+
+- dá boot direto no estúdio em tela cheia (compositor Wayland `cage`, usuário
+  `estudio` com login automático), em português, teclado ABNT2 e fuso de Brasília
+- RADV/Vulkan, firmware AMDGPU (RX 580), PipeWire, gPhoto2, FFmpeg, MLT
+- modos do sistema instalados; `scx_studio` ativo quando o kernel tem sched_ext
+- ferramentas embutidas por escolha (`FERRAMENTAS="rhubarb realesrgan ia voz cenarios scx"`)
+- menu de boot: normal, **persistência** (salva projetos no pendrive — crie uma
+  partição `casper-rw`), modo seguro de vídeo e diagnóstico por console serial
+
+```bash
+sudo apt install debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin \
+  mtools dosfstools clang libelf-dev zlib1g-dev git
+sudo ./iso/construir-iso.sh                 # → iso/saida/ia-stop-motion-studio-os-<versão>-amd64.iso
+sudo dd if=iso/saida/*.iso of=/dev/sdX bs=4M status=progress   # grava no pendrive
+```
+
+Ao fechar o estúdio, a sessão volta ao terminal; `ia-sms-sessao` abre de novo.
+
 ## Próximas etapas
 
-1. ISO do IA Stop-Motion Studio OS
+1. Instalador para disco (hoje a ISO roda live, com persistência opcional)
+2. Roteiro com LLM local (llama.cpp): texto → lista de cenas e planos

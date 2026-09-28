@@ -1,0 +1,12 @@
+#!/bin/sh
+# Sessão do IA Stop-Motion Studio OS: o estúdio em tela cheia no compositor
+# Wayland "cage". Ao fechar o estúdio, volta ao terminal (tty1).
+export QT_QPA_PLATFORM=wayland
+export QT_QUICK_CONTROLS_STYLE=Basic
+export QT_WAYLAND_DISABLE_WINDOWDECORATION=1   # o estúdio ocupa a tela toda
+export IA_SMS_TELA_CHEIA=1
+export XDG_SESSION_TYPE=wayland
+# Vulkan pelo RADV (RX 580) para Real-ESRGAN, whisper.cpp e stable-diffusion.cpp.
+export AMD_VULKAN_ICD=RADV
+export RADV_PERFTEST=nogttspill
+exec cage -s -- /usr/local/bin/ia-stop-motion-studio

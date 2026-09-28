@@ -6,6 +6,8 @@ import StopMotionStudio
 Item {
     id: home
     signal navigate(string page)
+    // Scales the hero (logo + title) down on narrower screens.
+    readonly property real k: Math.max(0.7, Math.min(1, (width - 350) / 780))
 
     RowLayout {
         anchors.fill: parent
@@ -21,30 +23,30 @@ Item {
 
                 RowLayout {
                     spacing: 24
-                    Clapperboard { Layout.preferredWidth: 200; Layout.preferredHeight: 230 }
+                    Clapperboard { Layout.preferredWidth: 200 * home.k; Layout.preferredHeight: 230 * home.k }
                     ColumnLayout {
                         spacing: -8
-                        Text { text: "IA"; color: Theme.cream; font.pixelSize: 78; font.weight: Font.Black; style: Text.Raised; styleColor: "#6B5A45" }
-                        Text { text: "STOP-MOTION"; color: Theme.cream; font.pixelSize: 64; font.weight: Font.Black; style: Text.Raised; styleColor: "#6B5A45" }
+                        Text { text: "IA"; color: Theme.cream; font.pixelSize: 78 * home.k; font.weight: Font.Black; style: Text.Raised; styleColor: "#6B5A45" }
+                        Text { text: "STOP-MOTION"; color: Theme.cream; font.pixelSize: 64 * home.k; font.weight: Font.Black; style: Text.Raised; styleColor: "#6B5A45" }
                         RowLayout {
                             spacing: 14
-                            Text { text: "STUDIO"; color: Theme.felt; font.pixelSize: 64; font.weight: Font.Black; style: Text.Raised; styleColor: "#123A70" }
+                            Text { text: "STUDIO"; color: Theme.felt; font.pixelSize: 64 * home.k; font.weight: Font.Black; style: Text.Raised; styleColor: "#123A70" }
                             Rectangle {
                                 Layout.alignment: Qt.AlignVCenter
-                                width: 64; height: 44; radius: 10; color: Theme.felt
+                                Layout.preferredWidth: 64 * home.k; Layout.preferredHeight: 44 * home.k; radius: 10; color: Theme.felt
                                 border.color: "#123A70"; border.width: 2
-                                Text { anchors.centerIn: parent; text: "OS"; color: "white"; font.pixelSize: 26; font.weight: Font.Black }
+                                Text { anchors.centerIn: parent; text: "OS"; color: "white"; font.pixelSize: 26 * home.k; font.weight: Font.Black }
                             }
                         }
                     }
                 }
                 Text {
                     text: "C A P T U R E   •   A N I M A T E   •   E D I T   •   R E N D E R"
-                    color: Theme.text; font.pixelSize: 16; font.weight: Font.DemiBold
+                    color: Theme.text; font.pixelSize: 16 * home.k; font.weight: Font.DemiBold
                 }
                 Column {
                     spacing: 6
-                    Text { text: "Sua criatividade quadro a quadro."; color: Theme.text; font.pixelSize: 30; font.italic: true; font.family: "serif" }
+                    Text { text: "Sua criatividade quadro a quadro."; color: Theme.text; font.pixelSize: 30 * home.k; font.italic: true; font.family: "serif" }
                     Rectangle { width: 240; height: 3; radius: 2; color: Theme.accent }
                 }
 

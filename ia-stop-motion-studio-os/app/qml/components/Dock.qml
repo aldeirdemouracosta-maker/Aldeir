@@ -6,10 +6,14 @@ import StopMotionStudio
 Rectangle {
     id: dock
     property string currentPage
+    property bool compact: false
     signal navigate(string page)
 
+    readonly property int entryWidth: compact ? 64 : 82
+    readonly property int tileSize: compact ? 42 : 52
+
     implicitWidth: row.implicitWidth + 36
-    implicitHeight: 104
+    implicitHeight: compact ? 84 : 104
     radius: 18
     color: "#D9121A2A"
     border.color: "#2EFFFFFF"
@@ -32,7 +36,7 @@ Rectangle {
     RowLayout {
         id: row
         anchors.centerIn: parent
-        spacing: 12
+        spacing: dock.compact ? 6 : 12
         Repeater {
             model: dock.items
             delegate: Loader {
@@ -44,16 +48,16 @@ Rectangle {
 
     Component {
         id: sep
-        Rectangle { width: 1; height: 64; color: "#33FFFFFF" }
+        Rectangle { width: 1; height: dock.tileSize + 12; color: "#33FFFFFF" }
     }
     Component {
         id: entry
         Item {
-            width: 82; height: 88
+            width: dock.entryWidth; height: dock.compact ? 70 : 88
             readonly property bool active: dock.currentPage === item.page
             Rectangle {
                 id: tile
-                width: 52; height: 52; radius: 12
+                width: dock.tileSize; height: dock.tileSize; radius: 12
                 anchors.horizontalCenter: parent.horizontalCenter
                 y: area.containsMouse ? 0 : 4
                 Behavior on y { NumberAnimation { duration: 120 } }
@@ -62,16 +66,16 @@ Rectangle {
                     GradientStop { position: 1; color: item.color }
                 }
                 border.color: parent.active ? "white" : "#33FFFFFF"
-                Image { anchors.centerIn: parent; source: Theme.icon(item.icon); width: 30; height: 30; sourceSize: Qt.size(60, 60) }
+                Image { anchors.centerIn: parent; source: Theme.icon(item.icon); width: dock.tileSize * 0.58; height: width; sourceSize: Qt.size(60, 60) }
             }
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter
-                y: 62
-                text: item.label; color: Theme.text; font.pixelSize: 13
+                y: dock.tileSize + 10
+                text: item.label; color: Theme.text; font.pixelSize: dock.compact ? 11 : 13
             }
             Rectangle {
                 visible: parent.active
-                width: 70; height: 3; radius: 2; color: Theme.accent
+                width: dock.entryWidth - 12; height: 3; radius: 2; color: Theme.accent
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.bottom: parent.bottom
             }

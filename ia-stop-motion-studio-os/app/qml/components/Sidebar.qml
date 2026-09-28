@@ -5,7 +5,10 @@ import StopMotionStudio
 Rectangle {
     id: side
     property string currentPage
+    property bool compact: false
     signal navigate(string page)
+    // Item height shrinks with the available height so all 12 entries fit.
+    readonly property real itemHeight: Math.max(30, Math.min(46, (height - 40) / 13))
 
     width: Theme.sidebarWidth
     radius: Theme.radius
@@ -33,15 +36,15 @@ Rectangle {
         property string iconName
         readonly property bool active: side.currentPage === page
         Layout.fillWidth: true
-        Layout.preferredHeight: 46
+        Layout.preferredHeight: side.itemHeight
         radius: 8
         color: active ? "#2E6FD0" : mouse.containsMouse ? "#18FFFFFF" : "transparent"
         Rectangle { visible: nav.active; width: 3; height: parent.height; anchors.right: parent.right; color: "#7FB6FF"; radius: 2 }
         Row {
             anchors.verticalCenter: parent.verticalCenter
             x: 16; spacing: 16
-            Image { source: Theme.icon(nav.iconName); width: 24; height: 24; sourceSize: Qt.size(48, 48) }
-            Text { text: nav.label; color: Theme.text; font.pixelSize: 15; anchors.verticalCenter: parent.verticalCenter }
+            Image { source: Theme.icon(nav.iconName); width: side.compact ? 20 : 24; height: width; sourceSize: Qt.size(48, 48); anchors.verticalCenter: parent.verticalCenter }
+            Text { text: nav.label; color: Theme.text; font.pixelSize: side.compact ? 14 : 15; anchors.verticalCenter: parent.verticalCenter }
         }
         MouseArea { id: mouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: side.navigate(nav.page) }
     }
@@ -49,8 +52,8 @@ Rectangle {
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 8
-        anchors.topMargin: 18
-        spacing: 7
+        anchors.topMargin: side.compact ? 10 : 18
+        spacing: side.compact ? 3 : 7
         Repeater {
             model: side.items
             NavItem { page: modelData.page; label: modelData.label; iconName: modelData.icon }

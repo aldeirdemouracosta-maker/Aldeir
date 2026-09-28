@@ -1,0 +1,14 @@
+[Unit]
+Description=Diagnóstico do IA Stop-Motion Studio OS (boot com ia-sms.diag)
+ConditionKernelCommandLine=ia-sms.diag
+After=multi-user.target scx-studio.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/sleep 5
+ExecStart=/usr/local/bin/ia-sms-diagnostico
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target

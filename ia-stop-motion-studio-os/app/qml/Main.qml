@@ -7,8 +7,10 @@ ApplicationWindow {
     id: window
     width: 1672
     height: 941
-    minimumWidth: 1280
-    minimumHeight: 760
+    minimumWidth: 1024
+    minimumHeight: 700
+    // Smaller screens (e.g. 1280×800 or 1366×768) get a compact sidebar and dock.
+    readonly property bool compact: width < 1500 || height < 880
     visible: true
     title: "IA Stop-Motion Studio OS"
     color: Theme.bg
@@ -79,7 +81,8 @@ ApplicationWindow {
     Sidebar {
         id: sidebar
         x: 10; y: 34
-        height: parent.height - 34 - (window.currentPage === "inicio" ? 150 : 140)
+        height: parent.height - 34 - dock.height - 36
+        compact: window.compact
         currentPage: window.currentPage
         onNavigate: (page) => window.navigate(page)
     }
@@ -130,6 +133,7 @@ ApplicationWindow {
         anchors.horizontalCenterOffset: Theme.sidebarWidth / 2
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 12
+        compact: window.compact
         currentPage: window.currentPage
         onNavigate: (page) => window.navigate(page)
     }
@@ -137,7 +141,7 @@ ApplicationWindow {
     Column {
         anchors.left: parent.left; anchors.leftMargin: 22
         anchors.bottom: parent.bottom; anchors.bottomMargin: 26
-        visible: window.width - dock.width > 2 * 260
+        visible: window.width - dock.width > 2 * 260 && !window.compact
         Text { text: "IA Stop-Motion Studio OS v" + appVersion; color: Theme.textDim; font.pixelSize: 13 }
         Text { text: "Built on Ubuntu 24.04 LTS"; color: Theme.textDim; font.pixelSize: 13 }
     }

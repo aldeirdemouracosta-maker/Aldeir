@@ -1,0 +1,31 @@
+#!/bin/sh
+# Relatório de diagnóstico do IA Stop-Motion Studio OS (boot com "ia-sms.diag").
+echo "===== IA Stop-Motion Studio OS — diagnóstico ====="
+cat /etc/ia-stop-motion-release 2>/dev/null
+echo "kernel: $(uname -r)"
+if [ -d /sys/kernel/sched_ext ]; then
+    echo "sched_ext: $(cat /sys/kernel/sched_ext/state 2>/dev/null) ops=$(cat /sys/kernel/sched_ext/root/ops 2>/dev/null)"
+else
+    echo "sched_ext: ausente"
+fi
+echo "scx-studio.service: $(systemctl is-active scx-studio.service 2>/dev/null)"
+[ -e /sys/fs/bpf/scx_studio/cfg ] && echo "mapas scx_studio: fixados"
+for d in /sys/class/drm/card*/device; do
+    [ -e "$d/vendor" ] && echo "GPU: $(cat "$d/vendor") $(cat "$d/device") driver=$(basename "$(readlink "$d/driver")")"
+done
+echo "Vulkan: $(vulkaninfo --summary 2>/dev/null | sed -n 's/.*deviceName *= *//p' | tr '\n' ';')"
+missing=$(ldd /usr/local/bin/ia-stop-motion-studio 2>&1 | grep -c "not found")
+echo "bibliotecas do estúdio faltando: $missing"
+ldd /usr/local/bin/ia-stop-motion-studio 2>&1 | grep "not found"
+for q in QtQuick/Controls QtQuick/Dialogs QtQuick/Layouts QtMultimedia; do
+    [ -d "/usr/lib/x86_64-linux-gnu/qt6/qml/$q" ] && echo "QML $q: ok" || echo "QML $q: FALTANDO"
+done
+# Sobe o estúdio sem tela por alguns segundos para validar o QML.
+if QT_QPA_PLATFORM=offscreen IA_SMS_HOME=/tmp/ia-sms-diag timeout 60 \
+    /usr/local/bin/ia-stop-motion-studio --screenshot /tmp/ia-sms-diag.png inicio >/tmp/ia-sms-diag.log 2>&1 \
+    && [ -s /tmp/ia-sms-diag.png ]; then
+    echo "estúdio: abre e desenha a tela inicial (ok)"
+else
+    echo "estúdio: FALHOU ao abrir"; tail -5 /tmp/ia-sms-diag.log
+fi
+echo "===== fim do diagnóstico ====="

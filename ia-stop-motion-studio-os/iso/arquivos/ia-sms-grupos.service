@@ -1,0 +1,12 @@
+[Unit]
+Description=Permissões de câmera, GPU e áudio para o usuário do estúdio
+# casper cria o usuário live no boot; isto roda depois e antes do login.
+After=casper.service systemd-user-sessions.service
+Before=getty@tty1.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'id estudio >/dev/null 2>&1 && usermod -aG video,render,audio,input,plugdev estudio || true'
+
+[Install]
+WantedBy=multi-user.target

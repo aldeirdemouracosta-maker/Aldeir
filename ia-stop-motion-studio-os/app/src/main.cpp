@@ -71,7 +71,22 @@ int main(int argc, char *argv[])
 
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app,
                      [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);
+    // Qt 6.4 places the app's QML module at qrc:/StopMotionStudio, which is
+    // not a default import path; without this the installed binary only works
+    // when the build directory (with its StopMotionStudio/qmldir) sits next to it.
+    engine.addImportPath(QStringLiteral("qrc:/"));
     engine.load(QUrl(QStringLiteral("qrc:/StopMotionStudio/qml/Main.qml")));
+
+    if (!engine.rootObjects().isEmpty()) {
+        auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
+        // IA_SMS_TAMANHO=WxH: window size for screenshots of small screens.
+        const QStringList size = qEnvironmentVariable("IA_SMS_TAMANHO").split(QLatin1Char('x'));
+        if (window && size.size() == 2)
+            window->resize(size.at(0).toInt(), size.at(1).toInt());
+        // The OS session runs the studio full screen.
+        if (window && qEnvironmentVariableIntValue("IA_SMS_TELA_CHEIA"))
+            window->showFullScreen();
+    }
 
     // --screenshot <file.png> [page]: render one page and exit (docs/CI).
     const QStringList args = app.arguments();

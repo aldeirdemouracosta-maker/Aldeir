@@ -1,0 +1,7 @@
+# IA Stop-Motion Studio OS: no tty1, abre o estúdio automaticamente.
+if [ -z "$WAYLAND_DISPLAY" ] && [ "$(tty)" = /dev/tty1 ] && [ ! -e "$HOME/.sem-estudio" ]; then
+    ia-sms-sessao
+    echo
+    echo "Estúdio fechado. Digite 'ia-sms-sessao' para abrir de novo."
+fi
+[ -f ~/.bashrc ] && . ~/.bashrc

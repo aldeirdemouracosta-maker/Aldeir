@@ -101,4 +101,4 @@ geração de vídeo por IA, interpolação de quadros (destrói o visual stop mo
 5. ✅ Dope sheet com trilha de áudio, sincronia labial (Rhubarb) e remoção de flicker
 6. ✅ IA Local: limpar suportes (placa limpa, preenchimento, LaMa), fundo por IA (IS-Net) e chroma key, upscale Real-ESRGAN (Vulkan); captura DSLR via gPhoto2
 7. ✅ Modos do sistema: helper root via polkit (perfis AMDGPU COMPUTE/VIDEO, governor, prioridades) com troca automática pelo app, e escalonador sched_ext próprio `scx_studio` (classes UI/worker por modo)
-8. Imagem ISO do IA Stop-Motion Studio OS com o app como sessão principal
+8. ✅ Imagem ISO do IA Stop-Motion Studio OS (Ubuntu 24.04 + HWE com sched_ext) com o app como sessão principal; testada em QEMU com scx_studio ativo
