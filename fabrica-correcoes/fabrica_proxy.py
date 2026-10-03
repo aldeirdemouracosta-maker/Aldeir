@@ -45,8 +45,13 @@ CLAIM_RE = re.compile(
     r"(✓|✅|\bcriad[oa]s?\b|\bcriei\b|\bescrit[oa]s?\b|\bsalv[oa]s?\b|\balterad[oa]s?\b|"
     r"\batualizad[oa]s?\b|\bmodificad[oa]s?\b|\brodad[oa]s?\b|\bexecutad[oa]s?\b|\bpassaram\b|"
     r"\bcreated\b|\bwrote\b|\bwritten\b|\bsaved\b|\bupdated\b)", re.I)
-FILENAME_RE = re.compile(r"[\w./-]+\.[A-Za-z0-9]{1,6}\b")
+FILENAME_RE = re.compile(r"[\w./-]+\.[A-Za-z][A-Za-z0-9]{0,5}\b")
 THINK_RE = re.compile(r"<think>.*?</think>", re.S)
+ACTION_RE = re.compile(
+    r"\b(cri[ae]r?|escrev[ae]r?|alter[ae]r?|modifi(que|car)|corrij[ae]|corrigir|rod[ae]r?|execut[ae]r?|"
+    r"implement[ae]r?|adicion[ae]r?|ger[ae]r?|fa[çc]a|fazer|atualiz[ae]r?|apag[ae]r?|remov[ae]r?|"
+    r"instal[ae]r?|teste|testar|create|write|edit|fix|run|add|implement|update|delete|make|build)\b", re.I)
+MAX_TEXT_AROUND_CALL = 300   # texto além do JSON para ainda considerar "chamada em texto"
 
 
 def log(msg):
@@ -74,7 +79,7 @@ def extract_text_tool_calls(content, names):
         return []
     text = THINK_RE.sub("", content)
     decoder = json.JSONDecoder()
-    calls, pos = [], 0
+    calls, pos, used = [], 0, 0
     while True:
         start = text.find("{", pos)
         if start < 0:
@@ -85,6 +90,7 @@ def extract_text_tool_calls(content, names):
             pos = start + 1
             continue
         pos = end
+        before = len(calls)
         objs = obj if isinstance(obj, list) else [obj]
         for o in objs:
             if not isinstance(o, dict):
@@ -101,21 +107,37 @@ def extract_text_tool_calls(content, names):
                     "type": "function",
                     "function": {"name": name, "arguments": args},
                 })
+        if len(calls) > before:
+            used += end - start
+    # texto explicativo longo com um exemplo de JSON no meio não é uma chamada
+    leftover = len(re.sub(r"```\w*|</?tool_call>|\s", "", text)) - used
+    if calls and leftover > MAX_TEXT_AROUND_CALL:
+        log("correção 1 ignorada: JSON de ferramenta no meio de %d car. de texto" % leftover)
+        return []
     return calls
 
 
+def last_user_text(messages):
+    for m in reversed(messages):
+        if m.get("role") == "user" and isinstance(m.get("content"), str):
+            return m["content"]
+    return ""
+
+
 def turn_history(messages):
-    """Ferramentas chamadas desde a última mensagem real do usuário."""
+    """Ferramentas chamadas desde a última mensagem real do usuário: (nome, args, resultado)."""
     last_user = 0
     for i, m in enumerate(messages):
         if m.get("role") == "user":
             last_user = i
+    results = {m.get("tool_call_id"): str(m.get("content"))
+               for m in messages[last_user:] if m.get("role") == "tool"}
     calls = []
     for m in messages[last_user:]:
         if m.get("role") == "assistant":
             for tc in m.get("tool_calls") or []:
                 fn = tc.get("function") or {}
-                calls.append((fn.get("name"), fn.get("arguments")))
+                calls.append((fn.get("name"), fn.get("arguments"), results.get(tc.get("id"))))
     return calls
 
 
@@ -129,7 +151,7 @@ def signature(name, args):
 
 
 def claims_work(content):
-    for line in (content or "").splitlines():
+    for line in THINK_RE.sub("", content or "").splitlines():
         if CLAIM_RE.search(line) and FILENAME_RE.search(line):
             return True
     return False
@@ -160,7 +182,12 @@ def call_upstream(body):
     first = None
     resp = {"id": None, "created": None, "model": body.get("model"), "usage": None}
     content, reasoning, calls, finish = [], [], {}, None
-    with urllib.request.urlopen(req, timeout=CONFIG["timeout"]) as r:
+    try:
+        r = urllib.request.urlopen(req, timeout=CONFIG["timeout"])
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", "replace")[:300]
+        raise RuntimeError("HTTP %d do servidor: %s" % (e.code, detail)) from None
+    with r:
         for raw in r:
             line = raw.decode("utf-8", "replace").strip()
             if not line.startswith("data:"):
@@ -168,7 +195,14 @@ def call_upstream(body):
             data = line[5:].strip()
             if data == "[DONE]":
                 break
-            chunk = json.loads(data)
+            try:
+                chunk = json.loads(data)
+            except ValueError:
+                log("pedaço inválido ignorado: %s" % data[:120])
+                continue
+            if chunk.get("error"):
+                err = chunk["error"]
+                raise RuntimeError(err.get("message") if isinstance(err, dict) else str(err))
             if first is None:
                 first = time.time()
                 log("Ollama começou a responder após %.0fs" % (first - t0))
@@ -180,8 +214,8 @@ def call_upstream(body):
                 d = ch.get("delta") or {}
                 if d.get("content"):
                     content.append(d["content"])
-                if d.get("reasoning"):
-                    reasoning.append(d["reasoning"])
+                if d.get("reasoning") or d.get("reasoning_content"):
+                    reasoning.append(d.get("reasoning") or d.get("reasoning_content"))
                 for tc in d.get("tool_calls") or []:
                     i = tc.get("index", len(calls))
                     cur = calls.setdefault(i, {"id": None, "type": "function",
@@ -197,7 +231,10 @@ def call_upstream(body):
                     % (last_log - t0, len("".join(reasoning)), len("".join(content)), len(calls)))
     if first is None:
         raise RuntimeError("o Ollama encerrou sem enviar resposta (após %.0fs)" % (time.time() - t0))
-    msg = {"role": "assistant", "content": "".join(content)}
+    text = "".join(content)
+    for t in THINK_RE.findall(text):          # servidores que deixam <think> no texto
+        reasoning.append(t[7:-8])
+    msg = {"role": "assistant", "content": THINK_RE.sub("", text).strip()}
     if reasoning:
         msg["reasoning"] = "".join(reasoning)
     if calls:
@@ -237,12 +274,14 @@ def fix_response(body, resp):
     choice = resp["choices"][0]
     msg = choice["message"]
 
-    history = turn_history(body.get("messages") or [])
+    messages = body.get("messages") or []
+    history = turn_history(messages)
     write_names = [n for n in names if WRITE_TOOL_RE.search(n)]
+    asked_action = bool(ACTION_RE.search(last_user_text(messages)))
 
-    # 2. sucesso falso
-    if not msg.get("tool_calls") and write_names:
-        did_write = any(n in write_names for n, _ in history)
+    # 2. sucesso falso (só quando o usuário pediu para fazer algo)
+    if not msg.get("tool_calls") and write_names and asked_action:
+        did_write = any(n in write_names for n, _, _ in history)
         tries = 0
         while not did_write and claims_work(msg.get("content")) and tries < CONFIG["retries"]:
             tries += 1
@@ -252,8 +291,9 @@ def fix_response(body, resp):
                 {"role": "assistant", "content": msg.get("content") or ""},
                 {"role": "user", "content":
                     "ATENÇÃO: você afirmou ter criado/alterado/rodado algo, mas NENHUMA ferramenta "
-                    "foi chamada e NADA mudou no disco. Não descreva o trabalho: chame agora as "
-                    "ferramentas (%s) para fazer de verdade." % ", ".join(write_names)},
+                    "foi chamada e NADA mudou no disco. Se o pedido exige criar, alterar ou rodar "
+                    "algo, chame agora as ferramentas (%s) para fazer de verdade. Se não exige, "
+                    "responda sem afirmar que alterou arquivos." % ", ".join(write_names)},
             ]
             new = convert_text_calls(names, call_upstream(retry))
             if not new.get("choices"):
@@ -263,7 +303,7 @@ def fix_response(body, resp):
             if msg.get("tool_calls"):
                 log("correção 2: a IA passou a usar ferramentas")
                 break
-        if not msg.get("tool_calls") and not did_write and claims_work(msg.get("content")):
+        if not msg.get("tool_calls") and not did_write and tries and claims_work(msg.get("content")):
             log("correção 2: IA insistiu na mentira; avisando o usuário")
             msg["content"] = ("⚠️ [proxy] A IA disse que concluiu, mas NENHUMA ferramenta de escrita "
                               "ou comando foi usado: nada foi alterado no disco.\n\n"
@@ -271,18 +311,19 @@ def fix_response(body, resp):
 
     # 3. proteção contra loop
     if msg.get("tool_calls"):
-        seen = {}
-        for n, a in history:
-            s = signature(n, a)
-            seen[s] = seen.get(s, 0) + 1
+        outcomes = {}
+        for n, a, res in history:
+            outcomes.setdefault(signature(n, a), []).append(res)
         reason = None
         if len(history) + len(msg["tool_calls"]) > CONFIG["max_steps"]:
             reason = "mais de %d ações neste pedido" % CONFIG["max_steps"]
         for tc in msg["tool_calls"]:
             fn = tc.get("function") or {}
-            if seen.get(signature(fn.get("name"), fn.get("arguments")), 0) >= CONFIG["max_repeat"]:
-                reason = "a ação '%s' com os mesmos argumentos já foi repetida %d vezes" % (
-                    fn.get("name"), CONFIG["max_repeat"])
+            past = outcomes.get(signature(fn.get("name"), fn.get("arguments")), [])
+            # repetir um teste depois de mudar o código é normal; repetir com o mesmo resultado é loop
+            if len(past) >= CONFIG["max_repeat"] and len(set(past)) == 1:
+                reason = ("a ação '%s' já foi feita %d vezes com os mesmos argumentos e o mesmo "
+                          "resultado" % (fn.get("name"), len(past)))
         if reason:
             log("correção 3: loop detectado (%s); interrompendo" % reason)
             msg.pop("tool_calls", None)
@@ -357,11 +398,22 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self._passthrough()
 
+    do_PUT = do_DELETE = do_GET
+
     def do_POST(self):
         if not self.path.rstrip("/").endswith("/chat/completions"):
             return self._passthrough()
         length = int(self.headers.get("Content-Length") or 0)
-        body = json.loads(self.rfile.read(length) or b"{}")
+        try:
+            body = json.loads(self.rfile.read(length) or b"{}")
+        except ValueError:
+            out = b'{"error": {"message": "proxy: corpo JSON invalido"}}'
+            self.send_response(400)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(out)))
+            self.end_headers()
+            self.wfile.write(out)
+            return
         stream = bool(body.get("stream"))
         include_usage = bool((body.get("stream_options") or {}).get("include_usage"))
         log("pedido: modelo=%s mensagens=%d ferramentas=%d stream=%s" % (

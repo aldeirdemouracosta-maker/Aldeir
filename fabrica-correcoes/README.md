@@ -13,7 +13,7 @@ Fábrica ──► fabrica_proxy.py (porta 11435) ──► Ollama (porta 11434)
 |---|---|---|
 | 1 | `qwen2.5-coder` manda a ferramenta como texto JSON e às vezes nada é executado | Converte o JSON do texto em `tool_call` de verdade |
 | 2 | A IA diz "✓ arquivo criado" sem ter chamado nenhuma ferramenta | Cobra a IA até 2 vezes; se ela insistir, mostra um aviso `⚠️ [proxy]` |
-| 3 | Loop `write_file → run_command → write_file…` | Para quando a mesma ação idêntica se repete 2 vezes ou passa de 30 ações num pedido |
+| 3 | Loop `write_file → run_command → write_file…` | Para quando a mesma ação, com o mesmo resultado, se repete 2 vezes, ou passa de 30 ações num pedido |
 | 4 | Termina com "0 tokens" e nenhuma mensagem | Mantém a conexão viva enquanto o modelo carrega e mostra o erro do Ollama na tela |
 
 Só usa a biblioteca padrão do Python 3.8+. Não precisa de `pip install`.
@@ -22,6 +22,13 @@ Só usa a biblioteca padrão do Python 3.8+. Não precisa de `pip install`.
 
 ```bash
 sudo bash instalar.sh
+```
+
+Para opções do serviço, passe variáveis antes do comando:
+
+```bash
+sudo PROXY_OPCOES="--sem-pensar" bash instalar.sh          # qwen3 sem raciocínio (sem GPU)
+sudo OLLAMA_URL=http://127.0.0.1:8080 bash instalar.sh     # usar llama.cpp com Vulkan
 ```
 
 Isso instala:
@@ -72,10 +79,24 @@ O terminal 1 mostra cada correção aplicada (`correção 1`, `correção 2`...)
 --sem-pensar             qwen3: desliga o raciocínio (/no_think); bem mais rápido sem GPU
 ```
 
+## Testes
+
+```bash
+python3 -m unittest -v test_fabrica_proxy
+```
+
+Usam um servidor falso que imita o Ollama; não precisam de modelo nem de GPU.
+
 ## Limitações
 
-- A correção 2 reconhece afirmações como "criado", "salvo", "rodado", "✓" junto de
-  um nome de arquivo. Uma resposta mentirosa escrita de outro jeito pode passar.
+- A correção 2 só age quando o pedido do usuário é de ação (crie, altere, rode...) e
+  a resposta afirma "criado", "salvo", "rodado", "✓" junto de um nome de arquivo.
+  Uma resposta mentirosa escrita de outro jeito pode passar.
+- A correção 1 ignora JSON de ferramenta no meio de um texto longo (mais de 300
+  caracteres), para não executar exemplos que aparecem numa explicação.
+- A proteção contra loop considera loop só a mesma ação, com os mesmos argumentos,
+  que já deu o mesmo resultado 2 vezes. Rodar os testes de novo depois de mudar o
+  código continua permitido.
 - Com o proxy, a resposta aparece de uma vez no fim, em vez de ir surgindo aos poucos.
 - Se a própria Fábrica tiver um tempo limite curto no modo sem streaming, o sinal
   de vida não ajuda; nesse caso o erro aparece no log do proxy.
