@@ -18,7 +18,32 @@ Fábrica ──► fabrica_proxy.py (porta 11435) ──► Ollama (porta 11434)
 
 Só usa a biblioteca padrão do Python 3.8+. Não precisa de `pip install`.
 
-## Como usar
+## Instalar no sistema (depois de aprovado)
+
+```bash
+sudo bash instalar.sh
+```
+
+Isso instala:
+
+- o programa em `/usr/local/lib/fabrica-correcoes/`;
+- o serviço `fabrica-proxy`, que inicia sozinho com o Linux (porta 11435);
+- o comando `fabrica-segura`, que é a Fábrica já usando o proxy e o `qwen3:8b`.
+
+```bash
+cd ~/meu-projeto
+fabrica-segura                                   # conversa
+fabrica-segura exec 'Crie ...' --auto            # não interativo
+FABRICA_MODELO=qwen2.5:7b fabrica-segura         # outro modelo
+journalctl -u fabrica-proxy -f                   # ver as correções ao vivo
+systemctl status fabrica-proxy                   # estado do serviço
+sudo bash /usr/local/lib/fabrica-correcoes/desinstalar.sh   # remover
+```
+
+O comando `fabrica` original continua igual. Com `--nuvem` ou `--claude`, o
+`fabrica-segura` não passa pelo proxy.
+
+## Usar sem instalar (para testar)
 
 Terminal 1, deixe o proxy rodando:
 
