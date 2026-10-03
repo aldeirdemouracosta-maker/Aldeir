@@ -69,6 +69,7 @@ O terminal 1 mostra cada correção aplicada (`correção 1`, `correção 2`...)
 --max-repeticoes 2       quantas vezes a mesma ação idêntica é permitida
 --max-etapas 30          máximo de ações por pedido
 --log ARQUIVO            grava o registro das correções
+--sem-pensar             qwen3: desliga o raciocínio (/no_think); bem mais rápido sem GPU
 ```
 
 ## Limitações

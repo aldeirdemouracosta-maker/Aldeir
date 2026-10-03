@@ -35,6 +35,7 @@ CONFIG = {
     "retries": 2,            # quantas vezes cobrar a IA que mentiu
     "keepalive": 10,         # segundos entre sinais de vida no streaming
     "log": None,
+    "no_think": False,    # qwen3: pede resposta sem a etapa de raciocínio
 }
 
 WRITE_TOOL_RE = re.compile(
@@ -134,9 +135,22 @@ def claims_work(content):
     return False
 
 
+def without_thinking(body):
+    """qwen3: acrescenta /no_think à última mensagem do usuário (bem mais rápido em CPU)."""
+    if not CONFIG["no_think"] or "qwen3" not in str(body.get("model", "")).lower():
+        return body
+    msgs = [dict(m) for m in body.get("messages") or []]
+    for m in reversed(msgs):
+        if m.get("role") == "user" and isinstance(m.get("content"), str):
+            if "/no_think" not in m["content"]:
+                m["content"] += "\n/no_think"
+            break
+    return dict(body, messages=msgs)
+
+
 def call_upstream(body):
     """Pede ao Ollama em streaming (para registrar o progresso) e monta a resposta completa."""
-    body = dict(body, stream=True, stream_options={"include_usage": True})
+    body = dict(without_thinking(body), stream=True, stream_options={"include_usage": True})
     req = urllib.request.Request(
         CONFIG["upstream"] + "/v1/chat/completions",
         data=json.dumps(body).encode(),
@@ -402,11 +416,15 @@ def main():
     p.add_argument("--max-repeticoes", type=int, default=CONFIG["max_repeat"])
     p.add_argument("--max-etapas", type=int, default=CONFIG["max_steps"])
     p.add_argument("--log", help="arquivo para gravar o registro das correções")
+    p.add_argument("--sem-pensar", action="store_true",
+                   help="qwen3: desliga a etapa de raciocínio (/no_think); bem mais rápido sem GPU")
     a = p.parse_args()
     CONFIG.update(upstream=a.ollama.rstrip("/"), max_repeat=a.max_repeticoes,
-                  max_steps=a.max_etapas, log=a.log)
+                  max_steps=a.max_etapas, log=a.log, no_think=a.sem_pensar)
     srv = ThreadingHTTPServer(("127.0.0.1", a.porta), Handler)
     log("proxy de correção ouvindo em http://127.0.0.1:%d/v1 -> %s" % (a.porta, CONFIG["upstream"]))
+    if CONFIG["no_think"]:
+        log("modo sem raciocínio ativo para modelos qwen3 (/no_think)")
     log("use: fabrica --url http://127.0.0.1:%d/v1 -m qwen3:8b" % a.porta)
     try:
         srv.serve_forever()
