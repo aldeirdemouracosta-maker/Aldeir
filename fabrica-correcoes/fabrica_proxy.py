@@ -56,7 +56,12 @@ MAX_TEXT_AROUND_CALL = 300   # texto além do JSON para ainda considerar "chamad
 
 def log(msg):
     line = time.strftime("%H:%M:%S ") + msg
-    print(line, file=sys.stderr, flush=True)
+    if sys.stderr is not None:            # pythonw (Windows, sem janela) não tem console
+        try:
+            print(line, file=sys.stderr, flush=True)
+        except UnicodeEncodeError:        # console do Windows sem UTF-8
+            enc = sys.stderr.encoding or "ascii"
+            print(line.encode(enc, "replace").decode(enc), file=sys.stderr, flush=True)
     if CONFIG["log"]:
         with open(CONFIG["log"], "a", encoding="utf-8") as f:
             f.write(line + "\n")

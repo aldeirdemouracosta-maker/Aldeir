@@ -18,7 +18,41 @@ Fábrica ──► fabrica_proxy.py (porta 11435) ──► Ollama (porta 11434)
 
 Só usa a biblioteca padrão do Python 3.8+. Não precisa de `pip install`.
 
-## Instalar no sistema (depois de aprovado)
+## Instalar no Windows 10/11
+
+Não precisa de administrador. Precisa do Python (python.org, marcando "Add python.exe to PATH").
+
+1. Ligue o servidor de IA: **LM Studio** (aba Developer, porta 1234; com a RX 580 use o
+   runtime Vulkan) ou **Ollama**.
+2. Dê **dois cliques em `instalar-windows.cmd`**.
+
+O instalador:
+
+- detecta sozinho o LM Studio (porta 1234) ou o Ollama (porta 11434) e o modelo qwen3 carregado;
+- copia o proxy para `%LOCALAPPDATA%\fabrica-correcoes`;
+- liga o proxy agora e cria um atalho na pasta Inicializar, para ele subir com o Windows;
+- cria o comando `fabrica-segura` (abra um terminal **novo** depois de instalar).
+
+Opções, pelo PowerShell:
+
+```powershell
+.\instalar-windows.ps1 -Servidor http://127.0.0.1:1234 -Modelo qwen/qwen3-8b -SemPensar
+```
+
+Uso:
+
+```powershell
+cd C:\caminho\do\projeto
+fabrica-segura
+fabrica-segura exec 'Crie calc.py com somar e dividir' --auto
+Get-Content $env:LOCALAPPDATA\fabrica-correcoes\proxy.log -Wait     # ver as correções
+```
+
+No Windows PowerShell 5.1, evite aspas duplas dentro do pedido; prefira aspas simples.
+
+Para remover: dois cliques em `desinstalar-windows.cmd`.
+
+## Instalar no Linux (sudo)
 
 ```bash
 sudo bash instalar.sh
