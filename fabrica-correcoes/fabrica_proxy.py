@@ -135,14 +135,66 @@ def claims_work(content):
 
 
 def call_upstream(body):
-    body = dict(body, stream=False)
-    body.pop("stream_options", None)
+    """Pede ao Ollama em streaming (para registrar o progresso) e monta a resposta completa."""
+    body = dict(body, stream=True, stream_options={"include_usage": True})
     req = urllib.request.Request(
         CONFIG["upstream"] + "/v1/chat/completions",
         data=json.dumps(body).encode(),
         headers={"Content-Type": "application/json"})
+    t0 = time.time()
+    last_log = t0
+    first = None
+    resp = {"id": None, "created": None, "model": body.get("model"), "usage": None}
+    content, reasoning, calls, finish = [], [], {}, None
     with urllib.request.urlopen(req, timeout=CONFIG["timeout"]) as r:
-        return json.loads(r.read())
+        for raw in r:
+            line = raw.decode("utf-8", "replace").strip()
+            if not line.startswith("data:"):
+                continue
+            data = line[5:].strip()
+            if data == "[DONE]":
+                break
+            chunk = json.loads(data)
+            if first is None:
+                first = time.time()
+                log("Ollama começou a responder após %.0fs" % (first - t0))
+            resp["id"] = resp["id"] or chunk.get("id")
+            resp["created"] = resp["created"] or chunk.get("created")
+            if chunk.get("usage"):
+                resp["usage"] = chunk["usage"]
+            for ch in chunk.get("choices") or []:
+                d = ch.get("delta") or {}
+                if d.get("content"):
+                    content.append(d["content"])
+                if d.get("reasoning"):
+                    reasoning.append(d["reasoning"])
+                for tc in d.get("tool_calls") or []:
+                    i = tc.get("index", len(calls))
+                    cur = calls.setdefault(i, {"id": None, "type": "function",
+                                               "function": {"name": "", "arguments": ""}})
+                    cur["id"] = cur["id"] or tc.get("id")
+                    fn = tc.get("function") or {}
+                    cur["function"]["name"] += fn.get("name") or ""
+                    cur["function"]["arguments"] += fn.get("arguments") or ""
+                finish = ch.get("finish_reason") or finish
+            if time.time() - last_log >= 15:
+                last_log = time.time()
+                log("  ... gerando há %.0fs: pensamento=%d car., texto=%d car., ferramentas=%d"
+                    % (last_log - t0, len("".join(reasoning)), len("".join(content)), len(calls)))
+    if first is None:
+        raise RuntimeError("o Ollama encerrou sem enviar resposta (após %.0fs)" % (time.time() - t0))
+    msg = {"role": "assistant", "content": "".join(content)}
+    if reasoning:
+        msg["reasoning"] = "".join(reasoning)
+    if calls:
+        msg["tool_calls"] = [calls[i] for i in sorted(calls)]
+    log("Ollama terminou em %.0fs: texto=%d car., ferramentas=%s"
+        % (time.time() - t0, len(msg["content"]),
+           ", ".join(c["function"]["name"] for c in msg.get("tool_calls", [])) or "nenhuma"))
+    resp.update(object="chat.completion", choices=[{
+        "index": 0, "message": msg,
+        "finish_reason": finish or ("tool_calls" if calls else "stop")}])
+    return resp
 
 
 def convert_text_calls(names, resp):
