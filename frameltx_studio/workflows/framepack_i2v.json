@@ -1,0 +1,309 @@
+{
+  "_about": {
+    "descricao": "FramePack image-to-video (início e fim opcionais). Requer ComfyUI-FramePackWrapper (kijai).",
+    "placeholders": [
+      "prompt",
+      "start_image",
+      "end_image (opcional)",
+      "width",
+      "height",
+      "steps",
+      "guidance",
+      "seed",
+      "total_seconds",
+      "gpu_memory_preservation",
+      "fps",
+      "filename_prefix",
+      "framepack_model",
+      "framepack_clip_l",
+      "framepack_llama",
+      "framepack_clip_vision",
+      "framepack_vae"
+    ]
+  },
+  "1": {
+    "class_type": "LoadFramePackModel",
+    "_meta": {
+      "title": "FramePack FP8"
+    },
+    "inputs": {
+      "model": "{{framepack_model}}",
+      "base_precision": "bf16",
+      "quantization": "fp8_e4m3fn",
+      "load_device": "offload_device",
+      "attention_mode": "sdpa"
+    }
+  },
+  "2": {
+    "class_type": "DualCLIPLoader",
+    "_meta": {
+      "title": "Text encoders HunyuanVideo"
+    },
+    "inputs": {
+      "clip_name1": "{{framepack_clip_l}}",
+      "clip_name2": "{{framepack_llama}}",
+      "type": "hunyuan_video",
+      "device": "default"
+    }
+  },
+  "3": {
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Prompt"
+    },
+    "inputs": {
+      "text": "{{prompt}}",
+      "clip": [
+        "2",
+        0
+      ]
+    }
+  },
+  "4": {
+    "class_type": "ConditioningZeroOut",
+    "_meta": {
+      "title": "Negativo (zerado, cfg=1)"
+    },
+    "inputs": {
+      "conditioning": [
+        "3",
+        0
+      ]
+    }
+  },
+  "5": {
+    "class_type": "CLIPVisionLoader",
+    "_meta": {
+      "title": "SigLIP"
+    },
+    "inputs": {
+      "clip_name": "{{framepack_clip_vision}}"
+    }
+  },
+  "6": {
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "VAE HunyuanVideo"
+    },
+    "inputs": {
+      "vae_name": "{{framepack_vae}}"
+    }
+  },
+  "10": {
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Imagem inicial"
+    },
+    "inputs": {
+      "image": "{{start_image}}"
+    }
+  },
+  "11": {
+    "class_type": "ImageScale",
+    "_meta": {
+      "title": "Redimensionar inicial"
+    },
+    "inputs": {
+      "image": [
+        "10",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": "{{width}}",
+      "height": "{{height}}",
+      "crop": "center"
+    }
+  },
+  "12": {
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "Latente inicial"
+    },
+    "inputs": {
+      "pixels": [
+        "11",
+        0
+      ],
+      "vae": [
+        "6",
+        0
+      ]
+    }
+  },
+  "13": {
+    "class_type": "CLIPVisionEncode",
+    "_meta": {
+      "title": "Embeds inicial"
+    },
+    "inputs": {
+      "clip_vision": [
+        "5",
+        0
+      ],
+      "image": [
+        "11",
+        0
+      ],
+      "crop": "center"
+    }
+  },
+  "20": {
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Imagem final (opcional)"
+    },
+    "inputs": {
+      "image": "{{end_image}}"
+    }
+  },
+  "21": {
+    "class_type": "ImageScale",
+    "_meta": {
+      "title": "Redimensionar final"
+    },
+    "inputs": {
+      "image": [
+        "20",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": "{{width}}",
+      "height": "{{height}}",
+      "crop": "center"
+    },
+    "_optional": true
+  },
+  "22": {
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "Latente final"
+    },
+    "inputs": {
+      "pixels": [
+        "21",
+        0
+      ],
+      "vae": [
+        "6",
+        0
+      ]
+    },
+    "_optional": true
+  },
+  "23": {
+    "class_type": "CLIPVisionEncode",
+    "_meta": {
+      "title": "Embeds final"
+    },
+    "inputs": {
+      "clip_vision": [
+        "5",
+        0
+      ],
+      "image": [
+        "21",
+        0
+      ],
+      "crop": "center"
+    },
+    "_optional": true
+  },
+  "30": {
+    "class_type": "FramePackSampler",
+    "_meta": {
+      "title": "FramePack Sampler"
+    },
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "3",
+        0
+      ],
+      "negative": [
+        "4",
+        0
+      ],
+      "start_latent": [
+        "12",
+        0
+      ],
+      "image_embeds": [
+        "13",
+        0
+      ],
+      "end_latent": [
+        "22",
+        0
+      ],
+      "end_image_embeds": [
+        "23",
+        0
+      ],
+      "steps": "{{steps}}",
+      "use_teacache": true,
+      "teacache_rel_l1_thresh": 0.15,
+      "cfg": 1.0,
+      "guidance_scale": "{{guidance}}",
+      "shift": 0.0,
+      "seed": "{{seed}}",
+      "latent_window_size": 9,
+      "total_second_length": "{{total_seconds}}",
+      "gpu_memory_preservation": "{{gpu_memory_preservation}}",
+      "sampler": "unipc_bh1",
+      "embed_interpolation": "linear",
+      "start_embed_strength": 1.0,
+      "denoise_strength": 1.0
+    }
+  },
+  "40": {
+    "class_type": "VAEDecodeTiled",
+    "_meta": {
+      "title": "Decodificar (tiled, pouca VRAM)"
+    },
+    "inputs": {
+      "samples": [
+        "30",
+        0
+      ],
+      "vae": [
+        "6",
+        0
+      ],
+      "tile_size": 256,
+      "overlap": 64,
+      "temporal_size": 64,
+      "temporal_overlap": 8
+    }
+  },
+  "90": {
+    "class_type": "CreateVideo",
+    "_meta": {
+      "title": "Montar vídeo"
+    },
+    "inputs": {
+      "images": [
+        "40",
+        0
+      ],
+      "fps": "{{fps}}"
+    }
+  },
+  "91": {
+    "class_type": "SaveVideo",
+    "_meta": {
+      "title": "Salvar vídeo"
+    },
+    "inputs": {
+      "video": [
+        "90",
+        0
+      ],
+      "filename_prefix": "{{filename_prefix}}",
+      "format": "auto",
+      "codec": "auto"
+    }
+  }
+}

@@ -1,0 +1,9 @@
+[
+  {
+    "name": "Unboxing",
+    "prompt_suffix": "hands slowly open the box revealing the product, close-up, soft studio light",
+    "default_prompt": "Hands unboxing a new gadget on a wooden table",
+    "recommended_mode": "ltx",
+    "recommended_style": "Comercial"
+  }
+]

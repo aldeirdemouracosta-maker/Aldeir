@@ -1,0 +1,10 @@
+# Interface
+gradio>=4.44,<6
+# Comunicação com o ComfyUI (HTTP + WebSocket)
+requests>=2.31
+websocket-client>=1.7
+# Imagens e vídeo (ffmpeg embutido, funciona no Windows e no Linux)
+pillow>=10.0
+imageio-ffmpeg>=0.5
+# Testes (opcional)
+pytest>=8.0

@@ -1,0 +1,17 @@
+{
+  "comfy_url": "http://127.0.0.1:8188",
+  "output_dir": "outputs",
+  "force_profile": "",
+  "export_width": 1080,
+  "export_height": 1920,
+  "server_port": 7860,
+  "models": {
+    "framepack": "FramePackI2V_HY_fp8_e4m3fn.safetensors",
+    "framepack_clip_l": "clip_l.safetensors",
+    "framepack_llama": "llava_llama3_fp8_scaled.safetensors",
+    "framepack_clip_vision": "sigclip_vision_patch14_384.safetensors",
+    "framepack_vae": "hunyuan_video_vae_bf16.safetensors",
+    "ltx_checkpoint": "ltx-2-19b-distilled-fp8.safetensors",
+    "ltx_text_encoder": "gemma_3_12B_it_fp8_scaled.safetensors"
+  }
+}

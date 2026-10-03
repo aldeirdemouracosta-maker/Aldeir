@@ -1,0 +1,9 @@
+outputs/*
+!outputs/.gitkeep
+config.json
+presets_custom.json
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
