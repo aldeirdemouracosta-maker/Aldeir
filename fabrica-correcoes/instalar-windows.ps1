@@ -84,8 +84,15 @@ Info "Servidor de IA: $Servidor"
 if (-not $Modelo) {
   $lista = Modelos $Servidor
   if ($lista -and $lista.data) {
-    $q = $lista.data | Where-Object { $_.id -match "qwen3" } | Select-Object -First 1
-    if ($q) { $Modelo = $q.id }
+    # prefere o qwen3:8b; senão o qwen3 de maior tamanho (evita modelos minúsculos como 0.8b)
+    $ids = @($lista.data | ForEach-Object { $_.id })
+    if ($ids -contains "qwen3:8b") { $Modelo = "qwen3:8b" }
+    else {
+      $q = $ids | Where-Object { $_ -match "qwen3" } |
+        Sort-Object { if ($_ -match "(\d+(\.\d+)?)b") { [double]$Matches[1] } else { 0 } } -Descending |
+        Select-Object -First 1
+      if ($q) { $Modelo = $q }
+    }
   }
   if (-not $Modelo) { $Modelo = "qwen3:8b" }
 }
