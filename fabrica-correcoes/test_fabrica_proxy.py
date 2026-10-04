@@ -199,6 +199,24 @@ class ProxyTest(unittest.TestCase):
         self.post([{"role": "user", "content": "K10 oi"}])
         self.assertTrue(FakeOllama.last_body["messages"][-1]["content"].endswith("/no_think"))
 
+    def test_acentos_chegam_como_ascii(self):
+        # alguns clientes no Windows leem UTF-8 como cp1252 ("NÃ£o"); \uXXXX evita isso
+        texto = "Não foi possível: módulo ausente ✓"
+        for stream in (False, True):
+            SCRIPT["K11"] = [reply(texto)]
+            body = {"model": "qwen3:8b", "stream": stream, "tools": TOOLS,
+                    "messages": [{"role": "user", "content": "K11 oi"}]}
+            req = urllib.request.Request(self.url, data=json.dumps(body).encode(),
+                                         headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                raw = r.read().decode("ascii")   # falha se houver byte fora do ASCII
+                self.assertIn("charset=utf-8", r.headers["Content-Type"])
+            if stream:
+                msg = json.loads(raw.splitlines()[0][len("data: "):])["choices"][0]["delta"]
+            else:
+                msg = json.loads(raw)["choices"][0]["message"]
+            self.assertEqual(msg["content"], texto)
+
     def test_modelos_passam_direto(self):
         url = "http://127.0.0.1:%d/v1/models" % self.proxy.server_port
         self.assertIn("qwen3", urllib.request.urlopen(url).read().decode())

@@ -438,16 +438,16 @@ class Handler(BaseHTTPRequestHandler):
 
         if not stream:
             t.join()
-            out = json.dumps(result["resp"], ensure_ascii=False).encode()
+            out = json.dumps(result["resp"]).encode()   # só ASCII: acentos viram \uXXXX
             self.send_response(200)
-            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(out)))
             self.end_headers()
             self.wfile.write(out)
             return
 
         self.send_response(200)
-        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
         self.send_header("Connection", "close")
         self.end_headers()
@@ -459,7 +459,7 @@ class Handler(BaseHTTPRequestHandler):
                     self.wfile.write(b": aguardando o modelo\n\n")
                     self.wfile.flush()
             for chunk in sse_chunks(result["resp"], include_usage):
-                self.wfile.write(b"data: " + json.dumps(chunk, ensure_ascii=False).encode() + b"\n\n")
+                self.wfile.write(b"data: " + json.dumps(chunk).encode() + b"\n\n")
             self.wfile.write(b"data: [DONE]\n\n")
             self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):
