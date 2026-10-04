@@ -17,6 +17,7 @@ $Origem = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Pasta = Join-Path $env:LOCALAPPDATA "fabrica-correcoes"
 $Log = Join-Path $Pasta "proxy.log"
 $Atalho = Join-Path ([Environment]::GetFolderPath("Startup")) "Fabrica Proxy.lnk"
+$ConfigAlterada = $false
 
 function Info($m) { Write-Host "->  $m" }
 function Ok($m) { Write-Host "OK  $m" -ForegroundColor Green }
@@ -60,16 +61,14 @@ if (-not $Fabrica) {
   $achados = @($achados | Sort-Object FullName -Unique)
   $exato = $achados | Where-Object { $_.Name -ieq "fabrica.exe" } | Select-Object -First 1
   if ($exato) { $Fabrica = $exato.FullName }
-  elseif ($achados.Count -gt 0) {
-    Write-Warning "Não achei fabrica.exe, mas achei:"
-    $achados | ForEach-Object { Write-Host "    $($_.FullName)" }
-    Falha "Rode de novo indicando o certo:  .\instalar-windows.ps1 -Fabrica `"CAMINHO`""
+  else {
+    $app = $achados | Where-Object { $_.Name -ieq "FabricaApp.exe" } | Select-Object -First 1
+    if ($app) { Info "Achei o aplicativo com janela: $($app.FullName)" }
   }
 }
-if (-not $Fabrica -or -not (Test-Path $Fabrica)) {
-  Falha "Não encontrei a Fábrica. Rode de novo indicando o caminho:  .\instalar-windows.ps1 -Fabrica `"C:\...\fabrica.exe`""
-}
-Ok "Fábrica: $Fabrica"
+if ($Fabrica -and -not (Test-Path $Fabrica)) { Falha "O caminho indicado não existe: $Fabrica" }
+if ($Fabrica) { Ok "Fábrica de terminal: $Fabrica" }
+else { Info "Fábrica de terminal (fabrica.exe) não encontrada: o comando fabrica-segura não será criado." }
 
 # --- servidor de IA: LM Studio (1234) ou Ollama (11434)
 if (-not $Servidor) {
@@ -104,7 +103,8 @@ Copy-Item (Join-Path $Origem "fabrica_proxy.py") $Pasta -Force
 Copy-Item (Join-Path $Origem "desinstalar-windows.ps1") $Pasta -Force -ErrorAction SilentlyContinue
 Copy-Item (Join-Path $Origem "desinstalar-windows.cmd") $Pasta -Force -ErrorAction SilentlyContinue
 
-# --- comando fabrica-segura
+# --- comando fabrica-segura (só para a versão de terminal)
+if ($Fabrica) {
 $wrapper = @'
 # Fábrica passando pelo proxy de correção.
 $a = @($args)
@@ -133,6 +133,43 @@ $utf8bom = New-Object System.Text.UTF8Encoding $true
 [IO.File]::WriteAllText((Join-Path $Pasta "fabrica-segura.cmd"),
   "@powershell -NoProfile -ExecutionPolicy Bypass -File `"%~dp0fabrica-segura.ps1`" %*`r`n",
   (New-Object System.Text.ASCIIEncoding))
+}
+
+# --- aplicativo com janela: aponta a configuração de IA local para o proxy
+$proxyUrl = "http://127.0.0.1:$Porta/v1"
+$semBom = New-Object System.Text.UTF8Encoding $false
+$configs = foreach ($l in @($env:APPDATA, $env:LOCALAPPDATA, (Join-Path $HOME ".config")) | Where-Object { $_ -and (Test-Path $_) }) {
+  Get-ChildItem -Path $l -Filter "configuracoes.json" -Recurse -Depth 3 -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -match "fabrica" -and $_.FullName -notmatch "fabrica-correcoes" }
+}
+foreach ($cfg in @($configs)) {
+  $texto = [IO.File]::ReadAllText($cfg.FullName)
+  $padrao = '("local_base_url"\s*:\s*")([^"]*)(")'
+  if ($texto -notmatch $padrao) { continue }
+  $atual = $Matches[2]
+  $bak = $cfg.FullName + ".antes-do-proxy"
+  $original = $atual
+  if ($atual -eq $proxyUrl) {
+    # já configurado antes: o servidor original está na cópia de segurança
+    if ((Test-Path $bak) -and ([IO.File]::ReadAllText($bak) -match $padrao)) { $original = $Matches[2] }
+    Ok "Configuração já aponta para o proxy: $($cfg.FullName)"
+  } else {
+    if (-not (Test-Path $bak)) { Copy-Item $cfg.FullName $bak }
+    $novo = [regex]::Replace($texto, $padrao, { param($m) $m.Groups[1].Value + $proxyUrl + $m.Groups[3].Value })
+    [IO.File]::WriteAllText($cfg.FullName, $novo, $semBom)
+    Ok "Configuração da Fábrica atualizada: $($cfg.FullName)"
+    Info "   endereço da IA local: $atual  ->  $proxyUrl   (cópia: $bak)"
+  }
+  if (-not $PSBoundParameters.ContainsKey("Servidor") -and $original -match "^https?://[^/]+" -and $original -ne $proxyUrl) {
+    $Servidor = $Matches[0]
+    Info "   o proxy vai repassar para o servidor que a Fábrica usava: $Servidor"
+    Info "   (para usar outro, por exemplo o LM Studio:  -Servidor http://127.0.0.1:1234)"
+  }
+  $ConfigAlterada = $true
+}
+if (-not $ConfigAlterada) {
+  Info "Não achei a configuração do aplicativo. Nas configurações da Fábrica, troque o endereço da IA local para:  $proxyUrl"
+}
 
 # --- PATH do usuário
 $path = [Environment]::GetEnvironmentVariable("Path", "User")
@@ -159,7 +196,10 @@ if (PortaAberta $Porta) { Ok "Proxy rodando na porta $Porta e configurado para i
 else { Falha "O proxy não subiu. Veja o log: $Log" }
 
 Write-Host ""
-Write-Host "Pronto. Abra um terminal NOVO, entre na pasta do projeto e use:  fabrica-segura"
-Write-Host "  Outro modelo:      `$env:FABRICA_MODELO='qwen2.5:7b'; fabrica-segura"
+if ($ConfigAlterada) { Write-Host "Feche o Fábrica App por completo (inclusive na bandeja do relógio) e abra de novo." }
+if ($Fabrica) {
+  Write-Host "Terminal: abra um terminal NOVO, entre na pasta do projeto e use:  fabrica-segura"
+  Write-Host "  Outro modelo:      `$env:FABRICA_MODELO='qwen2.5:7b'; fabrica-segura"
+}
 Write-Host "  Ver as correções:  Get-Content `"$Log`" -Wait"
 Write-Host "  Desinstalar:       $Pasta\desinstalar-windows.cmd"

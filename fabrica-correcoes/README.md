@@ -31,7 +31,10 @@ O instalador:
 - detecta sozinho o LM Studio (porta 1234) ou o Ollama (porta 11434) e o modelo qwen3 carregado;
 - copia o proxy para `%LOCALAPPDATA%\fabrica-correcoes`;
 - liga o proxy agora e cria um atalho na pasta Inicializar, para ele subir com o Windows;
-- cria o comando `fabrica-segura` (abra um terminal **novo** depois de instalar).
+- **Fábrica App com janela** (`FabricaApp.exe`): troca o endereço da IA local no
+  `configuracoes.json` do aplicativo para o proxy, guardando uma cópia
+  `configuracoes.json.antes-do-proxy`; o proxy repassa para o servidor que o aplicativo usava;
+- **Fábrica de terminal** (`fabrica.exe`): cria o comando `fabrica-segura` (abra um terminal **novo** depois).
 
 Opções, pelo PowerShell:
 
@@ -50,7 +53,7 @@ Get-Content $env:LOCALAPPDATA\fabrica-correcoes\proxy.log -Wait     # ver as cor
 
 No Windows PowerShell 5.1, evite aspas duplas dentro do pedido; prefira aspas simples.
 
-Para remover: dois cliques em `desinstalar-windows.cmd`.
+Para remover: dois cliques em `desinstalar-windows.cmd` (devolve também a configuração original do aplicativo).
 
 ## Instalar no Linux (sudo)
 
