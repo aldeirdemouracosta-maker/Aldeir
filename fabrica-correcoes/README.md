@@ -14,7 +14,18 @@ Fábrica ──► fabrica_proxy.py (porta 11435) ──► Ollama (porta 11434)
 | 1 | `qwen2.5-coder` manda a ferramenta como texto JSON e às vezes nada é executado | Converte o JSON do texto em `tool_call` de verdade |
 | 2 | A IA diz "✓ arquivo criado" sem ter chamado nenhuma ferramenta | Cobra a IA até 2 vezes; se ela insistir, mostra um aviso `⚠️ [proxy]` |
 | 3 | Loop `write_file → run_command → write_file…` | Para quando a mesma ação, com o mesmo resultado, se repete 2 vezes, ou passa de 30 ações num pedido |
-| 4 | Termina com "0 tokens" e nenhuma mensagem | Mantém a conexão viva enquanto o modelo carrega e mostra o erro do Ollama na tela |
+| 4 | A IA anuncia "vou começar a análise" e para, sem fazer nada | Pede para ela executar agora; se insistir, avisa para mandar "continue" |
+| 5 | Termina com "0 tokens" e nenhuma mensagem | Mantém a conexão viva enquanto o modelo carrega e mostra o erro do Ollama na tela |
+| 6 | Acentos embaralhados no Windows (`NÃ£o`) | Envia o texto com acentos escapados (`\u00e3`), que qualquer leitor JSON entende |
+
+## Página de atividade
+
+Abra **http://127.0.0.1:11435/atividade** no navegador (no Windows, há um atalho na Área
+de Trabalho). Ela mostra, atualizando a cada segundo:
+
+- se a IA está ociosa, esperando o modelo, raciocinando ou escrevendo, e há quanto tempo;
+- cada pedido, cada ferramenta que a Fábrica executou e o resultado;
+- as correções aplicadas pelo proxy e os erros.
 
 Só usa a biblioteca padrão do Python 3.8+. Não precisa de `pip install`.
 

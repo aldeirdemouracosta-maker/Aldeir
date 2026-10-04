@@ -78,7 +78,7 @@ class ProxyTest(unittest.TestCase):
     def setUpClass(cls):
         cls.ollama = serve(FakeOllama)
         fp.CONFIG["upstream"] = "http://127.0.0.1:%d" % cls.ollama.server_port
-        fp.log = lambda msg: None
+        fp.log = lambda *a, **k: None
         cls.proxy = serve(fp.Handler)
         cls.url = "http://127.0.0.1:%d/v1/chat/completions" % cls.proxy.server_port
 
@@ -216,6 +216,59 @@ class ProxyTest(unittest.TestCase):
             else:
                 msg = json.loads(raw)["choices"][0]["message"]
             self.assertEqual(msg["content"], texto)
+
+    def test_anunciou_e_parou_e_cobrado(self):
+        SCRIPT["K12"] = [reply("1. Organização\n2. Riscos\nVou começar com a análise das correções urgentes."),
+                         reply("", [call("list_dir", {"path": "."})])]
+        c = self.post([{"role": "user", "content": "K12 Analise este projeto"}])
+        self.assertEqual(c["message"]["tool_calls"][0]["function"]["name"], "list_dir")
+
+    def test_oferta_no_fim_nao_e_cobrada(self):
+        SCRIPT["K13"] = [reply("O projeto tem 5 arquivos HTML. Se quiser, posso analisar o CSS.")]
+        c = self.post([{"role": "user", "content": "K13 Analise este projeto"}])
+        self.assertNotIn("[proxy]", c["message"]["content"])
+        self.assertEqual(SCRIPT["K13"], [])
+
+    def test_pagina_de_atividade(self):
+        SCRIPT["K14"] = [reply("", [call("write_file", {"path": "ola.py", "content": "x"})])]
+        self.post([{"role": "user", "content": "K14 crie ola.py"}])
+        base = "http://127.0.0.1:%d" % self.proxy.server_port
+        html = urllib.request.urlopen(base + "/atividade").read().decode()
+        self.assertIn("Atividade da Fábrica", html)
+        d = json.loads(urllib.request.urlopen(base + "/atividade.json").read())
+        textos = [(e["tipo"], e["texto"]) for e in d["eventos"]]
+        self.assertIn(("pedido", "K14 crie ola.py"), textos)
+        self.assertIn(("ferramenta", "write_file: ola.py"), textos)
+        self.assertEqual(d["ativos"], [])
+
+    def test_resultado_de_ferramenta_aparece_na_atividade(self):
+        msgs = [{"role": "user", "content": "K15 rode"},
+                {"role": "assistant", "content": "", "tool_calls": [call("run_command", {"cmd": "ls"})]},
+                {"role": "tool", "tool_call_id": "c_run_command", "content": "a.py\nb.py"}]
+        self.post(msgs)
+        base = "http://127.0.0.1:%d" % self.proxy.server_port
+        d = json.loads(urllib.request.urlopen(base + "/atividade.json").read())
+        self.assertIn(("resultado", "run_command → a.py b.py"), [(e["tipo"], e["texto"]) for e in d["eventos"]])
+
+    def test_status_ativo_durante_geracao(self):
+        orig = fp.call_upstream
+        seen = {}
+
+        def lento(body):
+            time.sleep(0.5)
+            return orig(body)
+        fp.call_upstream = lento
+        try:
+            t = threading.Thread(target=self.post, args=([{"role": "user", "content": "K16 oi"}],))
+            t.start()
+            time.sleep(0.2)
+            base = "http://127.0.0.1:%d" % self.proxy.server_port
+            seen = json.loads(urllib.request.urlopen(base + "/atividade.json").read())
+            t.join()
+        finally:
+            fp.call_upstream = orig
+        self.assertEqual(len(seen["ativos"]), 1)
+        self.assertEqual(seen["ativos"][0]["modelo"], "qwen3:8b")
 
     def test_modelos_passam_direto(self):
         url = "http://127.0.0.1:%d/v1/models" % self.proxy.server_port

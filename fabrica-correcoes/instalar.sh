@@ -100,6 +100,7 @@ fi
 echo
 echo "Pronto. Entre na pasta do projeto e use:  fabrica-segura"
 echo "  Trocar o modelo:     FABRICA_MODELO=qwen2.5:7b fabrica-segura"
+echo "  Ver a atividade:     http://127.0.0.1:$PORTA/atividade  (no navegador)"
 echo "  Ver as correções:    journalctl -u fabrica-proxy -f   (ou /var/log/fabrica-proxy/proxy.log)"
 echo "  Mudar opções:        sudo PROXY_OPCOES=\"--sem-pensar\" bash $ORIGEM/instalar.sh"
 echo "  Desinstalar:         sudo bash $PASTA/desinstalar.sh"

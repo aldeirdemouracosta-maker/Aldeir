@@ -195,11 +195,18 @@ Start-Sleep -Seconds 2
 if (PortaAberta $Porta) { Ok "Proxy rodando na porta $Porta e configurado para iniciar com o Windows" }
 else { Falha "O proxy não subiu. Veja o log: $Log" }
 
+# --- atalho na Área de Trabalho para a página de atividade
+$urlAtividade = "http://127.0.0.1:$Porta/atividade"
+$atalhoAtividade = Join-Path ([Environment]::GetFolderPath("Desktop")) "Atividade da Fabrica.url"
+[IO.File]::WriteAllText($atalhoAtividade, "[InternetShortcut]`r`nURL=$urlAtividade`r`n", (New-Object System.Text.ASCIIEncoding))
+Ok "Atalho 'Atividade da Fabrica' criado na Área de Trabalho ($urlAtividade)"
+
 Write-Host ""
 if ($ConfigAlterada) { Write-Host "Feche o Fábrica App por completo (inclusive na bandeja do relógio) e abra de novo." }
 if ($Fabrica) {
   Write-Host "Terminal: abra um terminal NOVO, entre na pasta do projeto e use:  fabrica-segura"
   Write-Host "  Outro modelo:      `$env:FABRICA_MODELO='qwen2.5:7b'; fabrica-segura"
 }
+Write-Host "  Ver a atividade:   $urlAtividade  (atalho na Área de Trabalho)"
 Write-Host "  Ver as correções:  Get-Content `"$Log`" -Wait"
 Write-Host "  Desinstalar:       $Pasta\desinstalar-windows.cmd"

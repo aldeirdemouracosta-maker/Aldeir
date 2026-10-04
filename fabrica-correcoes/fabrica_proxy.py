@@ -17,6 +17,8 @@ Uso:
 """
 
 import argparse
+import collections
+import itertools
 import json
 import re
 import sys
@@ -41,6 +43,13 @@ CONFIG = {
 WRITE_TOOL_RE = re.compile(
     r"write|edit|create|replace|patch|apply|append|insert|delete|remove|move|rename|mkdir|run|exec|command|shell",
     re.I)
+PROMISE_RE = re.compile(
+    r"\b(vou|irei|vamos|começarei|comecarei|iniciarei|farei|analisarei|verificarei|"
+    r"let me|i will|i'll|i am going to|i'm going to)\b", re.I)
+OFFER_RE = re.compile(r"\b(se (você )?quiser|se preferir|deseja|quer que|posso|would you like|if you want)\b", re.I)
+ANALYSIS_RE = re.compile(
+    r"\b(analis[ae]r?|anális[ea]|verifi(que|car)|revis[ae]r?|examin[ae]r?|investig(ue|ar)|"
+    r"leia|ler|liste|listar|mostr[ae]r?|procur[ae]r?|encontr[ae]r?|analyze|review|check|inspect|find|list)\b", re.I)
 CLAIM_RE = re.compile(
     r"(✓|✅|\bcriad[oa]s?\b|\bcriei\b|\bescrit[oa]s?\b|\bsalv[oa]s?\b|\balterad[oa]s?\b|"
     r"\batualizad[oa]s?\b|\bmodificad[oa]s?\b|\brodad[oa]s?\b|\bexecutad[oa]s?\b|\bpassaram\b|"
@@ -54,7 +63,46 @@ ACTION_RE = re.compile(
 MAX_TEXT_AROUND_CALL = 300   # texto além do JSON para ainda considerar "chamada em texto"
 
 
-def log(msg):
+# ---------------------------------------------------------------- atividade
+# O que a página /atividade mostra: eventos recentes e pedidos em andamento.
+ACT_LOCK = threading.Lock()
+EVENTS = collections.deque(maxlen=400)
+ACTIVE = {}
+CURRENT = threading.local()      # status do pedido tratado nesta thread
+_event_ids = itertools.count(1)
+_request_ids = itertools.count(1)
+
+
+def event(kind, text):
+    with ACT_LOCK:
+        EVENTS.append({"id": next(_event_ids), "hora": time.strftime("%H:%M:%S"),
+                       "tipo": kind, "texto": text})
+
+
+def set_status(**fields):
+    st = getattr(CURRENT, "status", None)
+    if st is not None:
+        with ACT_LOCK:
+            st.update(fields)
+
+
+def short_args(args):
+    """Resumo legível dos argumentos de uma ferramenta (caminho, comando...)."""
+    try:
+        a = json.loads(args) if isinstance(args, str) else args
+    except ValueError:
+        return str(args)[:100]
+    if isinstance(a, dict):
+        for k in ("path", "file", "file_path", "filename", "command", "cmd", "pattern", "query"):
+            if a.get(k):
+                return str(a[k])[:100]
+        return ", ".join("%s=%s" % (k, str(v)[:40]) for k, v in list(a.items())[:3])
+    return str(a)[:100]
+
+
+def log(msg, kind="info"):
+    if kind != "progresso":
+        event(kind, msg)
     line = time.strftime("%H:%M:%S ") + msg
     if sys.stderr is not None:            # pythonw (Windows, sem janela) não tem console
         try:
@@ -117,7 +165,7 @@ def extract_text_tool_calls(content, names):
     # texto explicativo longo com um exemplo de JSON no meio não é uma chamada
     leftover = len(re.sub(r"```\w*|</?tool_call>|\s", "", text)) - used
     if calls and leftover > MAX_TEXT_AROUND_CALL:
-        log("correção 1 ignorada: JSON de ferramenta no meio de %d car. de texto" % leftover)
+        log("correção 1 ignorada: JSON de ferramenta no meio de %d car. de texto" % leftover, "correcao")
         return []
     return calls
 
@@ -162,6 +210,15 @@ def claims_work(content):
     return False
 
 
+def promises_next_step(content):
+    """A resposta termina anunciando o que vai fazer (sem ter feito)?"""
+    lines = [l.strip() for l in THINK_RE.sub("", content or "").splitlines() if l.strip()]
+    if not lines:
+        return False
+    last = lines[-1]
+    return bool(PROMISE_RE.search(last)) and not OFFER_RE.search(last) and not last.endswith("?")
+
+
 def without_thinking(body):
     """qwen3: acrescenta /no_think à última mensagem do usuário (bem mais rápido em CPU)."""
     if not CONFIG["no_think"] or "qwen3" not in str(body.get("model", "")).lower():
@@ -187,6 +244,8 @@ def call_upstream(body):
     first = None
     resp = {"id": None, "created": None, "model": body.get("model"), "usage": None}
     content, reasoning, calls, finish = [], [], {}, None
+    clen = rlen = 0
+    set_status(fase="aguardando o modelo", desde=t0, pensamento=0, texto=0, ferramentas=[])
     try:
         r = urllib.request.urlopen(req, timeout=CONFIG["timeout"])
     except urllib.error.HTTPError as e:
@@ -210,7 +269,8 @@ def call_upstream(body):
                 raise RuntimeError(err.get("message") if isinstance(err, dict) else str(err))
             if first is None:
                 first = time.time()
-                log("Ollama começou a responder após %.0fs" % (first - t0))
+                log("Ollama começou a responder após %.0fs" % (first - t0), "progresso")
+                set_status(fase="gerando")
             resp["id"] = resp["id"] or chunk.get("id")
             resp["created"] = resp["created"] or chunk.get("created")
             if chunk.get("usage"):
@@ -219,8 +279,10 @@ def call_upstream(body):
                 d = ch.get("delta") or {}
                 if d.get("content"):
                     content.append(d["content"])
+                    clen += len(d["content"])
                 if d.get("reasoning") or d.get("reasoning_content"):
                     reasoning.append(d.get("reasoning") or d.get("reasoning_content"))
+                    rlen += len(reasoning[-1])
                 for tc in d.get("tool_calls") or []:
                     i = tc.get("index", len(calls))
                     cur = calls.setdefault(i, {"id": None, "type": "function",
@@ -230,10 +292,12 @@ def call_upstream(body):
                     cur["function"]["name"] += fn.get("name") or ""
                     cur["function"]["arguments"] += fn.get("arguments") or ""
                 finish = ch.get("finish_reason") or finish
+            set_status(pensamento=rlen, texto=clen,
+                       ferramentas=[c["function"]["name"] for c in calls.values() if c["function"]["name"]])
             if time.time() - last_log >= 15:
                 last_log = time.time()
                 log("  ... gerando há %.0fs: pensamento=%d car., texto=%d car., ferramentas=%d"
-                    % (last_log - t0, len("".join(reasoning)), len("".join(content)), len(calls)))
+                    % (last_log - t0, rlen, clen, len(calls)), "progresso")
     if first is None:
         raise RuntimeError("o Ollama encerrou sem enviar resposta (após %.0fs)" % (time.time() - t0))
     text = "".join(content)
@@ -244,9 +308,10 @@ def call_upstream(body):
         msg["reasoning"] = "".join(reasoning)
     if calls:
         msg["tool_calls"] = [calls[i] for i in sorted(calls)]
+    set_status(fase="aplicando correções")
     log("Ollama terminou em %.0fs: texto=%d car., ferramentas=%s"
         % (time.time() - t0, len(msg["content"]),
-           ", ".join(c["function"]["name"] for c in msg.get("tool_calls", [])) or "nenhuma"))
+           ", ".join(c["function"]["name"] for c in msg.get("tool_calls", [])) or "nenhuma"), "progresso")
     resp.update(object="chat.completion", choices=[{
         "index": 0, "message": msg,
         "finish_reason": finish or ("tool_calls" if calls else "stop")}])
@@ -263,7 +328,7 @@ def convert_text_calls(names, resp):
         calls = extract_text_tool_calls(msg.get("content"), names)
         if calls:
             log("correção 1: %d ferramenta(s) em texto convertida(s): %s"
-                % (len(calls), ", ".join(c["function"]["name"] for c in calls)))
+                % (len(calls), ", ".join(c["function"]["name"] for c in calls)), "correcao")
             msg["tool_calls"] = calls
             msg["content"] = ""
             choice["finish_reason"] = "tool_calls"
@@ -271,7 +336,7 @@ def convert_text_calls(names, resp):
 
 
 def fix_response(body, resp):
-    """Aplica as correções 1, 2 e 3 numa resposta completa do Ollama."""
+    """Aplica as correções 1 a 4 numa resposta completa do Ollama."""
     names = tool_names(body)
     if not names or not resp.get("choices"):
         return resp
@@ -290,7 +355,7 @@ def fix_response(body, resp):
         tries = 0
         while not did_write and claims_work(msg.get("content")) and tries < CONFIG["retries"]:
             tries += 1
-            log("correção 2: IA afirmou ter feito algo sem usar ferramentas; cobrando (tentativa %d)" % tries)
+            log("correção 2: IA afirmou ter feito algo sem usar ferramentas; cobrando (tentativa %d)" % tries, "correcao")
             retry = dict(body)
             retry["messages"] = list(body.get("messages") or []) + [
                 {"role": "assistant", "content": msg.get("content") or ""},
@@ -306,13 +371,42 @@ def fix_response(body, resp):
             resp, choice = new, new["choices"][0]
             msg = choice.setdefault("message", {})
             if msg.get("tool_calls"):
-                log("correção 2: a IA passou a usar ferramentas")
+                log("correção 2: a IA passou a usar ferramentas", "correcao")
                 break
         if not msg.get("tool_calls") and not did_write and tries and claims_work(msg.get("content")):
-            log("correção 2: IA insistiu na mentira; avisando o usuário")
+            log("correção 2: IA insistiu na mentira; avisando o usuário", "correcao")
             msg["content"] = ("⚠️ [proxy] A IA disse que concluiu, mas NENHUMA ferramenta de escrita "
                               "ou comando foi usado: nada foi alterado no disco.\n\n"
                               "Resposta original da IA:\n" + (msg.get("content") or ""))
+
+    # 4. anunciou o próximo passo e parou (sem chamar ferramenta)
+    asked_work = asked_action or bool(ANALYSIS_RE.search(last_user_text(messages)))
+    if not msg.get("tool_calls") and asked_work and promises_next_step(msg.get("content")):
+        tries = 0
+        while tries < CONFIG["retries"] and promises_next_step(msg.get("content")):
+            tries += 1
+            log("correção 4: IA anunciou o próximo passo e parou; pedindo para executar (tentativa %d)"
+                % tries, "correcao")
+            retry = dict(body)
+            retry["messages"] = list(messages) + [
+                {"role": "assistant", "content": msg.get("content") or ""},
+                {"role": "user", "content":
+                    "Você anunciou o próximo passo, mas não o executou. Não descreva o plano: "
+                    "comece agora, chamando as ferramentas necessárias (por exemplo: %s). "
+                    "Se já tem tudo de que precisa, dê agora a resposta final completa."
+                    % ", ".join(names[:8])},
+            ]
+            new = convert_text_calls(names, call_upstream(retry))
+            if not new.get("choices"):
+                break
+            resp, choice = new, new["choices"][0]
+            msg = choice.setdefault("message", {})
+            if msg.get("tool_calls"):
+                log("correção 4: a IA passou a executar", "correcao")
+                break
+        if not msg.get("tool_calls") and promises_next_step(msg.get("content")):
+            msg["content"] = (msg.get("content") or "") + (
+                "\n\n⚠️ [proxy] A IA anunciou o próximo passo mas parou. Envie \"continue\" para ela seguir.")
 
     # 3. proteção contra loop
     if msg.get("tool_calls"):
@@ -330,7 +424,7 @@ def fix_response(body, resp):
                 reason = ("a ação '%s' já foi feita %d vezes com os mesmos argumentos e o mesmo "
                           "resultado" % (fn.get("name"), len(past)))
         if reason:
-            log("correção 3: loop detectado (%s); interrompendo" % reason)
+            log("correção 3: loop detectado (%s); interrompendo" % reason, "correcao")
             msg.pop("tool_calls", None)
             msg["content"] = ("⛔ [proxy] Proteção contra loop: %s. Parei para não repetir "
                               "indefinidamente. Revise o resultado e faça um pedido mais específico." % reason)
@@ -371,6 +465,140 @@ def error_response(body, err):
     }
 
 
+# ---------------------------------------------------------------- página de atividade
+
+def describe_incoming(messages):
+    """Registra o que chegou da Fábrica: um pedido novo ou resultados de ferramentas."""
+    if not messages:
+        return
+    last = messages[-1]
+    if last.get("role") == "user":
+        event("pedido", str(last.get("content") or "")[:400])
+        return
+    names = {}
+    for m in reversed(messages):
+        if m.get("role") == "assistant":
+            for tc in m.get("tool_calls") or []:
+                names[tc.get("id")] = (tc.get("function") or {}).get("name", "ferramenta")
+            break
+    for m in messages[::-1]:
+        if m.get("role") != "tool":
+            break
+        out = " ".join(str(m.get("content") or "").split())
+        event("resultado", "%s → %s" % (names.get(m.get("tool_call_id"), "ferramenta"), out[:200] or "(vazio)"))
+
+
+def describe_outgoing(resp):
+    msg = ((resp.get("choices") or [{}])[0]).get("message") or {}
+    if msg.get("tool_calls"):
+        for tc in msg["tool_calls"]:
+            fn = tc.get("function") or {}
+            event("ferramenta", "%s: %s" % (fn.get("name"), short_args(fn.get("arguments"))))
+    else:
+        event("resposta", " ".join(str(msg.get("content") or "").split())[:400] or "(resposta vazia)")
+
+
+def activity_snapshot():
+    now = time.time()
+    with ACT_LOCK:
+        ativos = [{"modelo": st.get("modelo"), "fase": st.get("fase"),
+                   "segundos": round(now - st["inicio"]),
+                   "fase_segundos": round(now - st.get("desde", st["inicio"])),
+                   "pensamento": st.get("pensamento", 0), "texto": st.get("texto", 0),
+                   "ferramentas": st.get("ferramentas", [])} for st in ACTIVE.values()]
+        eventos = list(EVENTS)[-200:]
+    return {"ativos": ativos, "eventos": eventos, "servidor": CONFIG["upstream"]}
+
+
+ATIVIDADE_HTML = """<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atividade da Fábrica</title>
+<style>
+:root { --bg:#f6f7f9; --card:#fff; --tx:#1b1f24; --mut:#5b6573; --bd:#d9dee5;
+  --azul:#1f6feb; --roxo:#8250df; --verde:#1a7f37; --ambar:#9a6700; --verm:#cf222e; }
+@media (prefers-color-scheme: dark) { :root { --bg:#0d1117; --card:#161b22; --tx:#e6edf3;
+  --mut:#9aa5b1; --bd:#30363d; --azul:#58a6ff; --roxo:#bc8cff; --verde:#3fb950; --ambar:#d29922; --verm:#ff7b72; } }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--tx); font:16px/1.5 system-ui, "Segoe UI", sans-serif; }
+main { max-width:900px; margin:0 auto; padding:16px; }
+h1 { font-size:1.3rem; margin:0 0 4px; }
+.sub { color:var(--mut); font-size:.9rem; margin:0 0 16px; }
+.card { background:var(--card); border:1px solid var(--bd); border-radius:10px; padding:14px 16px; margin-bottom:16px; }
+#estado { font-size:1.15rem; font-weight:600; }
+.det { color:var(--mut); margin-top:4px; }
+.ponto { display:inline-block; width:12px; height:12px; border-radius:50%; margin-right:8px; background:var(--mut); }
+.ocupado .ponto { background:var(--azul); animation:pulsa 1.2s infinite; }
+@keyframes pulsa { 50% { opacity:.3; } }
+@media (prefers-reduced-motion: reduce) { .ocupado .ponto { animation:none; } }
+ol { list-style:none; margin:0; padding:0; }
+li { display:grid; grid-template-columns:72px 110px 1fr; gap:8px; padding:8px 0; border-top:1px solid var(--bd); }
+li:first-child { border-top:0; }
+.hora { color:var(--mut); font-variant-numeric:tabular-nums; }
+.tipo { font-weight:600; }
+.texto { overflow-wrap:anywhere; white-space:pre-wrap; }
+.t-pedido .tipo { color:var(--azul); } .t-ferramenta .tipo { color:var(--roxo); }
+.t-resposta .tipo { color:var(--verde); } .t-correcao .tipo { color:var(--ambar); }
+.t-erro .tipo, .t-erro .texto { color:var(--verm); } .t-resultado .tipo, .t-info .tipo { color:var(--mut); }
+@media (max-width:560px) { li { grid-template-columns:1fr; gap:0; } }
+</style></head><body><main>
+<h1>Atividade da Fábrica</h1>
+<p class="sub">Tudo o que passa entre o Fábrica App e a IA local. Atualiza sozinho a cada segundo.</p>
+<section class="card" id="cartao" aria-live="polite">
+  <div id="estado"><span class="ponto"></span>Conectando ao proxy…</div>
+  <div class="det" id="detalhe"></div>
+</section>
+<section class="card"><ol id="eventos" aria-label="Eventos recentes, mais novos primeiro"></ol></section>
+</main>
+<script>
+const NOMES = {pedido:"Pedido", ferramenta:"Ferramenta", resultado:"Resultado", resposta:"Resposta",
+               correcao:"Correção", erro:"Erro", info:"Info"};
+let ultimo = -1;
+function esc(t) { const d = document.createElement("div"); d.textContent = t; return d.innerHTML; }
+function fase(a) {
+  let t = a.fase + " há " + a.fase_segundos + "s";
+  if (a.fase === "gerando") {
+    const p = [];
+    if (a.pensamento) p.push(a.pensamento + " car. de raciocínio");
+    if (a.texto) p.push(a.texto + " car. de texto");
+    if (a.ferramentas.length) p.push("ferramenta: " + a.ferramentas.join(", "));
+    if (p.length) t += " — " + p.join(", ");
+  }
+  return t;
+}
+async function atualiza() {
+  try {
+    const r = await fetch("atividade.json", {cache: "no-store"});
+    const d = await r.json();
+    const cartao = document.getElementById("cartao");
+    if (d.ativos.length) {
+      const a = d.ativos[0];
+      cartao.className = "card ocupado";
+      document.getElementById("estado").innerHTML = '<span class="ponto"></span>Trabalhando (' + esc(a.modelo || "") + ")";
+      document.getElementById("detalhe").textContent = fase(a) + " · total " + a.segundos + "s";
+    } else {
+      cartao.className = "card";
+      document.getElementById("estado").innerHTML = '<span class="ponto"></span>Ocioso: esperando um pedido';
+      document.getElementById("detalhe").textContent = "Servidor de IA: " + d.servidor;
+    }
+    const topo = d.eventos.length ? d.eventos[d.eventos.length - 1].id : 0;
+    if (topo !== ultimo) {
+      ultimo = topo;
+      document.getElementById("eventos").innerHTML = d.eventos.slice().reverse().map(e =>
+        '<li class="t-' + e.tipo + '"><span class="hora">' + e.hora + '</span><span class="tipo">' +
+        (NOMES[e.tipo] || e.tipo) + '</span><span class="texto">' + esc(e.texto) + "</span></li>").join("");
+    }
+  } catch (e) {
+    document.getElementById("cartao").className = "card";
+    document.getElementById("estado").innerHTML = '<span class="ponto"></span>Proxy desligado ou inacessível';
+    document.getElementById("detalhe").textContent = "";
+  }
+}
+atualiza(); setInterval(atualiza, 1000);
+</script></body></html>
+"""
+
+
 # ---------------------------------------------------------------- servidor
 
 class Handler(BaseHTTPRequestHandler):
@@ -400,7 +628,21 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(out)
 
+    def _send(self, status, ctype, out):
+        self.send_response(status)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(out)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(out)
+
     def do_GET(self):
+        path = self.path.split("?")[0].rstrip("/")
+        if path in ("", "/atividade"):
+            return self._send(200, "text/html; charset=utf-8", ATIVIDADE_HTML.encode("utf-8"))
+        if path == "/atividade.json":
+            return self._send(200, "application/json; charset=utf-8",
+                              json.dumps(activity_snapshot()).encode())
         self._passthrough()
 
     do_PUT = do_DELETE = do_GET
@@ -422,16 +664,26 @@ class Handler(BaseHTTPRequestHandler):
         stream = bool(body.get("stream"))
         include_usage = bool((body.get("stream_options") or {}).get("include_usage"))
         log("pedido: modelo=%s mensagens=%d ferramentas=%d stream=%s" % (
-            body.get("model"), len(body.get("messages") or []), len(tool_names(body)), stream))
+            body.get("model"), len(body.get("messages") or []), len(tool_names(body)), stream), "progresso")
+        describe_incoming(body.get("messages") or [])
+        rid = next(_request_ids)
+        status = {"modelo": body.get("model"), "inicio": time.time(), "fase": "recebido"}
+        with ACT_LOCK:
+            ACTIVE[rid] = status
 
         result = {}
 
         def work():
+            CURRENT.status = status
             try:
                 result["resp"] = fix_response(body, call_upstream(body))
+                describe_outgoing(result["resp"])
             except Exception as e:  # noqa: BLE001 — qualquer falha vira mensagem visível
-                log("erro no Ollama: %s" % e)
+                log("erro no Ollama: %s" % e, "erro")
                 result["resp"] = error_response(body, e)
+            finally:
+                with ACT_LOCK:
+                    ACTIVE.pop(rid, None)
 
         t = threading.Thread(target=work, daemon=True)
         t.start()
@@ -463,7 +715,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(b"data: [DONE]\n\n")
             self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):
-            log("a Fábrica fechou a conexão antes da resposta")
+            log("a Fábrica fechou a conexão antes da resposta", "erro")
 
 
 def main():
@@ -483,6 +735,7 @@ def main():
     if CONFIG["no_think"]:
         log("modo sem raciocínio ativo para modelos qwen3 (/no_think)")
     log("use: fabrica --url http://127.0.0.1:%d/v1 -m qwen3:8b" % a.porta)
+    log("acompanhe a atividade em: http://127.0.0.1:%d/atividade" % a.porta)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

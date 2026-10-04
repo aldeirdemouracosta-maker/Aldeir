@@ -5,6 +5,7 @@ Get-CimInstance Win32_Process -Filter "Name like 'python%'" -ErrorAction Silentl
   Where-Object { $_.CommandLine -like "*fabrica_proxy.py*" } |
   ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 Remove-Item $Atalho -Force -ErrorAction SilentlyContinue
+Remove-Item (Join-Path ([Environment]::GetFolderPath("Desktop")) "Atividade da Fabrica.url") -Force -ErrorAction SilentlyContinue
 # devolve a configuração original do Fábrica App
 foreach ($l in @($env:APPDATA, $env:LOCALAPPDATA, (Join-Path $HOME ".config")) | Where-Object { $_ -and (Test-Path $_) }) {
   Get-ChildItem -Path $l -Filter "configuracoes.json.antes-do-proxy" -Recurse -Depth 3 -File -ErrorAction SilentlyContinue |
