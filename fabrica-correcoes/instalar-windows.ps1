@@ -4,7 +4,9 @@
 #   .\instalar-windows.ps1 -Servidor http://127.0.0.1:1234   # LM Studio (RX 580 via Vulkan)
 #   .\instalar-windows.ps1 -Servidor http://127.0.0.1:11434  # Ollama
 #   .\instalar-windows.ps1 -Modelo qwen/qwen3-8b -SemPensar
+#   .\instalar-windows.ps1 -Fabrica "C:\caminho\da\fabrica.exe"
 param(
+  [string]$Fabrica = "",
   [string]$Servidor = "",
   [string]$Modelo = "",
   [switch]$SemPensar,
@@ -41,6 +43,33 @@ Info "Usando $versao"
 if (-not (Test-Path (Join-Path $Origem "fabrica_proxy.py"))) { Falha "fabrica_proxy.py não está ao lado deste script." }
 & $py.Source -m py_compile (Join-Path $Origem "fabrica_proxy.py")
 if ($LASTEXITCODE -ne 0) { Falha "fabrica_proxy.py tem erro de sintaxe." }
+
+# --- onde está a Fábrica
+if (-not $Fabrica) {
+  $c = Get-Command fabrica -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($c) { $Fabrica = $c.Source }
+}
+if (-not $Fabrica) {
+  Info "Procurando a Fábrica (fabrica*.exe)..."
+  $locais = @($env:LOCALAPPDATA, $env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:APPDATA,
+              (Join-Path $HOME "Downloads"), (Join-Path $HOME "Desktop"), (Join-Path $HOME "Documents"), $HOME) |
+            Where-Object { $_ -and (Test-Path $_) }
+  $achados = foreach ($l in $locais) {
+    Get-ChildItem -Path $l -Filter "fabrica*.exe" -Recurse -Depth 4 -File -ErrorAction SilentlyContinue
+  }
+  $achados = @($achados | Sort-Object FullName -Unique)
+  $exato = $achados | Where-Object { $_.Name -ieq "fabrica.exe" } | Select-Object -First 1
+  if ($exato) { $Fabrica = $exato.FullName }
+  elseif ($achados.Count -gt 0) {
+    Write-Warning "Não achei fabrica.exe, mas achei:"
+    $achados | ForEach-Object { Write-Host "    $($_.FullName)" }
+    Falha "Rode de novo indicando o certo:  .\instalar-windows.ps1 -Fabrica `"CAMINHO`""
+  }
+}
+if (-not $Fabrica -or -not (Test-Path $Fabrica)) {
+  Falha "Não encontrei a Fábrica. Rode de novo indicando o caminho:  .\instalar-windows.ps1 -Fabrica `"C:\...\fabrica.exe`""
+}
+Ok "Fábrica: $Fabrica"
 
 # --- servidor de IA: LM Studio (1234) ou Ollama (11434)
 if (-not $Servidor) {
@@ -79,8 +108,11 @@ Copy-Item (Join-Path $Origem "desinstalar-windows.cmd") $Pasta -Force -ErrorActi
 $wrapper = @'
 # Fábrica passando pelo proxy de correção.
 $a = @($args)
-$real = Get-Command fabrica -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-if (-not $real) { Write-Host "Comando 'fabrica' não encontrado no PATH." -ForegroundColor Red; exit 1 }
+$real = "__FABRICA__"
+if (-not (Test-Path $real)) {
+  $c = Get-Command fabrica -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($c) { $real = $c.Source } else { Write-Host "Fábrica não encontrada em $real. Rode o instalador de novo." -ForegroundColor Red; exit 1 }
+}
 $tcp = New-Object System.Net.Sockets.TcpClient
 try { $tcp.Connect("127.0.0.1", __PORTA__) } catch { Write-Warning "O proxy não está rodando. Reinicie o Windows ou rode o instalador de novo." } finally { $tcp.Close() }
 $extra = @()
@@ -92,10 +124,10 @@ if (-not (($a -contains "--nuvem") -or ($a -contains "--claude"))) {
     $extra += @("-m", $m)
   }
 }
-& $real.Source @a @extra
+& $real @a @extra
 exit $LASTEXITCODE
 '@
-$wrapper = $wrapper.Replace("__PORTA__", "$Porta").Replace("__MODELO__", $Modelo)
+$wrapper = $wrapper.Replace("__PORTA__", "$Porta").Replace("__MODELO__", $Modelo).Replace("__FABRICA__", $Fabrica)
 $utf8bom = New-Object System.Text.UTF8Encoding $true
 [IO.File]::WriteAllText((Join-Path $Pasta "fabrica-segura.ps1"), $wrapper, $utf8bom)
 [IO.File]::WriteAllText((Join-Path $Pasta "fabrica-segura.cmd"),
