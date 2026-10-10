@@ -1,0 +1,281 @@
+{
+  "origem": "linux/fabrica-ubuntu, base 3b139233f2c70e5c0869849b7d47523fe41e9ec4",
+  "ubuntu_validado": false,
+  "arquivos": {
+    ".gitattributes": {
+      "sha256": "3bf84e87b5f52be7b2624b63659c21e82da0a850c73a3a3d887533d0589b10a3",
+      "bytes": 51,
+      "modo": "0o644"
+    },
+    ".gitignore": {
+      "sha256": "f950160ea81c210c370882d38648ddb79e4caa067cb6009a870c2c676b5f3241",
+      "bytes": 93,
+      "modo": "0o644"
+    },
+    "analisador_projeto/analisar_completude.py": {
+      "sha256": "a79ebb215597e7e5b76fba6ceda5801040f1f2901d108576df8e4ca9cfed3cf4",
+      "bytes": 14698,
+      "modo": "0o755"
+    },
+    "analisador_projeto/README.md": {
+      "sha256": "d8533f1364f2e24f2f200bca865e7763dbfdf78a4d5e62ee1b426cd4d2669633",
+      "bytes": 3090,
+      "modo": "0o644"
+    },
+    "ARQUITETURA_FABRICA_LOCAL_IA.md": {
+      "sha256": "82d055b3e3a2605634918fb20486f7efa8eac72da5b0467248bcaba5c6c83a8a",
+      "bytes": 15891,
+      "modo": "0o644"
+    },
+    "busca_codigo/buscar_codigo.py": {
+      "sha256": "4d00651c7c03a7a9111f15f91e57dd98f902490531696db115dc7a27c73b77aa",
+      "bytes": 18385,
+      "modo": "0o755"
+    },
+    "busca_codigo/README.md": {
+      "sha256": "049a037af9a9c18dbb26074a5c8e087681f5e7c624e50011c394531a9cb4a966",
+      "bytes": 4982,
+      "modo": "0o644"
+    },
+    "compat_proxy.py": {
+      "sha256": "77becbdf8e72669b87904acfa793e2c31d80a0b2e52cc46ad51a59ae5a1eb07f",
+      "bytes": 1804,
+      "modo": "0o644"
+    },
+    "empacotamento/criar_pacote.py": {
+      "sha256": "8bb994c52376596f9252788ee44e319c777accfff0b2bdffdfa842f3e933d940",
+      "bytes": 5496,
+      "modo": "0o644"
+    },
+    "empacotamento/desinstalar.sh": {
+      "sha256": "35f551301022a56c292c78eeccf7f9b489380ac9135d62c23107bb457dbbd564",
+      "bytes": 136,
+      "modo": "0o755"
+    },
+    "empacotamento/diagnosticar.sh": {
+      "sha256": "00812abdee789e239d56c3e79fd7f6e75f274189a7ffdbe3879f2ccad5df27c6",
+      "bytes": 235,
+      "modo": "0o755"
+    },
+    "empacotamento/icone.svg": {
+      "sha256": "aaf45c641c9bd6d5b10e671cf959914fa739f8359ee91b159095dbcc20342a17",
+      "bytes": 371,
+      "modo": "0o644"
+    },
+    "empacotamento/iniciar.sh": {
+      "sha256": "7f1843f344939ec86eb9ec58853dd87c2ec6d3a6a5db888a30dea6c41c252616",
+      "bytes": 150,
+      "modo": "0o755"
+    },
+    "empacotamento/instalar.sh": {
+      "sha256": "818defb8949bf075534502b378bdf582f54da10a3205e3ccf8a675fe2a1b0c83",
+      "bytes": 137,
+      "modo": "0o755"
+    },
+    "empacotamento/usuario.py": {
+      "sha256": "7b404d095a46cbfb5c6abfd81375fe42217cb8a91564508e1007ba4e8edc63d6",
+      "bytes": 6611,
+      "modo": "0o644"
+    },
+    "fabrica_correcoes/__init__.py": {
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "bytes": 1,
+      "modo": "0o644"
+    },
+    "fabrica_correcoes/fabrica_proxy.py": {
+      "sha256": "7daeae1942e5b2ea914aa3a69371f4957c0f55af9cc93915037e06dd4adbad4c",
+      "bytes": 41820,
+      "modo": "0o755"
+    },
+    "fabrica_correcoes/test_fabrica_proxy.py": {
+      "sha256": "c08c6934e9fd256911757960ae1103e50d2633d0c77619068accb3b654137bf5",
+      "bytes": 20881,
+      "modo": "0o644"
+    },
+    "geracao_mockup/gerar_mockup_simples.py": {
+      "sha256": "6d53348ec231f359cc3ef96dd2bc3a0fd4012c3b12ee1563eb10243a467e6d2a",
+      "bytes": 5092,
+      "modo": "0o755"
+    },
+    "importador_zip/inspecionar_zip.py": {
+      "sha256": "a1685d043b4299e382db66f3fc784a9f6435fd05c384b89ce37ff8477448db5a",
+      "bytes": 9240,
+      "modo": "0o755"
+    },
+    "importador_zip/README.md": {
+      "sha256": "0dea7c607145cf53237bf702a6c1bda273781681441997ed83c3628e108124df",
+      "bytes": 3489,
+      "modo": "0o644"
+    },
+    "interface/janela_principal.py": {
+      "sha256": "9707c539112f6048904302b0baf51e5be119e8eff00166335bb467b9079c4384",
+      "bytes": 51926,
+      "modo": "0o755"
+    },
+    "interface/README.md": {
+      "sha256": "a67c3d0f71f5514be78c67da2d43b63a1fdbc7730ad8b7f7a3fe3cd5a050f58a",
+      "bytes": 13444,
+      "modo": "0o644"
+    },
+    "interface/servidor_local.py": {
+      "sha256": "7a16ffb5e568d088f508427db17099aa0ce1acf67245f2e75add116684bea2fe",
+      "bytes": 950,
+      "modo": "0o644"
+    },
+    "LEIA-ME_PACOTE.md": {
+      "sha256": "6305222d37b71e7d353b05fbd6b3e9f70eeee51489a7a7425c5652e6d3bceab2",
+      "bytes": 6066,
+      "modo": "0o644"
+    },
+    "microagentes/analisar_erro.py": {
+      "sha256": "2d0ca89f7610aef0a43b739b1e4ff736f4f030adcf643ee14620dfea11849ccb",
+      "bytes": 9474,
+      "modo": "0o755"
+    },
+    "microagentes/delegar_tarefa.py": {
+      "sha256": "dad59b30a03f07b57792e454640587cd0ab12afd74816606aaec4f0316961d24",
+      "bytes": 10340,
+      "modo": "0o755"
+    },
+    "microagentes/README.md": {
+      "sha256": "4e9f1e92174ea104c265969b88bdb8bbbb9a22cfca14253f7e08f388bdd2ed8f",
+      "bytes": 9387,
+      "modo": "0o644"
+    },
+    "motor_ia/README.md": {
+      "sha256": "415c41cfea32cd202b554318482b8fe05ce9b35043f49145490af3736c5d6412",
+      "bytes": 4346,
+      "modo": "0o644"
+    },
+    "motor_ia/selecionar_motor.py": {
+      "sha256": "4b6a952112791372dd4f27690ce43d42505d89150208ea2590a97ea80e669ee1",
+      "bytes": 8445,
+      "modo": "0o755"
+    },
+    "orquestrador/orquestrador.py": {
+      "sha256": "1b58961925d7ed71964234152ec1fe205c191d3b23758f26fccb2c684ab43141",
+      "bytes": 34547,
+      "modo": "0o755"
+    },
+    "orquestrador/README.md": {
+      "sha256": "0e03e2dbe48291706be7bb2611790f15e6ca524e6013e4d20224ba8b22618a74",
+      "bytes": 8965,
+      "modo": "0o644"
+    },
+    "pytest.ini": {
+      "sha256": "b160d82f7811555051f8966d8e02750a985227c1d022208c784e606946f2eada",
+      "bytes": 42,
+      "modo": "0o644"
+    },
+    "README_UBUNTU.md": {
+      "sha256": "e8dac5590bfe85cbfa370e9b67b85d164ee02b2bb42d867f144a80ec9bef04d4",
+      "bytes": 8898,
+      "modo": "0o644"
+    },
+    "requirements-dev.txt": {
+      "sha256": "da10459dac58f3141d0f1e0015cc3aa45a2e9790b80767684283a472b3bc3b47",
+      "bytes": 25,
+      "modo": "0o644"
+    },
+    "requirements.txt": {
+      "sha256": "1eb8745b764ae1014a48afab62e8ecc6670633caee8191c2fd6882d0a8f00948",
+      "bytes": 13,
+      "modo": "0o644"
+    },
+    "sandbox_execucao/executar_sandbox.py": {
+      "sha256": "fac6f1d0896c1a3403c28caf845ea40be349f4101c4e9f1eafcad6b816c31013",
+      "bytes": 7402,
+      "modo": "0o755"
+    },
+    "sandbox_execucao/README.md": {
+      "sha256": "72074cdeeda31a9c4303818a3dc5c1143b819b9c2fe47fcd6414d43afd913784",
+      "bytes": 4106,
+      "modo": "0o644"
+    },
+    "tests/conftest.py": {
+      "sha256": "6d65036da41a8c2d0bde00c5d786eb26ec6b7e7f405165fab38332e12776f7c2",
+      "bytes": 2914,
+      "modo": "0o644"
+    },
+    "tests/README.md": {
+      "sha256": "e66e547ca92d7a9bec1fd5a0ed614aac71db6e650d468f673293c3c720272da0",
+      "bytes": 894,
+      "modo": "0o644"
+    },
+    "tests/test_analisador_projeto.py": {
+      "sha256": "4af2a32b28aaed0da6fc2dc3392330fb9eba4f8223399706778cc3922dcc0f02",
+      "bytes": 4696,
+      "modo": "0o644"
+    },
+    "tests/test_analisar_erro.py": {
+      "sha256": "a7871d0805a152871c76661a2b9bb43f84b56bb29197e98a6fbee4921ff88303",
+      "bytes": 6657,
+      "modo": "0o644"
+    },
+    "tests/test_buscar_codigo.py": {
+      "sha256": "6e769d19e2540fececa5e2f81884648086d7db87d3f080cc309c828f5fdd350e",
+      "bytes": 16297,
+      "modo": "0o644"
+    },
+    "tests/test_gerar_mockup_simples.py": {
+      "sha256": "ef1538e2f5b6b804d272af9bd74158d235af31b9236dacc0b7a149cca65afc55",
+      "bytes": 2502,
+      "modo": "0o644"
+    },
+    "tests/test_importador_zip.py": {
+      "sha256": "8bcb745de82715ce089eba66ce594e0360485bba941b4967c295fda7aa00168f",
+      "bytes": 2658,
+      "modo": "0o644"
+    },
+    "tests/test_interface.py": {
+      "sha256": "c45964ce1cdb4ca2296f796a91227bf9e709ca93d37723d206fcf8b9f37c4f0c",
+      "bytes": 39976,
+      "modo": "0o644"
+    },
+    "tests/test_microagentes.py": {
+      "sha256": "e86f5186dcfdc46db36c28705ae1f4af124bd289f226b834e62e30c21bfc8698",
+      "bytes": 9448,
+      "modo": "0o644"
+    },
+    "tests/test_motor_ia.py": {
+      "sha256": "f740322b935f3b6d3c096aa5b3d550bc6a32a3d2fba3467bf497346936b31a03",
+      "bytes": 7359,
+      "modo": "0o644"
+    },
+    "tests/test_orquestrador.py": {
+      "sha256": "637f93c22167dbc0add54dcfaaebf8b83be0e3c77115f8487bfb28937e5203f3",
+      "bytes": 28457,
+      "modo": "0o644"
+    },
+    "tests/test_sandbox_execucao.py": {
+      "sha256": "aa8c255f1c88fed5a2f7344088cdfa4c1164a1a7952fd875356793526c32c955",
+      "bytes": 4464,
+      "modo": "0o644"
+    },
+    "tests/test_ubuntu_adaptacoes.py": {
+      "sha256": "4d6f20f4c0476c8faf535843bc8547a8fc6877e6088d496c8a84e03d3e85cc1a",
+      "bytes": 8606,
+      "modo": "0o644"
+    },
+    "tests/test_visao_mockup.py": {
+      "sha256": "a14d89530ea126a682e2d3ddf5b118c1e0293c1ae2125d8b00fbf44c8e906dbb",
+      "bytes": 9360,
+      "modo": "0o644"
+    },
+    "VALIDACAO_UBUNTU.md": {
+      "sha256": "45acda974b4168e43c89f6c3662aae896f092a8beb832203926e13e964615581",
+      "bytes": 7925,
+      "modo": "0o644"
+    },
+    "validar_interface_real.py": {
+      "sha256": "86cc277ea8d3c510d8024f87d4f644ef1dbce214419ee609840ba25bda852dd7",
+      "bytes": 2634,
+      "modo": "0o644"
+    },
+    "visao_mockup/interpretar_mockup.py": {
+      "sha256": "a5d0fec0e65087f7d1848b806515b97a0fbe869087cdfee51e2f9130458de5e0",
+      "bytes": 9261,
+      "modo": "0o755"
+    }
+  }
+}

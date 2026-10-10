@@ -1,0 +1,244 @@
+#!/usr/bin/env python3
+"""Seletor automatico de motor de IA local (llama.cpp / Ollama / LM Studio).
+
+Detecta o hardware disponivel e os motores em execucao, e escolhe o
+melhor sem exigir mudanca de codigo no orquestrador.
+
+Nesta maquina hoje (Xeon sem AVX2 + RX 580 via Vulkan), so o llama.cpp
+e elegivel. Apos um upgrade de hardware (CPU com AVX2, por exemplo),
+o mesmo script passa a habilitar LM Studio e/ou Ollama automaticamente,
+bastando que o motor esteja instalado e rodando.
+
+Uso:
+    python3 selecionar_motor.py
+"""
+
+import json
+import os
+import platform
+import shutil
+import signal
+import subprocess
+import urllib.error
+import urllib.request
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable, Optional
+
+
+def tem_avx2() -> bool:
+    """AVX2 e exigido pelo LM Studio em Linux/Windows x64."""
+    if platform.system() != "Linux":
+        return False
+    try:
+        with open("/proc/cpuinfo") as f:
+            return "avx2" in f.read()
+    except OSError:
+        return False
+
+
+def tem_vulkan() -> bool:
+    """Vulkan funcional e o requisito do backend do llama.cpp usado aqui."""
+    vulkaninfo = shutil.which("vulkaninfo")
+    if not vulkaninfo:
+        return False
+    try:
+        resultado = subprocess.run(
+            [vulkaninfo, "--summary"], capture_output=True, timeout=5
+        )
+        return resultado.returncode == 0
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+
+
+def endpoint_responde(url: str, timeout: float = 1.5) -> bool:
+    """Verifica se uma API local (OpenAI-compatible) esta de pe."""
+    try:
+        with urllib.request.urlopen(url, timeout=timeout):
+            return True
+    except (urllib.error.URLError, OSError, ValueError):
+        return False
+
+
+@dataclass
+class MotorIA:
+    nome: str
+    base_url: str
+    requisito_hardware: Callable[[], bool]
+    verificar_disponivel: Callable[[], bool]
+    observacao: str = ""
+
+    def elegivel(self) -> bool:
+        return self.requisito_hardware()
+
+    def disponivel(self) -> bool:
+        return self.elegivel() and self.verificar_disponivel()
+
+
+def motores_conhecidos() -> list:
+    """Ordem de prioridade quando mais de um estiver disponivel ao mesmo
+    tempo. llama.cpp (Vulkan) e o motor padrao do projeto (nao depende de
+    AVX2, unico eligivel no hardware de referencia) e por isso vem
+    primeiro. LM Studio e Ollama sao opcoes futuras: hoje ficam de fora
+    automaticamente por falta de AVX2 ou por nao estarem rodando, e
+    entram sozinhas quando o hardware/instalacao permitir — mas nunca
+    devem ser escolhidas no lugar do motor padrao so por estarem de pe
+    ao mesmo tempo.
+    """
+    return [
+        MotorIA(
+            nome="llama.cpp (Vulkan)",
+            base_url="http://localhost:8080/v1",
+            requisito_hardware=tem_vulkan,
+            verificar_disponivel=lambda: endpoint_responde(
+                "http://localhost:8080/v1/models"
+            ),
+            observacao="Motor padrao atual: nao depende de AVX2, usa RADV/Mesa.",
+        ),
+        MotorIA(
+            nome="Ollama",
+            base_url="http://localhost:11434/v1",
+            requisito_hardware=lambda: True,
+            verificar_disponivel=lambda: endpoint_responde(
+                "http://localhost:11434/api/tags"
+            ),
+            observacao="Backend Vulkan ainda experimental (2026). Opcao futura/paralela.",
+        ),
+        MotorIA(
+            nome="LM Studio",
+            base_url="http://localhost:1234/v1",
+            requisito_hardware=tem_avx2,
+            verificar_disponivel=lambda: endpoint_responde(
+                "http://localhost:1234/v1/models"
+            ),
+            observacao="Exige AVX2 (Linux/Windows x64). Opcao futura pos-upgrade.",
+        ),
+    ]
+
+
+def selecionar_motor(motores: Optional[list] = None) -> dict:
+    motores = motores or motores_conhecidos()
+    diagnostico = []
+    for motor in motores:
+        elegivel = motor.elegivel()
+        disponivel = elegivel and motor.verificar_disponivel()
+        diagnostico.append(
+            {
+                "nome": motor.nome,
+                "elegivel_pelo_hardware": elegivel,
+                "servidor_respondendo": disponivel,
+                "observacao": motor.observacao,
+            }
+        )
+        if disponivel:
+            return {
+                "escolhido": motor.nome,
+                "base_url": motor.base_url,
+                "diagnostico": diagnostico,
+            }
+    return {
+        "escolhido": None,
+        "base_url": None,
+        "diagnostico": diagnostico,
+        "mensagem": (
+            "Nenhum motor elegivel esta respondendo. Suba o servidor do "
+            "llama.cpp (ex.: `llama-server -m modelo.gguf --port 8080`) "
+            "ou instale/inicie um dos motores futuros (Ollama, LM Studio)."
+        ),
+    }
+
+
+FLAGS_LIMITE_GPU = ("-ngl", "--n-gpu-layers", "--gpu-layers")
+
+
+def listar_processos_llama_server(raiz_proc: Path = Path("/proc")) -> list:
+    """Lista processos `llama-server` rodando agora (Linux, lendo
+    `/proc/<pid>/cmdline` — sem dependência nova, sem precisar de root),
+    e se cada um foi iniciado com algum limite de GPU (-ngl/--n-gpu-layers).
+
+    Existe por causa de um incidente real: o servidor do modelo de
+    código é subido manualmente pelo usuário, fora do controle do
+    orquestrador — nada aqui impede alguém de esquecer a flag e rodar
+    sem limite nenhum, o que já derrubou uma GPU sob carga sustentada.
+    Isso não conserta o problema sozinho, só torna visível."""
+    processos = []
+    if not raiz_proc.is_dir():
+        return processos
+
+    for entrada in raiz_proc.iterdir():
+        if not entrada.name.isdigit():
+            continue
+        try:
+            bruto = (entrada / "cmdline").read_bytes()
+        except OSError:
+            continue
+
+        args = [a for a in bruto.decode("utf-8", errors="replace").split("\x00") if a]
+        if not args or "llama-server" not in Path(args[0]).name:
+            continue
+
+        porta = None
+        if "--port" in args:
+            try:
+                porta = int(args[args.index("--port") + 1])
+            except (ValueError, IndexError):
+                pass
+
+        processos.append(
+            {
+                "pid": int(entrada.name),
+                "porta": porta,
+                "tem_limite_gpu": any(flag in args for flag in FLAGS_LIMITE_GPU),
+                "cmdline": " ".join(args),
+            }
+        )
+    return processos
+
+
+def encerrar_processos_llama_server(
+    raiz_proc: Path = Path("/proc"),
+    sinal: int = signal.SIGTERM,
+    matar: Callable[[int, int], None] = os.kill,
+) -> list:
+    """Encerra todo processo `llama-server` encontrado por
+    `listar_processos_llama_server` — botão de emergência complementar:
+    esse último só avisa que um servidor está rodando sem limite de
+    GPU, este age sobre o aviso sem precisar achar o PID na mão. Mata
+    tudo que casar, inclusive um servidor de código/visão subido
+    manualmente pelo usuário fora do controle da Fábrica — use só em
+    emergência (ex.: aviso de GPU sem limite combinado com temperatura
+    alta). Devolve a lista de PIDs que receberam o sinal com sucesso."""
+    encerrados = []
+    for processo in listar_processos_llama_server(raiz_proc):
+        try:
+            matar(processo["pid"], sinal)
+        except OSError:
+            continue
+        encerrados.append(processo["pid"])
+    return encerrados
+
+
+CAMINHO_HWMON_DRM = Path("/sys/class/drm")
+LIMITE_TEMPERATURA_GPU_CELSIUS = 90.0
+
+
+def temperatura_gpu_celsius(raiz: Path = CAMINHO_HWMON_DRM) -> Optional[float]:
+    """Lê a temperatura mais alta entre as GPUs via sysfs (Linux,
+    amdgpu/i915/nouveau — sem dependência nova, sem precisar de root).
+    Devolve `None` se não achar nenhum sensor (fora do Linux, sem GPU
+    dedicada, ou hwmon ainda não populado logo após o boot) — chamador
+    decide o que fazer com a ausência de leitura, não é tratado como
+    erro aqui."""
+    if not raiz.is_dir():
+        return None
+    temperaturas = []
+    for arquivo in raiz.glob("card*/device/hwmon/hwmon*/temp1_input"):
+        try:
+            temperaturas.append(int(arquivo.read_text().strip()) / 1000)
+        except (OSError, ValueError):
+            continue
+    return max(temperaturas) if temperaturas else None
+
+
+if __name__ == "__main__":
+    print(json.dumps(selecionar_motor(), indent=2, ensure_ascii=False))

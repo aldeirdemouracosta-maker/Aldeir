@@ -44,7 +44,8 @@ if [ "$PERFIL" = "completo" ]; then
   chmod +x config/hooks/live/*
   mkdir -p config/includes.chroot/opt/codice
   cp -a ../../aether config/includes.chroot/opt/codice/aether
-  cp -a ../../fabrica-correcoes config/includes.chroot/opt/codice/fabrica-correcoes
+  cp -a ../../fabrica-linux config/includes.chroot/opt/codice/fabrica-linux
+  rm -rf config/includes.chroot/opt/codice/fabrica-linux/tests
   rm -rf config/includes.chroot/opt/codice/aether/tests
 fi
 

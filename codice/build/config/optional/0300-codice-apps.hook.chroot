@@ -10,6 +10,22 @@ python3 -m venv /opt/codice/venv
 ln -sf /opt/codice/venv/bin/aether /usr/local/bin/aether
 ln -sf /opt/codice/venv/bin/aether-gui /usr/local/bin/aether-gui
 PIPX_HOME=/opt/codice/pipx PIPX_BIN_DIR=/usr/local/bin pipx install aider-chat || echo "AVISO: aider falhou"
-# Proxy da Fabrica (servico systemd criado no primeiro boot)
+# Fabrica Local de IA (PySide6) em venv proprio + lancador e atalho
+python3 -m venv /opt/codice/fabrica-venv
+/opt/codice/fabrica-venv/bin/pip install --no-cache-dir -r /opt/codice/fabrica-linux/requirements.txt
+cat > /usr/local/bin/fabrica-local <<'EOS'
+#!/bin/sh
+cd /opt/codice/fabrica-linux && exec /opt/codice/fabrica-venv/bin/python -B -m interface.janela_principal "$@"
+EOS
+chmod 755 /usr/local/bin/fabrica-local
+cat > /usr/share/applications/fabrica-local.desktop <<'EOS'
+[Desktop Entry]
+Type=Application
+Name=Fabrica Local de IA
+Exec=/usr/local/bin/fabrica-local
+Terminal=false
+Categories=Development;
+EOS
+# Proxy corrigido (versao do pacote Fabrica Linux, 39 testes)
 install -d /usr/local/lib/fabrica-correcoes
-install -m 644 /opt/codice/fabrica-correcoes/fabrica_proxy.py /usr/local/lib/fabrica-correcoes/
+install -m 644 /opt/codice/fabrica-linux/fabrica_correcoes/fabrica_proxy.py /usr/local/lib/fabrica-correcoes/
