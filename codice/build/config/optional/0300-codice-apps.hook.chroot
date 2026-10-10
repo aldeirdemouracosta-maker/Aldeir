@@ -9,7 +9,11 @@ python3 -m venv /opt/codice/venv
 /opt/codice/venv/bin/pip install --no-cache-dir "/opt/codice/aether[gui]"
 ln -sf /opt/codice/venv/bin/aether /usr/local/bin/aether
 ln -sf /opt/codice/venv/bin/aether-gui /usr/local/bin/aether-gui
-PIPX_HOME=/opt/codice/pipx PIPX_BIN_DIR=/usr/local/bin pipx install aider-chat || echo "AVISO: aider falhou"
+# aider: o pipx falhou no build (Python 3.13 do Debian). uv baixa um Python 3.12 so para o aider.
+/opt/codice/venv/bin/pip install --no-cache-dir uv
+UV_TOOL_DIR=/opt/codice/uv-tools UV_TOOL_BIN_DIR=/usr/local/bin UV_PYTHON_INSTALL_DIR=/opt/codice/uv-python \
+  /opt/codice/venv/bin/uv tool install --python 3.12 aider-chat \
+  || echo "AVISO: aider falhou (veja o log acima)" >&2
 # Fabrica Local de IA (PySide6) em venv proprio + lancador e atalho
 python3 -m venv /opt/codice/fabrica-venv
 /opt/codice/fabrica-venv/bin/pip install --no-cache-dir -r /opt/codice/fabrica-linux/requirements.txt
