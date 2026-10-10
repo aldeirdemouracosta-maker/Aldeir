@@ -1,0 +1,3 @@
+[init]
+	templateDir = /usr/share/codice/git-template
+	defaultBranch = main

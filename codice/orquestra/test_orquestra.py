@@ -23,7 +23,7 @@ class T(unittest.TestCase):
         self.d.cleanup()
 
     def contrato(self, mods, **extra):
-        c = {"projeto": str(self.repo), "base": "main", "descricao": "d", "paralelo": 2,
+        c = {"projeto": str(self.repo), "base": "main", "sandbox": "nenhum", "descricao": "d", "paralelo": 2,
              "timeout": 60, "agentes": {"fake": [sys.executable, "-c", AGENTE, "{arq}", "ok"]},
              "modulos": mods}
         c.update(extra)
@@ -78,6 +78,34 @@ class T(unittest.TestCase):
     def test_escopo(self):
         self.assertEqual(co.fora_do_escopo(["a/x", "ab/y"], ["a"]), ["ab/y"])
         self.assertEqual(co.fora_do_escopo(["q"], None), [])
+
+class Seguranca(unittest.TestCase):
+    def test_comando_bwrap(self):
+        b = co.envolver_sandbox(["agente", "x"], "/w/a", "/w", rede=False)
+        self.assertIn("--unshare-all", b)
+        self.assertNotIn("--share-net", b)
+        self.assertEqual(b[b.index("--bind") + 1], "/w/a")
+        self.assertEqual(b[-3:], ["--", "agente", "x"])
+        self.assertIn("--share-net", co.envolver_sandbox(["a"], "/w/a", "/w", rede=True))
+        self.assertNotIn("/root", " ".join(b))
+
+    def test_sandbox_obrigatorio_falha_fechado(self):
+        import shutil
+        if shutil.which("bwrap"):
+            self.skipTest("bwrap instalado")
+        with self.assertRaises(RuntimeError):
+            co.preparar(["x"], {}, {}, "/w/a", "/w")
+
+    def test_env_arquivo_permissoes(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "env"
+            f.write_text("# c\nOPENAI_API_KEY=abc\nOUTRA='x'\n")
+            f.chmod(0o644)
+            with self.assertRaises(SystemExit):
+                co.ler_env_arquivo(str(f))
+            f.chmod(0o600)
+            self.assertEqual(co.ler_env_arquivo(str(f)), {"OPENAI_API_KEY": "abc", "OUTRA": "x"})
+
 
 if __name__ == "__main__":
     unittest.main()

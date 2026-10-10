@@ -1,6 +1,5 @@
 # --- sistema minimo ---
 sudo
-openssh-server
 curl
 wget
 git
@@ -46,3 +45,17 @@ pipx
 cmatrix
 fonts-dejavu-core
 tmux
+# --- v0.1: seguranca, editor, monitoramento, idioma ---
+bubblewrap
+podman
+nftables
+unattended-upgrades
+neovim
+micro
+btop
+radeontop
+nvtop
+locales
+console-setup
+nodejs
+npm

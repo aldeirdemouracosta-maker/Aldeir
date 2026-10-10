@@ -19,7 +19,7 @@ lb config \
   --architectures amd64 \
   --archive-areas "main contrib non-free non-free-firmware" \
   --binary-images iso-hybrid \
-  --bootappend-live "boot=live components quiet" \
+  --bootappend-live "boot=live components quiet locales=pt_BR.UTF-8 keyboard-layouts=br timezone=America/Sao_Paulo" \
   --debian-installer live \
   --debian-installer-gui false \
   --iso-volume "CODICE" \

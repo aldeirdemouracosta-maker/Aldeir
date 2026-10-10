@@ -1,0 +1,13 @@
+#!/bin/sh
+# Baixa um modelo GGUF e confere o SHA-256 antes de aceitar.
+# Uso: codice-baixar-modelo <url> <sha256> [destino=/models]
+set -eu
+[ $# -ge 2 ] || { echo "uso: $0 <url> <sha256> [pasta]" >&2; exit 2; }
+url=$1; sha=$2; dest=${3:-/models}
+arq="$dest/$(basename "${url%%\?*}")"
+tmp="$arq.parte"
+curl -fL --proto '=https,file' -o "$tmp" "$url"
+if [ "$(sha256sum "$tmp" | cut -d' ' -f1)" != "$sha" ]; then
+  rm -f "$tmp"; echo "SHA-256 nao confere: arquivo descartado" >&2; exit 1
+fi
+mv "$tmp" "$arq"; echo "ok: $arq"

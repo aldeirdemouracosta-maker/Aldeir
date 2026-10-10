@@ -50,6 +50,55 @@ def run(cmd, cwd, timeout=None, env=None):
         return 127, "comando nao encontrado: %s" % e
 
 
+def envolver_sandbox(cmd, pasta, repo, rede, extra_ro=(), bwrap="bwrap"):
+    """Prefixa o comando com bubblewrap: so a pasta do worktree e gravavel,
+    HOME e /tmp sao temporarios, o .git do projeto e somente leitura.
+    rede=False isola a rede por completo; rede=True compartilha a rede da maquina
+    (o bubblewrap nao filtra por destino)."""
+    pasta, repo = str(pasta), str(repo)
+    b = [bwrap, "--die-with-parent", "--unshare-all", "--new-session"]
+    if rede:
+        b.append("--share-net")
+    for d in ("/usr", "/etc/ssl", "/etc/alternatives", "/etc/resolv.conf", "/etc/hosts"):
+        b += ["--ro-bind-try", d, d]
+    b += ["--symlink", "usr/bin", "/bin", "--symlink", "usr/sbin", "/sbin",
+          "--symlink", "usr/lib", "/lib", "--symlink", "usr/lib64", "/lib64",
+          "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--tmpfs", "/home/agente",
+          "--setenv", "HOME", "/home/agente",
+          "--ro-bind-try", str(Path(repo) / ".git"), str(Path(repo) / ".git"),
+          "--bind", pasta, pasta, "--chdir", pasta]
+    for d in extra_ro:
+        b += ["--ro-bind-try", d, d]
+    return b + ["--"] + list(cmd)
+
+
+def ler_env_arquivo(caminho):
+    """Le CHAVE=VALOR. Recusa arquivo legivel por grupo/outros (segredos)."""
+    p = Path(caminho).expanduser()
+    if not p.exists():
+        raise SystemExit("arquivo de chaves nao existe: %s" % p)
+    if p.stat().st_mode & 0o077:
+        raise SystemExit("permissao insegura em %s (use chmod 600)" % p)
+    env = {}
+    for linha in p.read_text(encoding="utf-8").splitlines():
+        linha = linha.strip()
+        if linha and not linha.startswith("#") and "=" in linha:
+            k, v = linha.split("=", 1)
+            env[k.strip()] = v.strip().strip("\"'")
+    return env
+
+
+def preparar(cmd, contrato, mod, pasta, repo):
+    modo = contrato.get("sandbox", "bwrap")
+    if modo == "nenhum":
+        return cmd
+    import shutil
+    if not shutil.which("bwrap"):
+        raise RuntimeError("sandbox exigido mas 'bwrap' nao encontrado (instale bubblewrap "
+                           "ou use \"sandbox\": \"nenhum\" por sua conta e risco)")
+    return envolver_sandbox(cmd, pasta, repo, mod.get("rede", False), mod.get("bind_ro", []))
+
+
 def git(repo, *args):
     return run(["git"] + list(args), cwd=str(repo))
 
@@ -93,12 +142,22 @@ def trabalhar(contrato, repo, base, mod, simular):
         return res
     prompt = montar_prompt(contrato, mod)
     cmd = [prompt if a == "{prompt}" else a for a in modelo_cmd]
-    env = dict(os.environ, **contrato.get("env", {}), **mod.get("env", {}))
+    env = dict(os.environ, **contrato.get("env", {}))
+    if contrato.get("env_arquivo") and mod.get("chaves"):
+        # so as chaves pedidas pelo modulo entram no ambiente do agente
+        todas = ler_env_arquivo(contrato["env_arquivo"])
+        env.update({k: v for k, v in todas.items() if k in mod["chaves"]})
+    env.update(mod.get("env", {}))
     (pasta / ".codice-prompt.txt").write_text(prompt, encoding="utf-8")
     if simular:
         res.update(status="SIMULADO", motivo="comando: " + " ".join(cmd[:2]) + " ...")
         return res
     t0 = time.time()
+    try:
+        cmd = preparar(cmd, contrato, mod, pasta, repo)
+    except RuntimeError as e:
+        res["motivo"] = str(e)
+        return res
     code, out = run(cmd, str(pasta), contrato.get("timeout", 1800), env)
     res["duracao_s"] = round(time.time() - t0, 1)
     res["log_agente"] = out[-4000:]
@@ -118,7 +177,12 @@ def trabalhar(contrato, repo, base, mod, simular):
         res["motivo"] = "nenhuma alteracao feita"
         return res
     if mod.get("teste"):
-        code, out = run(mod["teste"], str(pasta), contrato.get("timeout", 1800), env)
+        try:
+            tcmd = preparar(mod["teste"], contrato, {"rede": False, "bind_ro": mod.get("bind_ro", [])}, pasta, repo)
+        except RuntimeError as e:
+            res["motivo"] = str(e)
+            return res
+        code, out = run(tcmd, str(pasta), contrato.get("timeout", 1800), env)
         res["log_teste"] = out[-4000:]
         if code != 0:
             res["motivo"] = "teste do modulo falhou (codigo %s)" % code
