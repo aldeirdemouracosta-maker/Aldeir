@@ -46,6 +46,36 @@ jobs:
         run: |
           ls -lh *.iso || true
           sha256sum *.iso | tee SHA256SUMS || true
+      - name: Resumo do conteudo da ISO
+        if: always()
+        working-directory: codice/build/work
+        run: |
+          {
+            echo "## Conteudo da ISO (${{ matrix.perfil }})"
+            echo '```'
+            ls -lh *.iso 2>/dev/null || echo "sem ISO"
+            echo "--- XanMod / llama no build.log ---"
+            grep -E "XanMod:|AVISO|llama" build.log | head -20 || true
+            if ls *.iso >/dev/null 2>&1; then
+              xorriso -osirrox on -indev *.iso -extract /live /tmp/live >/dev/null 2>&1 || true
+              echo "--- kernels na ISO (/live) ---"
+              ls /tmp/live 2>/dev/null | grep -E "vmlinuz|initrd|squashfs" || true
+              if [ -f /tmp/live/filesystem.squashfs ]; then
+                unsquashfs -ll /tmp/live/filesystem.squashfs > /tmp/lista.txt 2>/dev/null || true
+                echo "--- itens esperados dentro do sistema (1 = presente) ---"
+                for item in usr/local/bin/llama-server usr/local/bin/llama-cli etc/nftables.conf \
+                            etc/systemd/system/llama-server.service usr/local/bin/codice-estado \
+                            usr/bin/librewolf usr/local/bin/aether usr/local/bin/aider \
+                            usr/local/bin/fabrica-local usr/local/lib/fabrica-correcoes/fabrica_proxy.py \
+                            usr/share/codice/wallpaper.png usr/bin/tint2 usr/bin/conky usr/bin/tor; do
+                  printf "%s %s\n" "$(grep -c " squashfs-root/$item" /tmp/lista.txt || true)" "$item"
+                done
+                echo "--- kernels instalados ---"
+                grep -oE "squashfs-root/boot/vmlinuz-[^ ]+" /tmp/lista.txt | sort -u || true
+              fi
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
