@@ -1,0 +1,19 @@
+#!/bin/sh
+# Ivy Bridge-E: tem AVX e F16C; NAO tem AVX2, FMA nem BMI2.
+set -e
+TAG="$(cat /usr/share/ia-local/llama-tag)"
+cd /opt
+git clone --depth 1 --branch "$TAG" https://github.com/ggml-org/llama.cpp.git
+cd llama.cpp
+# libs estaticas: os binarios nao dependem do diretorio de build (removido no fim)
+cmake -B build \
+  -DGGML_VULKAN=ON \
+  -DGGML_NATIVE=OFF \
+  -DGGML_AVX=ON -DGGML_F16C=ON \
+  -DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_BMI2=OFF -DGGML_AVX512=OFF \
+  -DBUILD_SHARED_LIBS=OFF \
+  -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j"$(nproc)" --target llama-cli llama-server llama-bench
+install -m 0755 build/bin/llama-cli build/bin/llama-server build/bin/llama-bench /usr/local/bin/
+cd /opt && rm -rf llama.cpp
+mkdir -p /models

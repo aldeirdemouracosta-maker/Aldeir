@@ -1,0 +1,3 @@
+#!/bin/sh
+systemctl enable cpu-performance.service || true
+systemctl enable zramswap.service || true
