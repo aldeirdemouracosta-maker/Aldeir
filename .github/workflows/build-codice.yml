@@ -12,8 +12,12 @@ on:
 
 jobs:
   iso:
+    strategy:
+      fail-fast: false
+      matrix:
+        perfil: [minimo, completo]
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 150
     container:
       image: debian:trixie
       options: --privileged
@@ -33,7 +37,8 @@ jobs:
         working-directory: codice/build
         env:
           LLAMA_TAG: ${{ steps.tag.outputs.tag }}
-          DESKTOP: ${{ inputs.desktop || 'minimal' }}
+          PERFIL: ${{ matrix.perfil }}
+          DESKTOP: ${{ matrix.perfil == 'completo' && 'minimal' || 'none' }}
         run: ./build-iso.sh
       - name: Tamanho e checksum
         if: always()
@@ -44,7 +49,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: codice-iso-e-log
+          name: codice-iso-${{ matrix.perfil }}
           path: |
             codice/build/work/*.iso
             codice/build/work/SHA256SUMS
