@@ -1,0 +1,978 @@
+{
+  "schema": 1,
+  "snapshot_date": "2026-10-10",
+  "source": "C:/Projetos/Aether-antigo",
+  "tests_rerun_for_packaging": false,
+  "files": [
+    {
+      "path": ".aether/evidence/0ad0b56ecc6c4665b07a4a26ac6ae733.json",
+      "bytes": 18851,
+      "sha256": "8a1a11f344c5263e50f737ac4e605c3c91b758f68d37e5aa336111ae88a0290a"
+    },
+    {
+      "path": ".aether/evidence/0ad0b56ecc6c4665b07a4a26ac6ae733.txt",
+      "bytes": 1294,
+      "sha256": "595d94c157e83554965e4a46fa0ef7e7553317ca59f06c7ecc3019a3ecb2c38a"
+    },
+    {
+      "path": ".aether/evidence/0deb606409c7484b9efec89a2fe46bdf.json",
+      "bytes": 935,
+      "sha256": "fdb17fdf54722a5a6ac1cd0ee4323b0de8ad9fe9eee6beccc00d154ee7414287"
+    },
+    {
+      "path": ".aether/evidence/0deb606409c7484b9efec89a2fe46bdf.txt",
+      "bytes": 215,
+      "sha256": "84856eba759b7dc63547b50480814c4ae98a840370558878c7289495d2c47d1c"
+    },
+    {
+      "path": ".aether/evidence/1273727164dc4ec38ddb7b5fe915f69e.json",
+      "bytes": 760,
+      "sha256": "163d84be7f8e363a0f3d51cca1d11001250aaa1a49c6b6ff8b0f1ff311f3c5e3"
+    },
+    {
+      "path": ".aether/evidence/1273727164dc4ec38ddb7b5fe915f69e.txt",
+      "bytes": 132,
+      "sha256": "e287eadfa0d6ab03ea458162da47d2dfa05ba8a944c2aa09924847aebbbd7102"
+    },
+    {
+      "path": ".aether/evidence/12a5ab8ac3844bc6a3cb1fb9a98b6512.json",
+      "bytes": 18864,
+      "sha256": "b5b4f8d963296fbd4162219c656826f9318b8f80ddd6683f53ad860678736b37"
+    },
+    {
+      "path": ".aether/evidence/12a5ab8ac3844bc6a3cb1fb9a98b6512.txt",
+      "bytes": 1294,
+      "sha256": "e728f79a2eda95c1df90bd66910712bf39394b952acc351068f57c61d1311236"
+    },
+    {
+      "path": ".aether/evidence/179bdb9458d14ec5b9da6fbc1ac12335.json",
+      "bytes": 761,
+      "sha256": "33f2a1f8c1ab4cd09ef663925c1259792d166474de4ca54bfde281992c71e088"
+    },
+    {
+      "path": ".aether/evidence/179bdb9458d14ec5b9da6fbc1ac12335.txt",
+      "bytes": 132,
+      "sha256": "d216122ed5ecb1f9788b44aebc2f83e6d820280a26adb3d9605bbbb74ee25e43"
+    },
+    {
+      "path": ".aether/evidence/20486316c4b448d18fabd103465a9444.json",
+      "bytes": 947,
+      "sha256": "ecd89e28897227ca856d0e496c7426c4da99a6c4dbef3f39e5d447ed219226fd"
+    },
+    {
+      "path": ".aether/evidence/20486316c4b448d18fabd103465a9444.txt",
+      "bytes": 172,
+      "sha256": "5cb2e18ab3397343b4ea9539fdb2d7f9c3920dea22f5ec55215fa52c401a0215"
+    },
+    {
+      "path": ".aether/evidence/2757b345efb9496cadd550ec4dfb9274.json",
+      "bytes": 19004,
+      "sha256": "0ec9aa3693e529369aed83aa656365e50b7a765da1a98e74d755acbbbb309e91"
+    },
+    {
+      "path": ".aether/evidence/2757b345efb9496cadd550ec4dfb9274.txt",
+      "bytes": 1293,
+      "sha256": "aeda30efba03219348d9b240b7def7f515c98ce594fcf5fd4543df0ba55a41e1"
+    },
+    {
+      "path": ".aether/evidence/2de82caf101741f7bd889f5d3f2a86b1.json",
+      "bytes": 12165,
+      "sha256": "1eea7e8c05b010765230a76a74ac290df12dfe1946af8a4675eb26d978075236"
+    },
+    {
+      "path": ".aether/evidence/2de82caf101741f7bd889f5d3f2a86b1.txt",
+      "bytes": 1463,
+      "sha256": "b08be5b2c8f34ba3b94638494dcdfd57bd64c5ddfa8f8354a57501fd7a75c0a0"
+    },
+    {
+      "path": ".aether/evidence/31fd963674b940c39d7749ad5bcb896d.json",
+      "bytes": 18863,
+      "sha256": "39f22e218910458cc635248f1321a970232a98961d4f4ff64ba365196b554345"
+    },
+    {
+      "path": ".aether/evidence/31fd963674b940c39d7749ad5bcb896d.txt",
+      "bytes": 1293,
+      "sha256": "3b36be07af05fc7ef1077154d17f8fe19b57da84f8f111f605b6d96ae792da04"
+    },
+    {
+      "path": ".aether/evidence/3f02d4903baa478d85d337c822b77325.json",
+      "bytes": 1004,
+      "sha256": "0fb1f5cf6e71996e88c65a4f291364d3b8450a2bd55ac4d1137fae06fa5f7af2"
+    },
+    {
+      "path": ".aether/evidence/3f02d4903baa478d85d337c822b77325.txt",
+      "bytes": 285,
+      "sha256": "b2d3e905d45887f0c1b117dc385ab8fb7d9d5b249ce7611c4a3ba718aed77aeb"
+    },
+    {
+      "path": ".aether/evidence/466c8465b07c462290b80477c2038ba6.json",
+      "bytes": 7673,
+      "sha256": "37c34b26f6f44e1469cd532d6f92dbc5b251324067bcbe276bfd434208fa2e47"
+    },
+    {
+      "path": ".aether/evidence/466c8465b07c462290b80477c2038ba6.txt",
+      "bytes": 256,
+      "sha256": "c9354c57ad295658eba1fb3c809f786b62a2e839cb39a0193c13dd0a489e26d5"
+    },
+    {
+      "path": ".aether/evidence/66947d05f7d04c9dac9e55370323963b.json",
+      "bytes": 37867,
+      "sha256": "f0142cca96f8c6db4ff5f0be74ff6142272f958b17d5a70097f0c841f07cc55f"
+    },
+    {
+      "path": ".aether/evidence/66947d05f7d04c9dac9e55370323963b.txt",
+      "bytes": 1278,
+      "sha256": "6af1918bb4f37f226aa5bb20c8064f6ce1d5a82fd0ca25c1ecfbdee54176bee3"
+    },
+    {
+      "path": ".aether/evidence/6a31aa798e5d4a1da7ab8bd1f4279ab2.json",
+      "bytes": 12164,
+      "sha256": "46e4b0e5a2f14b458284afb6689b55d4592b793c121401a159219c98276bdbe7"
+    },
+    {
+      "path": ".aether/evidence/6a31aa798e5d4a1da7ab8bd1f4279ab2.txt",
+      "bytes": 1463,
+      "sha256": "b6c74abd21e77c64e6050ed4f0060bc98981498d7603160811e0ea8fe2271dc2"
+    },
+    {
+      "path": ".aether/evidence/78af880d7de54d348a8d0104d2895b04.json",
+      "bytes": 12085,
+      "sha256": "c3212df44261fb81092dea8ade77bbe30f24d5a9eff7e8632559eb0958dd312a"
+    },
+    {
+      "path": ".aether/evidence/78af880d7de54d348a8d0104d2895b04.txt",
+      "bytes": 1463,
+      "sha256": "6e8f72cb4fee4b8465b561fd9b2c1665968f917653c43f4e61b26b960a693419"
+    },
+    {
+      "path": ".aether/evidence/7a1894f7ebc8437d9984e7813f739cee.json",
+      "bytes": 18861,
+      "sha256": "68cded9c80c47a7e55e4f6493d17ccfb5d060a54f2f5db6d5f3cc8935631e6ec"
+    },
+    {
+      "path": ".aether/evidence/7a1894f7ebc8437d9984e7813f739cee.txt",
+      "bytes": 1293,
+      "sha256": "e873dc8c3fa0fe4e798e56ec86d275646269e040717a16f7d3f446738e8d5147"
+    },
+    {
+      "path": ".aether/evidence/86bc1f9bee3549b681e80fb315a4ab57.json",
+      "bytes": 18864,
+      "sha256": "72bd703963da1111219d589ef42db73de625a32ef0bbc3b2f550bdf254d2539b"
+    },
+    {
+      "path": ".aether/evidence/86bc1f9bee3549b681e80fb315a4ab57.txt",
+      "bytes": 1293,
+      "sha256": "837672fcbabbfccc6c784244eceeba93b3a5ef4c2c86658716c2d79e3755b9f8"
+    },
+    {
+      "path": ".aether/evidence/ab554ff8d34a47438602d2632dae7756.json",
+      "bytes": 946,
+      "sha256": "7752a77926bc6be45e1b33e51d00a797c4b87b5cf8f8d0544fe10f6b4916a3c1"
+    },
+    {
+      "path": ".aether/evidence/ab554ff8d34a47438602d2632dae7756.txt",
+      "bytes": 172,
+      "sha256": "e8fd02fb4a49348e95cc432f1dc5d41720e0f5568927efe692cc2a1f35090fc5"
+    },
+    {
+      "path": ".aether/evidence/b2c27ab0f027403299abd1a7b1edf2fc.json",
+      "bytes": 11706,
+      "sha256": "f810900e52e461518fd12e66628495a58d4212930fa6207e795880eef792dcbf"
+    },
+    {
+      "path": ".aether/evidence/b2c27ab0f027403299abd1a7b1edf2fc.txt",
+      "bytes": 1463,
+      "sha256": "ad20a5144c51f99e15f7e02ef2c7508ee8cdc938ea030e0291dc39869970da60"
+    },
+    {
+      "path": ".aether/evidence/b2cc9a7f7aac46338284a322e171acb1.json",
+      "bytes": 18848,
+      "sha256": "fe8c733ffc965b65f0dbdc957f98b4a14ca05bd142590d31b9f3d756b06916ee"
+    },
+    {
+      "path": ".aether/evidence/b2cc9a7f7aac46338284a322e171acb1.txt",
+      "bytes": 1293,
+      "sha256": "20531e816f47a16ee0f93794038b62081960b06ccd46d104f413108e99993283"
+    },
+    {
+      "path": ".aether/evidence/cdfd67690e66477ebd96855680550e7c.json",
+      "bytes": 18849,
+      "sha256": "f18d6928dae0166fd057f786c0e040921ce184d24b5318ff470aff5c4e8f4001"
+    },
+    {
+      "path": ".aether/evidence/cdfd67690e66477ebd96855680550e7c.txt",
+      "bytes": 1278,
+      "sha256": "e5cde63a0347e324f7b9cdf8c2de8f4cdd9c93f1e403b31315f4a57e13ff7f68"
+    },
+    {
+      "path": ".aether/evidence/count-baseline-ollama-responses.json",
+      "bytes": 8304,
+      "sha256": "4486f32028bb3ef3a98ccc204c97f3e938ed81fc7352cea126f30a28ee87c76a"
+    },
+    {
+      "path": ".aether/evidence/count-baseline-ollama.json",
+      "bytes": 19780,
+      "sha256": "7635015e0638a665f079a10305d48246c924d90c6446f297670d5149acea1731"
+    },
+    {
+      "path": ".aether/evidence/count-baseline-ollama.log",
+      "bytes": 2636,
+      "sha256": "479f9e643de01670587d7a8d3a98b2f48588951dd577398e3bc43101558bbf27"
+    },
+    {
+      "path": ".aether/evidence/count-fake-limit-reproduction.json",
+      "bytes": 528,
+      "sha256": "39b2b525e3646b7fb8a1a519c9ffffab01eedada312b11e329f68b6aa48d2804"
+    },
+    {
+      "path": ".aether/evidence/count-fixed-filesystem-initial.json",
+      "bytes": 358,
+      "sha256": "0e12dcbe9a72ce5a13ba31dbaca5fcb6ba2e3ef95a21c16f9201cff5ea4e17ab"
+    },
+    {
+      "path": ".aether/evidence/count-fixed-filesystem.json",
+      "bytes": 8777,
+      "sha256": "efd9c875117dd9037ce0faf685064132d2ddd943abb2fb0c020c8879ac16f83e"
+    },
+    {
+      "path": ".aether/evidence/count-fixed-ollama-responses.json",
+      "bytes": 6533,
+      "sha256": "cd1c2b538b5c6be08e6093ebb124cb0af59b9f3e5b36e20e4d14c2d616517877"
+    },
+    {
+      "path": ".aether/evidence/count-fixed-ollama.json",
+      "bytes": 14470,
+      "sha256": "7c6dd7490c715f80561374734be509d757f2fe68328d4d6661886ea04b44a8f6"
+    },
+    {
+      "path": ".aether/evidence/count-fixed-ollama.log",
+      "bytes": 4616,
+      "sha256": "b755d5f37cf9a40ed3d5de52bfe71517fdc0877c2be626d416158ac03d66e46b"
+    },
+    {
+      "path": ".aether/evidence/count-gui-runtime-tests-final.log",
+      "bytes": 6736,
+      "sha256": "ec3dede65757ed656f077bc93bfc0249629a8e1458a3acd4fb54276b8a94f29b"
+    },
+    {
+      "path": ".aether/evidence/count-gui-runtime-tests.log",
+      "bytes": 5507,
+      "sha256": "2cf6fde176b5cf6c457ef65cd7842d7c62d5b7cf5c4b9c44ef31073424f156da"
+    },
+    {
+      "path": ".aether/evidence/count-pytest.log",
+      "bytes": 1203,
+      "sha256": "f65a9878cc20bf9148bbda45aad752b9687b4fc62280c57921039a227d28a590"
+    },
+    {
+      "path": ".aether/evidence/count-validation-report.md",
+      "bytes": 7123,
+      "sha256": "ec2ffac9de642832c147d09fdb7fddb1b316afba60d5ef783f44e01b0e7c1132"
+    },
+    {
+      "path": ".aether/evidence/count-verify-final.log",
+      "bytes": 2936,
+      "sha256": "cd9045e78821793cd048288d0fac61a9b8d8aeb55add1ac8f292bf09fd5595d7"
+    },
+    {
+      "path": ".aether/evidence/f0ed0aa7d6ad497d8a92bc01d7ba26d7.json",
+      "bytes": 7595,
+      "sha256": "bc39c5feb03928b1c1ecaadaa5a6969ab9865841cad156728f4d25b218d84719"
+    },
+    {
+      "path": ".aether/evidence/f0ed0aa7d6ad497d8a92bc01d7ba26d7.txt",
+      "bytes": 179,
+      "sha256": "ba0f9b133f34fdb8699417290a24148f7f01fab5e3a65c27b86295b74a5c7d1b"
+    },
+    {
+      "path": ".aether/evidence/f27f284a6ef54cb6941f6e55f53e2b5f.json",
+      "bytes": 761,
+      "sha256": "2c3f6d360b7f266d63386af6ce4e1a1cddca5637be2862313c5934a422ba1abc"
+    },
+    {
+      "path": ".aether/evidence/f27f284a6ef54cb6941f6e55f53e2b5f.txt",
+      "bytes": 132,
+      "sha256": "09115a9b8c39a8ea1bf733197bbd6022ad8e76e7755921a8fdecdfde956f8522"
+    },
+    {
+      "path": ".aether/evidence/gui-implementation-final.json",
+      "bytes": 3757,
+      "sha256": "a18e51040a86e00f5a852e58c7c2c063bb20e9923a5e7c23a997f5e4253c68ab"
+    },
+    {
+      "path": ".aether/evidence/gui-implementation-final.md",
+      "bytes": 4318,
+      "sha256": "d51d140fafe1f37b7677bf751194cae46e5b6df8a65ae355f781054fa8a906d3"
+    },
+    {
+      "path": ".aether/evidence/gui-install-retry.log",
+      "bytes": 5534,
+      "sha256": "3560a2d47001ba427e880a74d138128d9d2e3e1401b136c24467509ce08be203"
+    },
+    {
+      "path": ".aether/evidence/gui-install.log",
+      "bytes": 1024,
+      "sha256": "5f836a341a473f00dfb050b31725c2a80e9afb6c77d82f37068236430a5989db"
+    },
+    {
+      "path": ".aether/evidence/gui-launch.log",
+      "bytes": 1338,
+      "sha256": "f1927138f4fb1687c7196ee266b5a0353cdcc09b7c59cf92f6c6cc2c36d29fef"
+    },
+    {
+      "path": ".aether/evidence/gui-native-corrected-launch.log",
+      "bytes": 5782,
+      "sha256": "520bc8620bcd58815709ee6e621cb7712b8c1459eac0919396be8a13428d921d"
+    },
+    {
+      "path": ".aether/evidence/gui-native-first-launch.log",
+      "bytes": 2554,
+      "sha256": "31f956905807ce434e40808ffa0b09e987ff70e0fb18359eb50a0ab8a5f038d3"
+    },
+    {
+      "path": ".aether/evidence/gui-native-probes.log",
+      "bytes": 270,
+      "sha256": "d1ce54d1bc049ed0608048168fe17db5744476c4c1634c1cd6ce1ecb7be09b67"
+    },
+    {
+      "path": ".aether/evidence/gui-native-validation-final.json",
+      "bytes": 3647,
+      "sha256": "a991b737614255168de69e185b3defdf8821919578d8f8ea7ac0570a1527396a"
+    },
+    {
+      "path": ".aether/evidence/gui-native-validation-final.md",
+      "bytes": 4367,
+      "sha256": "6da2cf55d71749bb11d6bb2d9fbdd28f256298e200c3553fa35e9a7886258d8b"
+    },
+    {
+      "path": ".aether/evidence/gui-native-validation-gates.log",
+      "bytes": 2936,
+      "sha256": "b9aeac754a479e75fe920a9de730b4905be268863dbc6e4ec85206ee06d8cd5d"
+    },
+    {
+      "path": ".aether/evidence/gui-quality-gates.log",
+      "bytes": 2938,
+      "sha256": "4dab08ec68726a25c63e217c03b1ec9b360764aaf30e508c7f60c140e7bf69ee"
+    },
+    {
+      "path": ".aether/evidence/gui-real-elements-chat-corrected.log",
+      "bytes": 1042,
+      "sha256": "9ecdd349ab32b4c5cf4d004edbcc94b73bf94109d855e5c284e6466c59edbde1"
+    },
+    {
+      "path": ".aether/evidence/gui-real-elements-chat.json",
+      "bytes": 518,
+      "sha256": "9a328647bf558149a504815ffc38916cfe74958b5b2db002b0fd4d42c7c76ae7"
+    },
+    {
+      "path": ".aether/evidence/gui-real-elements-chat.log",
+      "bytes": 3078,
+      "sha256": "a7948795284b01d1b83b58371354bea3249f75886ebcbb43cdc673098e86e62c"
+    },
+    {
+      "path": ".aether/evidence/gui-real-runtime-tests.log",
+      "bytes": 1890,
+      "sha256": "a564dcf817cc8ab5c212156ad4fa335207f264dd36789511c517ac7a069c6ad4"
+    },
+    {
+      "path": ".aether/evidence/gui-runtime-status.json",
+      "bytes": 220,
+      "sha256": "7b5f5593bacdc83b116997982946a9dd41ecb10f5ac0ab08a217bf4c9cc92d55"
+    },
+    {
+      "path": ".aether/evidence/ollama-cache-corrected.json",
+      "bytes": 1051,
+      "sha256": "542c153fbaa919ba1c92f3669e9608e485f7b47b06b4f6ef705ea42f2593dcf1"
+    },
+    {
+      "path": ".aether/evidence/ollama-cli-cache-status.log",
+      "bytes": 292,
+      "sha256": "43c458f7e152c5663e956b7035916ccda9e73c13e005a01d2f94c1959c688e64"
+    },
+    {
+      "path": ".aether/evidence/ollama-cli-exits.json",
+      "bytes": 83,
+      "sha256": "9ce95a8f78ca03970c3bfd082a39a433623b0c1daf90018a6974a2e7b0c4a10c"
+    },
+    {
+      "path": ".aether/evidence/ollama-cli-search.log",
+      "bytes": 10310,
+      "sha256": "cb293a0efd6ff173d40fbb55dc31819f0a3e775bdc2c79d0427b5ab6d3f90688"
+    },
+    {
+      "path": ".aether/evidence/ollama-cli-status.log",
+      "bytes": 482,
+      "sha256": "14407da223561cbb1f86c3d9f25d183482c88fc1c3352c644f5920f78889722b"
+    },
+    {
+      "path": ".aether/evidence/ollama-index-confirmed.log",
+      "bytes": 8694,
+      "sha256": "b0b441a82989f74794846ca93015856b559794706de930e156eea14142ad7942"
+    },
+    {
+      "path": ".aether/evidence/ollama-index-default.json",
+      "bytes": 238,
+      "sha256": "e336de4faae880e6285c6283fe28ff13f7c5e8dadf1f78cb573279c7b4813bd7"
+    },
+    {
+      "path": ".aether/evidence/ollama-index-initial.log",
+      "bytes": 8696,
+      "sha256": "9cf3c32a2f4201449969c4ab69bc783196f32d9c2bcb9a5e442c141e58cb3fd3"
+    },
+    {
+      "path": ".aether/evidence/ollama-readonly-messages.json",
+      "bytes": 9425,
+      "sha256": "1a43b8245ec51acd8c2ec7dd757ce6d898219832f137faab36d9c46e1adb9eba"
+    },
+    {
+      "path": ".aether/evidence/ollama-readonly-result.txt",
+      "bytes": 1594,
+      "sha256": "19c13b43d282286c45ae41145c4b50fe21c24de7d604457675a44a4037b69b8b"
+    },
+    {
+      "path": ".aether/evidence/ollama-readonly-retry-messages.json",
+      "bytes": 7703,
+      "sha256": "2bb1dd1a60945b6a96657300401971967afead58ca6132db32897e79f4d6978e"
+    },
+    {
+      "path": ".aether/evidence/ollama-readonly-retry.json",
+      "bytes": 2007,
+      "sha256": "c028856c2352b01725ea6a746614cc13b7a0f34c932c8486dce46eb32ee06f1a"
+    },
+    {
+      "path": ".aether/evidence/ollama-readonly-retry.log",
+      "bytes": 4668,
+      "sha256": "531931291dbcbeac79862863dea81d27e1960ec2e5942c351f05495792cb1cb6"
+    },
+    {
+      "path": ".aether/evidence/ollama-real-validation.json",
+      "bytes": 10711,
+      "sha256": "f19ef927532221caf529a5f116ca11b25a73ef8e49da4017d4144f954016ee56"
+    },
+    {
+      "path": ".aether/evidence/ollama-real-validation.log",
+      "bytes": 12608,
+      "sha256": "d8afe240de7491b26addefe40496a7a817af8025a4107ea5db077c462088a62d"
+    },
+    {
+      "path": ".aether/evidence/ollama-validation-final.json",
+      "bytes": 12846,
+      "sha256": "65ffcbf87425b67317a07d6ce5ac14b3eb51c1bdb7105a15a3a9e525a0d63012"
+    },
+    {
+      "path": ".aether/evidence/ollama-validation-final.md",
+      "bytes": 5602,
+      "sha256": "b3c741291120c4866c13456408cbbd8150cd8b937ad13bb5ee6682b2972d257b"
+    },
+    {
+      "path": ".aether/evidence/reproduce_count_baseline.py",
+      "bytes": 1280,
+      "sha256": "eb604e9d0dbe1048847b1d312b2cb2362b22eb2f175887ed1f395dbf5c3d1df9"
+    },
+    {
+      "path": ".aether/evidence/reproduce_count_fixed_ollama.py",
+      "bytes": 1572,
+      "sha256": "0ba1c211da0be3bde10045c1438400efacbb544971b823f53d1486b3f921e606"
+    },
+    {
+      "path": ".aether/evidence/validate_cache_corrected.py",
+      "bytes": 1688,
+      "sha256": "b95db5227cc98e04f35cef7ad9e8912f5213919bf99284e6c1cf58c119fe6bfd"
+    },
+    {
+      "path": ".aether/evidence/validate_ollama_real.py",
+      "bytes": 5968,
+      "sha256": "1ff707380c1c8eea537da05afa83ac8d09b7bb41eb1b432f83fd923ea0f97002"
+    },
+    {
+      "path": ".aether/evidence/validate_readonly_retry.py",
+      "bytes": 2216,
+      "sha256": "5082956a716626293d596570c434e180ef9dceaf1625da3ce1b27f519c209a16"
+    },
+    {
+      "path": ".aether/skills/aether-corrigir-bug/aether.json",
+      "bytes": 152,
+      "sha256": "6575472a8e7f94abbeed9f6fb313759b7f23ce46d6825e4c6ca646fa366cd716"
+    },
+    {
+      "path": ".aether/skills/aether-corrigir-bug/SKILL.md",
+      "bytes": 1250,
+      "sha256": "657340fe963912aba6d4b47f91c82d554d458a06ef2ba5b7bc9ad2769206930c"
+    },
+    {
+      "path": ".aether/skills/aether-investigar-projeto/aether.json",
+      "bytes": 132,
+      "sha256": "57b273f482304d46ba10b9a95df22384b4022c36242dcc29defd7e54e123436e"
+    },
+    {
+      "path": ".aether/skills/aether-investigar-projeto/SKILL.md",
+      "bytes": 1197,
+      "sha256": "c5372e10542ca89035e9711a385f6424fa0c66e908739ee12a4b5fc8f701099f"
+    },
+    {
+      "path": ".aether/skills/aether-quality-gates/aether.json",
+      "bytes": 139,
+      "sha256": "5389270b800fdf9d272929b3e455004c3c150ccec9fbb4396ca82c882f9a52a6"
+    },
+    {
+      "path": ".aether/skills/aether-quality-gates/SKILL.md",
+      "bytes": 1626,
+      "sha256": "9887d7cea55b453a104106f6bda245709185febec107ef3ff47ebaf5f154b2a3"
+    },
+    {
+      "path": ".aether/skills/aether-report-evidence/aether.json",
+      "bytes": 126,
+      "sha256": "9f4d05329787aafe66eb09ac1823bc9e269a0286ab50d8ef05ca815f81d2e12b"
+    },
+    {
+      "path": ".aether/skills/aether-report-evidence/SKILL.md",
+      "bytes": 1613,
+      "sha256": "a08055df9d6bf00d700726b69216167ee1b331cf85c21dcc4adecac490818886"
+    },
+    {
+      "path": ".aether/skills/aether-revisar-diff/aether.json",
+      "bytes": 181,
+      "sha256": "afcd26155fd4c40f5fc39ea49661ced0ab7a5b2d224f353a9cff9f9ca6d5df1a"
+    },
+    {
+      "path": ".aether/skills/aether-revisar-diff/SKILL.md",
+      "bytes": 1235,
+      "sha256": "9edf0f0db16a1604e5937f9ecb2c6b66630671c3aea87e1795aaeb7fc0299a14"
+    },
+    {
+      "path": ".gitignore",
+      "bytes": 173,
+      "sha256": "eb124ccd4acaf9fb94e4d340b311d9adcd026ebf9c5f243815c03089d717ed1b"
+    },
+    {
+      "path": "aether/__init__.py",
+      "bytes": 60,
+      "sha256": "54297d8d072177c8291f8f2988cc2854a35fd828d12d0beac442e1f59db22cde"
+    },
+    {
+      "path": "aether/agent/__init__.py",
+      "bytes": 311,
+      "sha256": "f90c5b2f89e6250e3ee4dc5e514ff0cfe27bfab291d3a73957c95e8a45948108"
+    },
+    {
+      "path": "aether/agent/agent.py",
+      "bytes": 20098,
+      "sha256": "d6624edcd24449374540c8ce0c38f33e32f2107410d5726616fd778980d9a111"
+    },
+    {
+      "path": "aether/agent/counting.py",
+      "bytes": 5432,
+      "sha256": "e71ab899408a2d0c6ea016d25b25ce2976e95e492292a7948d7a3b794f4fc03f"
+    },
+    {
+      "path": "aether/agent/outcome.py",
+      "bytes": 410,
+      "sha256": "c432fa52cf33c4af5474c97055d231ef373120481f91c0e6b1991d3812cc904d"
+    },
+    {
+      "path": "aether/agent/tools.py",
+      "bytes": 21397,
+      "sha256": "3e701c1a833838c62a77c6c3bc368f2c7a9c1899f7d251822db09b9c8d6f63f0"
+    },
+    {
+      "path": "aether/cli.py",
+      "bytes": 8984,
+      "sha256": "da79ea11dbea222472390502445d3d0c14c00f0b19e31d473cf864130599af23"
+    },
+    {
+      "path": "aether/config.py",
+      "bytes": 4880,
+      "sha256": "eb1bebaa9ee2a5f5792e12d97d26d5da7f23d157b48e04ee9a10498b241a7b6d"
+    },
+    {
+      "path": "aether/evidence.py",
+      "bytes": 7865,
+      "sha256": "76ce74c5d3dff9c9e0caa4fa8512be1282f904e16363a17c924ac604aa0e90b1"
+    },
+    {
+      "path": "aether/gui/__init__.py",
+      "bytes": 53,
+      "sha256": "0a41997ddfba9cbb28807762f3154e3089821059e6c12878cf02852c988164cb"
+    },
+    {
+      "path": "aether/gui/app.py",
+      "bytes": 9316,
+      "sha256": "2cf0fa843f47f971120a47fc9c2aebcea407eddfd7e3c19e124a2d325f19635f"
+    },
+    {
+      "path": "aether/gui/components/__init__.py",
+      "bytes": 38,
+      "sha256": "3ad7c8e1ebcd30eb58b3749faf5c5f2e99b4d13438a9b9179db6bd30724b94ef"
+    },
+    {
+      "path": "aether/gui/components/chat.py",
+      "bytes": 3465,
+      "sha256": "3a0ab17cfd11141a65b6d400dd2b9fe0d278f302f38a37d74198c8d2d97dc887"
+    },
+    {
+      "path": "aether/gui/components/sidebar.py",
+      "bytes": 1586,
+      "sha256": "6bafed5bdc7f8ebf95a4cf92fecad1ace43c9201f85d06ad2ae7ce6be0d578f3"
+    },
+    {
+      "path": "aether/gui/components/tool_card.py",
+      "bytes": 866,
+      "sha256": "13559b9ad4a4b5022cba562f014a4465a76cc05bed0f92426e6d5203e783088c"
+    },
+    {
+      "path": "aether/gui/session.py",
+      "bytes": 3025,
+      "sha256": "8dcbd31f0a8afe45d51ad39d5d42702d219cce7878f045ee2d9be6647c3a7532"
+    },
+    {
+      "path": "aether/gui/styles.py",
+      "bytes": 4255,
+      "sha256": "e248ab47235abb7f601e87cbe0e5f7598a50660a8da857d447bf067f3f4244f1"
+    },
+    {
+      "path": "aether/indexer/__init__.py",
+      "bytes": 402,
+      "sha256": "47c4390e76df8595ba2eec0598494fde84cab1a36d3d6b2b99475e357bbf3f5f"
+    },
+    {
+      "path": "aether/indexer/cache.py",
+      "bytes": 5441,
+      "sha256": "9dddd8c4e01b70d44847e85236dd596720fdc84a1f8c3be895c1ffc872c1ca46"
+    },
+    {
+      "path": "aether/indexer/embedder.py",
+      "bytes": 3187,
+      "sha256": "2827bec6e5fb24f1eff73e0ea37bb8dd08e4f3f154f17cc2640c4b2d103b471f"
+    },
+    {
+      "path": "aether/indexer/indexer.py",
+      "bytes": 9048,
+      "sha256": "f1d73dc758429f08e42f4ebe2305b320809b3144fe8140aabf84e60fd77ca70a"
+    },
+    {
+      "path": "aether/indexer/vectorstore.py",
+      "bytes": 3058,
+      "sha256": "bea97fbf3acc1736dfe5ff817f3cd2f0ab0ca389119a28215a549512a0549a70"
+    },
+    {
+      "path": "aether/llm/__init__.py",
+      "bytes": 225,
+      "sha256": "5ec1197421299ba4ff4aa5f21f7b6ab07888a30b3acf40189ae7ec0d2d190b3e"
+    },
+    {
+      "path": "aether/llm/local.py",
+      "bytes": 1106,
+      "sha256": "4f8d29e0cdaf928eab65b83e7c4620ffd2d35c82a15392585d052c209b8a3df8"
+    },
+    {
+      "path": "aether/llm/ollama.py",
+      "bytes": 3840,
+      "sha256": "0f6757151644604e42d6b54e82ad7a83ab575d422c73a9f9126f9872534bc700"
+    },
+    {
+      "path": "aether/security.py",
+      "bytes": 384,
+      "sha256": "3dfdf45e7d91c52b5086786dd3fab9c785d20bd56f1717eb15d342d307424933"
+    },
+    {
+      "path": "aether/skills.py",
+      "bytes": 10883,
+      "sha256": "565672d1a4087f67b249ac00924aea7e9ef3e6f6df0202f8339feb7a8becd66a"
+    },
+    {
+      "path": "aether.yaml",
+      "bytes": 895,
+      "sha256": "ea4d79df7af11403228b5fd02f9c6d356146ef37bfc1d744d5222ab627e75bf5"
+    },
+    {
+      "path": "pyproject.toml",
+      "bytes": 1275,
+      "sha256": "bc7060718fc3fa15e0f641590e83fbcbd2d74a9e58ab00f8592ca348e6cd8208"
+    },
+    {
+      "path": "README.md",
+      "bytes": 15769,
+      "sha256": "097d0c23e918a6a9dac7c0b34527d90b387c67e70ee7a604683609260f4239d6"
+    },
+    {
+      "path": "REGISTRO-DA-ETAPA.md",
+      "bytes": 11066,
+      "sha256": "7ad9a0e486ddef8d437e3a629ebd29bda9b46e2a8b6f0d3584bdc01d85ad751b"
+    },
+    {
+      "path": "scripts/verify.py",
+      "bytes": 3138,
+      "sha256": "689f358aae0535961cb0701b3ca16f87419bedee33bc87b61afdf6f0cf000823"
+    },
+    {
+      "path": "tests/support.py",
+      "bytes": 474,
+      "sha256": "87c82ac7891ccaa2fa7f05276bff92903b1cc4b539637665dce10f16ce05c2f7"
+    },
+    {
+      "path": "tests/test_agent.py",
+      "bytes": 11202,
+      "sha256": "f6ab603c4d919474627d9c44390cc5664edbb1efd723879631c67be8ffc1712a"
+    },
+    {
+      "path": "tests/test_cache.py",
+      "bytes": 5145,
+      "sha256": "b9b6c08762b187f83426f5e3326a3345112622ffe4268122384b2c091dace8df"
+    },
+    {
+      "path": "tests/test_counting.py",
+      "bytes": 6155,
+      "sha256": "5bb1b4c0298ec0b43fc1cd75b7fc024d0f3c09d593d840be7a74c2984129b5be"
+    },
+    {
+      "path": "tests/test_evidence.py",
+      "bytes": 5041,
+      "sha256": "d8eb59d68c325b7e2be41c20acb35c739658d2ab7915d7035af462b5a71f82a3"
+    },
+    {
+      "path": "tests/test_gui_runtime.py",
+      "bytes": 8963,
+      "sha256": "ec8b64c6e2eea9c1cbf3b9773587f9ac26573bdda619e4cc9f01939fa2f9ce92"
+    },
+    {
+      "path": "tests/test_gui_session.py",
+      "bytes": 4315,
+      "sha256": "21b17853c9bf466f03b33863e3e797ea84d5008a23912674b63b101805577219"
+    },
+    {
+      "path": "tests/test_indexer.py",
+      "bytes": 4138,
+      "sha256": "3651c0095f9098b08ba4790585231efe419a28e3c4da654a0213175ad18a8f79"
+    },
+    {
+      "path": "tests/test_runtime_dependencies.py",
+      "bytes": 1972,
+      "sha256": "8a1b45edce3f3c47a615a56e7c7c23b6374dedda771e1d049eaff063429e8ae1"
+    },
+    {
+      "path": "tests/test_security.py",
+      "bytes": 6932,
+      "sha256": "51fd081d61de33d35d0460d1428fd3fe9ab24d789695345e11f1dd56c4d81408"
+    },
+    {
+      "path": "tests/test_skills.py",
+      "bytes": 5943,
+      "sha256": "3c996dbe4921f2157282f31ca361d0a09e0cbc2acd7d1a5e8be586aab0824c19"
+    },
+    {
+      "path": "MANIFESTO.json",
+      "bytes": null,
+      "sha256": null,
+      "note": "self hash omitted; covered by ZIP CRC and external SHA-256"
+    }
+  ],
+  "excluded": [
+    {
+      "path": ".aether/diagnostics",
+      "reason": "environment/cache/generated data"
+    },
+    {
+      "path": ".aether/embeddings.sqlite3",
+      "reason": "credential/key or generated/model/index data"
+    },
+    {
+      "path": ".aether/gui-install-tmp",
+      "reason": "environment/cache/generated data"
+    },
+    {
+      "path": ".aether/lancedb",
+      "reason": "environment/cache/generated data"
+    },
+    {
+      "path": ".buildtmp",
+      "reason": "environment/cache/generated data"
+    },
+    {
+      "path": ".mypy_cache",
+      "reason": "environment/cache/generated data"
+    },
+    {
+      "path": ".pytest_cache",
+      "reason": "environment/cache/generated data"
+    },
+    {
+      "path": ".ruff_cache",
+      "reason": "environment/cache/generated data"
+    },
+    {
+      "path": ".tmp",
+      "reason": "environment/cache/generated data"
+    },
+    {
+      "path": ".venv",
+      "reason": "environment/cache/generated data"
+    },
+    {
+      "path": "aether/__pycache__",
+      "reason": "environment/cache/generated data"
+    },
+    {
+      "path": "aether/agent/__pycache__",
+      "reason": "environment/cache/generated data"
+    },
+    {
+      "path": "aether/gui/__pycache__",
+      "reason": "environment/cache/generated data"
+    },
+    {
+      "path": "aether/gui/components/__pycache__",
+      "reason": "environment/cache/generated data"
+    },
+    {
+      "path": "aether/indexer/__pycache__",
+      "reason": "environment/cache/generated data"
+    },
+    {
+      "path": "aether/llm/__pycache__",
+      "reason": "environment/cache/generated data"
+    },
+    {
+      "path": "aether.egg-info",
+      "reason": "environment/cache/generated data"
+    },
+    {
+      "path": "scripts/__pycache__",
+      "reason": "environment/cache/generated data"
+    },
+    {
+      "path": "tests/__pycache__",
+      "reason": "environment/cache/generated data"
+    }
+  ],
+  "unavailable": [
+    {
+      "path": "tests/tmp1mo5nq94",
+      "error": "PermissionError",
+      "winerror": 5
+    },
+    {
+      "path": "tests/tmp2agewwuz",
+      "error": "PermissionError",
+      "winerror": 5
+    },
+    {
+      "path": "tests/tmp2hu1g4ep",
+      "error": "PermissionError",
+      "winerror": 5
+    },
+    {
+      "path": "tests/tmp3l6upsgu",
+      "error": "PermissionError",
+      "winerror": 5
+    },
+    {
+      "path": "tests/tmp4xd39hpc",
+      "error": "PermissionError",
+      "winerror": 5
+    },
+    {
+      "path": "tests/tmp5fq2cjh_",
+      "error": "PermissionError",
+      "winerror": 5
+    },
+    {
+      "path": "tests/tmp5fz3ndck",
+      "error": "PermissionError",
+      "winerror": 5
+    },
+    {
+      "path": "tests/tmp8ahvkmp_",
+      "error": "PermissionError",
+      "winerror": 5
+    },
+    {
+      "path": "tests/tmp8y95ca44",
+      "error": "PermissionError",
+      "winerror": 5
+    },
+    {
+      "path": "tests/tmp9x0w5avw",
+      "error": "PermissionError",
+      "winerror": 5
+    },
+    {
+      "path": "tests/tmpb9s1eiml",
+      "error": "PermissionError",
+      "winerror": 5
+    },
+    {
+      "path": "tests/tmpfyq1pjoz",
+      "error": "PermissionError",
+      "winerror": 5
+    },
+    {
+      "path": "tests/tmpkmvpc24s",
+      "error": "PermissionError",
+      "winerror": 5
+    },
+    {
+      "path": "tests/tmplmlo7g6_",
+      "error": "PermissionError",
+      "winerror": 5
+    },
+    {
+      "path": "tests/tmplpn_e0i_",
+      "error": "PermissionError",
+      "winerror": 5
+    },
+    {
+      "path": "tests/tmpsn5r34jw",
+      "error": "PermissionError",
+      "winerror": 5
+    },
+    {
+      "path": "tests/tmpss2vlgp0",
+      "error": "PermissionError",
+      "winerror": 5
+    },
+    {
+      "path": "tests/tmpvi0_13l8",
+      "error": "PermissionError",
+      "winerror": 5
+    },
+    {
+      "path": "tests/tmpyqj51ha_",
+      "error": "PermissionError",
+      "winerror": 5
+    },
+    {
+      "path": "tests/tmpyrfy18qe",
+      "error": "PermissionError",
+      "winerror": 5
+    }
+  ],
+  "sanitized_evidence_copies": [
+    ".aether/evidence/0ad0b56ecc6c4665b07a4a26ac6ae733.json",
+    ".aether/evidence/12a5ab8ac3844bc6a3cb1fb9a98b6512.json",
+    ".aether/evidence/2757b345efb9496cadd550ec4dfb9274.json",
+    ".aether/evidence/2de82caf101741f7bd889f5d3f2a86b1.json",
+    ".aether/evidence/2de82caf101741f7bd889f5d3f2a86b1.txt",
+    ".aether/evidence/31fd963674b940c39d7749ad5bcb896d.json",
+    ".aether/evidence/6a31aa798e5d4a1da7ab8bd1f4279ab2.json",
+    ".aether/evidence/6a31aa798e5d4a1da7ab8bd1f4279ab2.txt",
+    ".aether/evidence/78af880d7de54d348a8d0104d2895b04.json",
+    ".aether/evidence/78af880d7de54d348a8d0104d2895b04.txt",
+    ".aether/evidence/7a1894f7ebc8437d9984e7813f739cee.json",
+    ".aether/evidence/86bc1f9bee3549b681e80fb315a4ab57.json",
+    ".aether/evidence/b2c27ab0f027403299abd1a7b1edf2fc.json",
+    ".aether/evidence/b2c27ab0f027403299abd1a7b1edf2fc.txt",
+    ".aether/evidence/b2cc9a7f7aac46338284a322e171acb1.json",
+    ".aether/evidence/cdfd67690e66477ebd96855680550e7c.json",
+    ".aether/evidence/count-gui-runtime-tests-final.log",
+    ".aether/evidence/count-gui-runtime-tests.log",
+    ".aether/evidence/count-pytest.log",
+    ".aether/evidence/gui-install.log",
+    ".aether/evidence/gui-native-corrected-launch.log",
+    ".aether/evidence/gui-native-first-launch.log",
+    ".aether/evidence/gui-native-validation-final.json",
+    ".aether/evidence/gui-native-validation-final.md",
+    ".aether/evidence/gui-real-elements-chat.log"
+  ],
+  "source_code_modified": false,
+  "synthetic_secret_fixture": "tests/test_evidence.py"
+}

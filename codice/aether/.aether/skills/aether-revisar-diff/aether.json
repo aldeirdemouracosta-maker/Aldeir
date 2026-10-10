@@ -1,0 +1,7 @@
+{
+  "version": "1.0.0",
+  "required_tools": ["git_status", "git_diff", "read_file"],
+  "required_executables": ["git"],
+  "os": ["windows", "linux", "darwin"],
+  "network": false
+}

@@ -1,0 +1,15 @@
+#!/bin/sh
+# Instala os apps do Codice. Precisa de rede durante o build. NAO TESTADO.
+set -e
+# LibreWolf pelo extrepo (repositorio oficial do projeto)
+extrepo enable librewolf || echo "AVISO: extrepo/librewolf falhou; instale depois"
+apt-get update && apt-get install -y --no-install-recommends librewolf || true
+# Aether e aider em ambientes isolados do sistema
+python3 -m venv /opt/codice/venv
+/opt/codice/venv/bin/pip install --no-cache-dir "/opt/codice/aether[gui]"
+ln -sf /opt/codice/venv/bin/aether /usr/local/bin/aether
+ln -sf /opt/codice/venv/bin/aether-gui /usr/local/bin/aether-gui
+PIPX_HOME=/opt/codice/pipx PIPX_BIN_DIR=/usr/local/bin pipx install aider-chat || echo "AVISO: aider falhou"
+# Proxy da Fabrica (servico systemd criado no primeiro boot)
+install -d /usr/local/lib/fabrica-correcoes
+install -m 644 /opt/codice/fabrica-correcoes/fabrica_proxy.py /usr/local/lib/fabrica-correcoes/

@@ -1,0 +1,13 @@
+.venv/
+.deps/
+.tmp/
+.buildtmp/
+.aether/*
+!.aether/skills/
+!.aether/skills/**
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+tests/fixture-*/
+tests/tmp*/

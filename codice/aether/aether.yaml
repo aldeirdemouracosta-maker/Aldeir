@@ -1,0 +1,49 @@
+# Aether configuration
+
+project_root: .
+
+embedder:
+  model: nomic-embed-text
+  provider: ollama
+  base_url: http://localhost:11434
+  dimension: 768
+  parameters: {}
+
+cache:
+  enabled: true
+  path: .aether/embeddings.sqlite3
+  max_bytes: 134217728
+
+skills:
+  max_bytes: 65536
+  max_skills: 100
+  max_selected: 5
+
+llm:
+  model: qwen3:8b
+  provider: ollama
+  base_url: http://localhost:11434
+  temperature: 0.2
+  max_tokens: 8192
+
+indexer:
+  chunk_size: 1200
+  chunk_overlap: 200
+  max_file_size_kb: 500
+
+vectorstore:
+  path: .aether/lancedb
+  table_name: codebase
+
+agent:
+  max_iterations: 25
+  max_tool_calls: 8
+  max_tool_steps: 50
+  max_tool_failures: 3
+  max_context_chars: 48000
+  max_tool_output_chars: 12000
+  max_response_chars: 12000
+  allow_unisolated_terminal: false
+  terminal_timeout: 30
+  require_plan_approval: false
+  verbose: true

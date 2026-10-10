@@ -1,0 +1,48 @@
+# --- sistema minimo ---
+sudo
+openssh-server
+curl
+wget
+git
+htop
+nano
+less
+ca-certificates
+locales
+network-manager
+firmware-amd-graphics
+firmware-linux-free
+firmware-misc-nonfree
+# --- GPU / Vulkan (RX 580 via RADV; GT 210 via nouveau) ---
+mesa-vulkan-drivers
+libvulkan1
+vulkan-tools
+xserver-xorg-video-nouveau
+# --- ferramentas p/ compilar llama.cpp ---
+build-essential
+cmake
+pkg-config
+libvulkan-dev
+glslc
+spirv-headers
+libcurl4-openssl-dev
+# --- ajustes de desempenho ---
+zram-tools
+linux-cpupower
+# --- kernel: padrao do Debian (reserva) + XanMod LTS x64v2 (NUNCA x64v3) ---
+linux-image-amd64
+linux-xanmod-lts-x64v2
+# --- Codice: navegador, Tor, office, apps, ferramentas de codigo ---
+extrepo
+tor
+torbrowser-launcher
+libreoffice-writer
+libreoffice-calc
+flatpak
+gh
+python3
+python3-venv
+pipx
+cmatrix
+fonts-dejavu-core
+tmux

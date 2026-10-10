@@ -1,0 +1,6 @@
+{
+  "version": "1.0.0",
+  "required_tools": ["read_file", "edit_file", "record_evidence"],
+  "os": ["windows", "linux", "darwin"],
+  "network": false
+}

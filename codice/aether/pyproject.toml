@@ -1,0 +1,61 @@
+[project]
+name = "aether"
+version = "0.1.0"
+description = "Local coding agent with full codebase understanding"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "lancedb>=0.12.0",
+    "pyarrow>=15.0.0",
+    "httpx>=0.27.0",
+    "pydantic>=2.7.0",
+    "pyyaml>=6.0",
+    "rich>=13.7.0",
+    "prompt-toolkit>=3.0.0",
+    "typer>=0.12.0",
+]
+
+[project.optional-dependencies]
+gui = [
+    "nicegui>=3.0,<4",
+    "pywebview>=5.0,<7",
+]
+dev = [
+    "pytest>=8.0.0",
+    "mypy>=1.10.0",
+    "ruff>=0.5.0",
+    "types-PyYAML>=6.0",
+]
+
+[project.scripts]
+aether = "aether.cli:app"
+aether-gui = "aether.gui.app:main"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["aether*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "tests"]
+norecursedirs = ["fixture-*", "tmp*", ".venv", ".deps", ".tmp"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["aether"]
+
+[[tool.mypy.overrides]]
+module = ["lancedb.*", "pyarrow.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["nicegui", "nicegui.*"]
+ignore_missing_imports = true
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
