@@ -31,31 +31,13 @@ linux-cpupower
 # --- kernel: padrao do Debian (reserva) + XanMod LTS x64v2 (NUNCA x64v3) ---
 linux-image-amd64
 linux-xanmod-lts-x64v2
-# --- Codice: navegador, Tor, office, apps, ferramentas de codigo ---
-extrepo
-tor
-torbrowser-launcher
-libreoffice-writer
-libreoffice-calc
-flatpak
-gh
-python3
-python3-venv
-pipx
-cmatrix
-fonts-dejavu-core
-tmux
 # --- v0.1: seguranca, editor, monitoramento, idioma ---
 bubblewrap
-podman
 nftables
 unattended-upgrades
 neovim
 micro
 btop
 radeontop
-nvtop
 locales
 console-setup
-nodejs
-npm

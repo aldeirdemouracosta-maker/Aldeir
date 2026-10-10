@@ -3,7 +3,8 @@
 # Gera ISO Debian 13 enxuta p/ IA local. Rodar como root em host Debian/Ubuntu.
 set -euo pipefail
 cd "$(dirname "$0")"
-DESKTOP="${DESKTOP:-minimal}"   # minimal | none
+DESKTOP="${DESKTOP:-none}"       # minimal | none
+PERFIL="${PERFIL:-minimo}"       # minimo (camadas 1 e 2) | completo (+ apps, Aether, Fabrica)
 # Tag estavel do llama.cpp (ex.: bNNNN). Confirme em github.com/ggml-org/llama.cpp/tags.
 LLAMA_TAG="${LLAMA_TAG:?Defina LLAMA_TAG, ex.: sudo LLAMA_TAG=bNNNN ./build-iso.sh}"
 
@@ -36,11 +37,16 @@ chmod +x config/hooks/live/*
 mkdir -p config/includes.chroot/usr/share/ia-local
 echo "$LLAMA_TAG" > config/includes.chroot/usr/share/ia-local/llama-tag
 
-# apps do Codice (Aether + proxy da Fabrica) dentro da imagem
-mkdir -p config/includes.chroot/opt/codice
-cp -a ../../aether config/includes.chroot/opt/codice/aether
-cp -a ../../fabrica-correcoes config/includes.chroot/opt/codice/fabrica-correcoes
-rm -rf config/includes.chroot/opt/codice/aether/tests
+# perfil completo: apps, Aether e proxy da Fabrica dentro da imagem
+if [ "$PERFIL" = "completo" ]; then
+  cp ../config/optional/completo.list.chroot config/package-lists/completo.list.chroot
+  cp ../config/optional/0300-codice-apps.hook.chroot config/hooks/live/
+  chmod +x config/hooks/live/*
+  mkdir -p config/includes.chroot/opt/codice
+  cp -a ../../aether config/includes.chroot/opt/codice/aether
+  cp -a ../../fabrica-correcoes config/includes.chroot/opt/codice/fabrica-correcoes
+  rm -rf config/includes.chroot/opt/codice/aether/tests
+fi
 
 # chave do repositorio XanMod (URL citada em xanmod.org)
 curl -fsSL https://dl.xanmod.org/archive.key -o config/archives/xanmod.key.chroot

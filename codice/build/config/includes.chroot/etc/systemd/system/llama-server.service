@@ -1,0 +1,26 @@
+[Unit]
+Description=llama.cpp server (Vulkan) - API local em 127.0.0.1:8080
+After=network.target
+ConditionPathExists=/models/modelo.gguf
+
+[Service]
+# Coloque o modelo em /models/modelo.gguf (veja codice-baixar-modelo).
+ExecStart=/usr/local/bin/llama-server --host 127.0.0.1 --port 8080 -m /models/modelo.gguf -ngl 99 -c 16384 --parallel 2
+Restart=on-failure
+RestartSec=5
+DynamicUser=yes
+SupplementaryGroups=render video
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadOnlyPaths=/models
+# a GPU precisa de /dev/dri; nada alem de loopback e exposto
+DevicePolicy=closed
+DeviceAllow=/dev/dri rw
+DeviceAllow=char-drm rw
+IPAddressAllow=localhost
+IPAddressDeny=any
+
+[Install]
+WantedBy=multi-user.target
