@@ -48,9 +48,18 @@ if [ "$PERFIL" = "completo" ]; then
   rm -rf config/includes.chroot/opt/codice/aether/tests
 fi
 
-# chave do repositorio XanMod (URL citada em xanmod.org)
-curl -fsSL https://dl.xanmod.org/archive.key -o config/archives/xanmod.key.chroot
-cp config/archives/xanmod.key.chroot config/archives/xanmod.key.binary
+# XanMod (opcional): sem a chave, a ISO sai so com o kernel do Debian
+rm -f config/archives/xanmod.list.chroot config/archives/xanmod.list.binary
+if curl -fsSL --retry 3 -A "Mozilla/5.0 (X11; Linux x86_64)" https://dl.xanmod.org/archive.key \
+     -o config/archives/xanmod.key.chroot && [ -s config/archives/xanmod.key.chroot ]; then
+  cp config/archives/xanmod.key.chroot config/archives/xanmod.key.binary
+  echo "deb http://deb.xanmod.org trixie main" | tee config/archives/xanmod.list.chroot > config/archives/xanmod.list.binary
+  cp ../config/optional/xanmod.list.chroot config/package-lists/xanmod.list.chroot
+  echo "XanMod: ATIVADO"
+else
+  rm -f config/archives/xanmod.key.chroot
+  echo "AVISO: nao consegui a chave do XanMod; ISO usara SOMENTE o kernel do Debian" >&2
+fi
 
 lb build 2>&1 | tee build.log
 echo "ISO em: $(pwd)/*.iso"

@@ -30,7 +30,6 @@ zram-tools
 linux-cpupower
 # --- kernel: padrao do Debian (reserva) + XanMod LTS x64v2 (NUNCA x64v3) ---
 linux-image-amd64
-linux-xanmod-lts-x64v2
 # --- v0.1: seguranca, editor, monitoramento, idioma ---
 bubblewrap
 nftables
