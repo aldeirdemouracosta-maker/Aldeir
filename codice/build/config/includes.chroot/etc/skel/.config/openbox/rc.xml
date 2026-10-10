@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<openbox_config xmlns="http://openbox.org/3.4/rc">
+  <theme><name>Codice</name><font place="ActiveWindow"><name>DejaVu Sans Mono</name><size>9</size></font></theme>
+  <desktops><number>4</number><names><name>codigo</name><name>navegador</name><name>office</name><name>terminal</name></names></desktops>
+</openbox_config>

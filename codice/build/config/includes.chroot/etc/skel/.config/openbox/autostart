@@ -1,2 +1,5 @@
 # Abre o terminal verde ao entrar na sessao.
 lxterminal &
+feh --bg-fill /usr/share/codice/wallpaper.png &
+tint2 &
+conky -c ~/.config/conky/conky.conf &

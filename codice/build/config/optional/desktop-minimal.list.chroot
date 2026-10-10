@@ -1,6 +1,11 @@
 xorg
 openbox
 lxterminal
-firefox-esr
 lightdm
 pcmanfm
+tint2
+conky-std
+feh
+lightdm-gtk-greeter
+adwaita-icon-theme
+xdg-utils

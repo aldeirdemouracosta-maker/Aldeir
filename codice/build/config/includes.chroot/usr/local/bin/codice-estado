@@ -1,0 +1,9 @@
+#!/bin/sh
+# Imprime on/off para o painel do conky. Uso: codice-estado llama|proxy|firewall
+case "$1" in
+  llama)    c=$(curl -s -m 1 -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/health) ;;
+  proxy)    c=$(curl -s -m 1 -o /dev/null -w '%{http_code}' http://127.0.0.1:11435/v1/models) ;;
+  firewall) nft list ruleset 2>/dev/null | grep -q 'policy drop' && c=200 || c=0 ;;
+  *) echo "uso: $0 llama|proxy|firewall" >&2; exit 2 ;;
+esac
+[ "$c" = 200 ] && echo on || echo off
