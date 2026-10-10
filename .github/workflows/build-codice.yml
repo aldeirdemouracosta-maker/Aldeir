@@ -1,0 +1,52 @@
+name: Build ISO Codice
+
+on:
+  workflow_dispatch:
+    inputs:
+      desktop:
+        description: "minimal ou none"
+        default: minimal
+  push:
+    branches: [claude/zen-hypatia-4h0ce1]
+    paths: ["codice/**", ".github/workflows/build-codice.yml"]
+
+jobs:
+  iso:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    container:
+      image: debian:trixie
+      options: --privileged
+    steps:
+      - name: Dependencias do host
+        run: |
+          apt-get update
+          apt-get install -y git curl jq ca-certificates
+      - uses: actions/checkout@v4
+      - name: Descobrir a tag estavel do llama.cpp
+        id: tag
+        run: |
+          TAG=$(curl -fsSL https://api.github.com/repos/ggml-org/llama.cpp/releases/latest | jq -r .tag_name)
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "llama.cpp: $TAG"
+      - name: Gerar a ISO
+        working-directory: codice/build
+        env:
+          LLAMA_TAG: ${{ steps.tag.outputs.tag }}
+          DESKTOP: ${{ inputs.desktop || 'minimal' }}
+        run: ./build-iso.sh
+      - name: Tamanho e checksum
+        if: always()
+        working-directory: codice/build/work
+        run: |
+          ls -lh *.iso || true
+          sha256sum *.iso | tee SHA256SUMS || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: codice-iso-e-log
+          path: |
+            codice/build/work/*.iso
+            codice/build/work/SHA256SUMS
+            codice/build/work/build.log
+          if-no-files-found: warn
