@@ -1,12 +1,13 @@
 """StateGraph do CineForja (Fase 1: nós simulados)."""
 from __future__ import annotations
 
+import os
 import sqlite3
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 
-from .. import config
+from .. import config, editing
 from ..workers import mock
 from .parsing import parse_shots
 from .state import MAX_ATTEMPTS, MIN_CONSISTENCY, ProjectState, Shot, dump, next_pending, shots
@@ -82,8 +83,13 @@ def audio_designer(state: ProjectState) -> dict:
 
 
 def editor(state: ProjectState) -> dict:
-    out = f"data/projects/{state['project_id']}/final.mp4"
-    return {"output_path": out, "logs": [mock.run("cpu", f"Editor exportou {out}")]}
+    out = os.path.join(config.load().output_dir, state["project_id"], "final.mp4")
+    clips = editing.usable_inputs([s.frames_path for s in shots(state)])
+    if clips is None:  # shots sem arquivo real (modo simulado): só registra o destino
+        return {"output_path": out, "logs": [mock.run("cpu", f"Editor (simulado) exportou {out}")]}
+    music = (state.get("audio") or {}).get("music")
+    editing.assemble(clips, out, audio=music)
+    return {"output_path": out, "logs": [f"[cpu] Editor montou {len(clips)} shots -> {out}"]}
 
 
 def after_checker(state: ProjectState) -> str:

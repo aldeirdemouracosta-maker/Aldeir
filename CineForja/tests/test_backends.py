@@ -17,6 +17,18 @@ from cineforja.workers.backends.ollama import BackendError
 from cineforja.workers.server import WorkerServer
 
 
+def _make_png() -> bytes:
+    import subprocess, tempfile
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "x.png")
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=blue:s=64x64:d=1",
+                        "-frames:v", "1", p], check=True)
+        return open(p, "rb").read()
+
+
+REAL_PNG = _make_png()
+
+
 class Fake(ThreadingHTTPServer):
     """Servidor HTTP falso para Ollama/ComfyUI; guarda as requisições recebidas."""
     daemon_threads = True
@@ -96,7 +108,7 @@ def fake_comfy():
         return {} if polls["n"] < 2 else {"p1": {"outputs": {"9": {"images": [
             {"filename": "../../evil.png", "subfolder": "", "type": "output"}]}}}}
     s = Fake({"/prompt": lambda b: {"prompt_id": "p1"}, "/history/p1": history,
-              "/view": lambda b: b"PNGDATA", "/free": lambda b: {}})
+              "/view": lambda b: REAL_PNG, "/free": lambda b: {}})
     yield s; s.stop()
 
 
@@ -105,7 +117,7 @@ def test_comfy_run_workflow(fake_comfy, tmp_path):
     out = tmp_path / "out"
     files = comfyui.run_workflow(fake_comfy.url, str(wf), {"prompt": "robô"}, str(out), poll=0.01)
     assert files == [str(out / "evil.png")]  # basename: sem path traversal
-    assert open(files[0], "rb").read() == b"PNGDATA"
+    assert open(files[0], "rb").read() == REAL_PNG
     assert fake_comfy.seen[0][2]["prompt"]["1"]["inputs"]["text"] == "robô"
 
 
@@ -168,6 +180,7 @@ def test_full_graph_with_real_executors(fake_ollama, fake_comfy, tmp_path, monke
     assert st["plan"].startswith("Plano: tom leve")
     assert all(s["score"] == 0.8 and s["status"] == "done" for s in st["storyboard"])
     assert all(os.path.isfile(s["frames_path"]) for s in st["storyboard"])
+    assert os.path.getsize(st["output_path"]) > 0  # Editor montou o MP4 real com os 3 shots
     # Ollama e ComfyUI dividem a P100: ao trocar de serviço, o anterior é descarregado
     hist = cuda.slot.history
     assert ("unload", "ollama:llm-x") in hist and ("unload", "comfyui") in hist

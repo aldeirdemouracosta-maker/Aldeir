@@ -4,7 +4,7 @@ Estúdio local multi-agente para gerar/editar vídeo CGI ou stop-motion em hardw
 (Tesla P100 16 GB via CUDA + RX 570 8 GB via Vulkan). Orquestração com LangGraph,
 persistência em SQLite e Human-in-the-Loop.
 
-**Status: Fase 3 (modelos reais, não validados em GPU)** — grafo, persistência, retomada,
+**Status: Fase 3 (modelos reais, não validados em GPU) + Editor FFmpeg (testado)** — grafo, persistência, retomada,
 regeneração por consistência, 3 pontos de aprovação, workers CUDA/Vulkan isolados (um modelo
 pesado por GPU) e clientes reais para Ollama, ComfyUI e stable-diffusion.cpp. Cada serviço só é
 usado se configurado; sem configuração a tarefa continua simulada. Os clientes foram testados
@@ -45,6 +45,13 @@ Ollama e ComfyUI dividem a P100: ao trocar de um para o outro o worker descarreg
 
 Antes de tudo, rode `python scripts/check_hardware.py` na sua máquina.
 Áudio e upscale seguem simulados.
+
+### Montagem final (Editor)
+Quando todos os shots têm arquivo real (vídeo ou imagem), o Editor usa FFmpeg para normalizar
+resolução (1280x720), fps (24) e formato, concatenar os shots em ordem (imagens duram 2 s) e,
+se houver trilha em arquivo real, mixar o áudio. Grava em `<saída>/<projeto>/final.mp4` via arquivo
+temporário (nunca deixa um MP4 parcial). Mídia corrompida falha rápido com erro claro, e o estado
+fica salvo no checkpoint para retomar. Sem arquivos reais, o Editor segue simulado.
 
 **Nota de desempenho (para a Fase 5):** o loop atual alterna `video` ↔ `vlm` a cada shot, o que
 força descarregar/carregar modelos na P100. Animar todos os shots e só depois checar a consistência em lote reduz as trocas.
