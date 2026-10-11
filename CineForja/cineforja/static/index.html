@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CineForja</title>
+<style>
+  :root { --bg:#f6f5f2; --fg:#1d1d1b; --muted:#6b6a65; --card:#fff; --line:#dedbd3; --accent:#b4531a; --ok:#2f7d4f; --bad:#b3261e; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#17171a; --fg:#ecebe6; --muted:#9c9b94; --card:#222226; --line:#36363c; --accent:#e08a4f; --ok:#5fbf86; --bad:#f2837c; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, sans-serif; }
+  header { padding:14px 16px; border-bottom:1px solid var(--line); display:flex; gap:10px; align-items:baseline; }
+  header h1 { margin:0; font-size:18px; } header span { color:var(--muted); font-size:13px; }
+  main { display:grid; grid-template-columns:260px 1fr; gap:16px; padding:16px; max-width:1100px; margin:0 auto; }
+  @media (max-width:760px) { main { grid-template-columns:1fr; } }
+  section, aside { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; }
+  h2 { margin:0 0 10px; font-size:15px; }
+  label { display:block; font-size:13px; color:var(--muted); margin:8px 0 3px; }
+  input, textarea, select { width:100%; padding:8px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--fg); font:inherit; }
+  textarea { min-height:60px; resize:vertical; }
+  button { padding:8px 14px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--fg); font:inherit; cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button:disabled { opacity:.5; cursor:default; }
+  ul { list-style:none; margin:0; padding:0; } li.proj { padding:7px 8px; border-radius:6px; cursor:pointer; display:flex; justify-content:space-between; gap:8px; }
+  li.proj:hover, li.proj.sel { background:var(--bg); }
+  .pill { font-size:12px; padding:1px 8px; border-radius:99px; border:1px solid var(--line); color:var(--muted); }
+  .pill.running { color:var(--accent); } .pill.done { color:var(--ok); } .pill.error { color:var(--bad); }
+  .shot { border:1px solid var(--line); border-radius:8px; padding:10px; margin:10px 0; }
+  .shot .row { display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:6px; font-size:13px; color:var(--muted); }
+  .shot img, .shot video, video.final { max-width:100%; border-radius:6px; margin-top:6px; background:#000; }
+  .bar { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+  pre { background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:8px; max-height:180px; overflow:auto; font-size:12px; white-space:pre-wrap; }
+  .err { color:var(--bad); } .muted { color:var(--muted); }
+</style>
+</head>
+<body>
+<header><h1>CineForja</h1><span>estúdio local multi-agente</span></header>
+<main>
+  <aside>
+    <h2>Novo projeto</h2>
+    <label for="brief">Brief</label><textarea id="brief" maxlength="2000" placeholder="Um robô aprende a dançar"></textarea>
+    <label for="style">Estilo</label>
+    <select id="style"><option value="cgi">CGI</option><option value="stop_motion">Stop-motion</option></select>
+    <div class="bar"><button class="primary" id="start">Iniciar</button></div>
+    <h2 style="margin-top:18px">Projetos</h2><ul id="list"></ul>
+  </aside>
+  <section id="detail"><p class="muted">Selecione ou crie um projeto.</p></section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let current = null, timer = null, dirty = false;
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+  if (!r.ok) { let d = r.statusText; try { d = (await r.json()).detail || d; } catch {} throw new Error(d); }
+  return r.status === 204 ? null : r.json();
+}
+function el(tag, props = {}, ...kids) {
+  const e = Object.assign(document.createElement(tag), props);
+  kids.forEach((k) => e.append(k)); return e;           // sempre textContent/nós: sem innerHTML
+}
+async function refreshList() {
+  const ids = await api("/projects"); const ul = $("list"); ul.replaceChildren();
+  ids.forEach((id) => { const li = el("li", { className: "proj" + (id === current ? " sel" : "") }, el("span", { textContent: id }));
+    li.onclick = () => { current = id; dirty = false; refreshList(); load(); }; ul.append(li); });
+}
+async function load() {
+  if (!current) return;
+  try { render(await api("/projects/" + encodeURIComponent(current))); }
+  catch (e) { $("detail").replaceChildren(el("p", { className: "err", textContent: e.message })); }
+}
+function render(p) {
+  const d = $("detail");
+  if (dirty && p.status === "paused") return;            // não sobrescreve edições em andamento
+  d.replaceChildren();
+  d.append(el("h2", { textContent: p.project_id + " " }, el("span", { className: "pill " + p.status, textContent: p.status })));
+  d.append(el("p", { className: "muted", textContent: (p.style || "") + " — " + (p.brief || "") }));
+  if (p.error) d.append(el("p", { className: "err", textContent: "Erro: " + p.error + " (corrija o serviço e clique em Continuar)" }));
+  if (p.plan) d.append(el("details", {}, el("summary", { textContent: "Plano do Director" }), el("pre", { textContent: p.plan })));
+  const wait = p.waiting_for;
+  if (p.status === "paused") d.append(el("p", {}, el("strong", { textContent: p.label || wait })));
+  const editable = p.status === "paused" && wait === "asset_designer";
+  const review = p.status === "paused" && wait === "audio_designer";
+  const boxes = [];
+  p.storyboard.forEach((s) => {
+    const row = el("div", { className: "shot" });
+    const head = el("div", { className: "row" }, el("span", { textContent: `Shot ${s.index} — ${s.status}` + (s.score != null ? ` — nota ${s.score.toFixed(2)}` : "") }));
+    let cb = null;
+    if (review) { cb = el("input", { type: "checkbox", style: "width:auto" }); head.append(el("label", { style: "margin:0;display:flex;gap:4px;align-items:center" }, cb, "refazer")); }
+    row.append(head);
+    const ta = el("textarea", { value: s.prompt, disabled: !(editable || review) }); ta.oninput = () => (dirty = true);
+    row.append(ta); boxes.push({ s, ta, cb });
+    if (s.frames_path && s.status === "done") {
+      const url = `/projects/${encodeURIComponent(p.project_id)}/shots/${s.index}/media?t=${Date.now()}`;
+      const ext = s.frames_path.split(".").pop().toLowerCase();
+      const m = ["mp4", "webm", "mov", "mkv"].includes(ext) ? el("video", { src: url, controls: true }) : el("img", { src: url, alt: "shot " + s.index });
+      m.onerror = () => m.remove(); row.append(m);
+    }
+    d.append(row);
+  });
+  const bar = el("div", { className: "bar" }); d.append(bar);
+  const act = (label, fn, primary) => { const b = el("button", { textContent: label, className: primary ? "primary" : "" });
+    b.onclick = async () => { b.disabled = true; try { await fn(); dirty = false; } catch (e) { alert(e.message); } await load(); }; bar.append(b); };
+  if (editable) {
+    act("Salvar storyboard", () => api(`/projects/${p.project_id}/storyboard`, { method: "PUT", body: JSON.stringify({ shots: boxes.map((b) => ({ prompt: b.ta.value })) }) }));
+    act("Aprovar e continuar", async () => { await api(`/projects/${p.project_id}/storyboard`, { method: "PUT", body: JSON.stringify({ shots: boxes.map((b) => ({ prompt: b.ta.value })) }) }); await api(`/projects/${p.project_id}/continue`, { method: "POST" }); }, true);
+  } else if (review) {
+    act("Refazer selecionados", async () => { const sel = boxes.filter((b) => b.cb.checked); if (!sel.length) throw new Error("Marque ao menos um shot.");
+      const prompts = {}; sel.forEach((b) => (prompts[b.s.index] = b.ta.value));
+      await api(`/projects/${p.project_id}/regenerate`, { method: "POST", body: JSON.stringify({ shots: sel.map((b) => b.s.index), prompts }) }); });
+    act("Aprovar frames e continuar", () => api(`/projects/${p.project_id}/continue`, { method: "POST" }), true);
+  } else if (p.status === "paused" || p.status === "error") {
+    act(p.status === "error" ? "Continuar (tentar de novo)" : "Aprovar e continuar", () => api(`/projects/${p.project_id}/continue`, { method: "POST" }), true);
+  }
+  if (p.status === "done" && p.output_path) d.append(el("video", { className: "final", controls: true, src: `/projects/${encodeURIComponent(p.project_id)}/final?t=${Date.now()}`, onerror() { this.replaceWith(el("p", { className: "muted", textContent: "Saída: " + p.output_path + " (simulada ou não disponível)" })); } }));
+  d.append(el("details", {}, el("summary", { textContent: "Logs" }), el("pre", { textContent: p.logs.join("\n") })));
+}
+$("start").onclick = async () => {
+  const brief = $("brief").value.trim(); if (!brief) return alert("Escreva um brief.");
+  try { const r = await api("/projects", { method: "POST", body: JSON.stringify({ brief, style: $("style").value }) });
+    current = r.project_id; dirty = false; $("brief").value = ""; await refreshList(); load(); } catch (e) { alert(e.message); }
+};
+timer = setInterval(() => { if (current) load(); }, 2000);
+refreshList();
+</script>
+</body>
+</html>
