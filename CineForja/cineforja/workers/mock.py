@@ -1,13 +1,12 @@
-"""Workers simulados da Fase 1: nenhum modelo real é carregado.
+"""Despacho de tarefas da Fase 2.
 
-Cada função registra a GPU escolhida por choose_worker(), para validar o roteamento.
-Na Fase 2/3 estas funções serão substituídas por chamadas aos workers reais.
+Com CINEFORJA_WORKERS definido, delega aos workers HTTP; sem ele, simula em processo.
 """
-from .router import choose_worker
+from .client import dispatch
 
 
 def run(task_type: str, what: str) -> str:
-    return f"[{choose_worker(task_type)}] {what}"
+    return dispatch(task_type, what)
 
 
 def score_shot(index: int, attempt: int) -> float:
