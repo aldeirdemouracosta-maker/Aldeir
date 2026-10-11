@@ -6,21 +6,41 @@ import sqlite3
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 
+from .. import config
 from ..workers import mock
+from .parsing import parse_shots
 from .state import MAX_ATTEMPTS, MIN_CONSISTENCY, ProjectState, Shot, dump, next_pending, shots
 
 # Pontos de aprovação humana (ver hitl.py)
 INTERRUPT_BEFORE = ["asset_designer", "audio_designer", "editor"]
 
 
+STYLE_HINT = {"cgi": "estilo CGI 3D, iluminação cinematográfica",
+              "stop_motion": "estilo stop-motion, massinha e miniaturas, movimento quadro a quadro"}
+
+
 def director(state: ProjectState) -> dict:
-    plan = f"Plano ({state['style']}): {state['brief']}"
-    return {"plan": plan, "logs": [mock.run("llm", "Director definiu o plano")]}
+    r = mock.call("llm", "Director definiu o plano", {
+        "prompt": f"Brief: {state['brief']}\nEstilo: {STYLE_HINT[state['style']]}\n"
+                  "Escreva um plano de direção curto (tom, personagens, cenário, paleta)."})
+    plan = (r["result"] or {}).get("text") or f"Plano ({state['style']}): {state['brief']}"
+    return {"plan": plan, "logs": [r["log"]]}
 
 
 def script_writer(state: ProjectState) -> dict:
-    board = [Shot(index=i, prompt=f"Shot {i}: {state['brief']}") for i in range(3)]
-    return {"storyboard": dump(board), "logs": [mock.run("llm", "ScriptWriter gerou storyboard de 3 shots")]}
+    n = config.load().shots
+    r = mock.call("llm", f"ScriptWriter gerou storyboard de {n} shots", {
+        "json": True,
+        "prompt": f"Plano:\n{state['plan']}\n\nCrie {n} shots em ordem. Responda somente JSON no formato "
+                  '{"shots": ["descrição visual do shot 1", "..."]}.'})
+    prompts = parse_shots((r["result"] or {}).get("text", ""), n) if r["result"] else None
+    logs = [r["log"]]
+    if prompts is None:
+        if r["result"]:
+            logs.append("AVISO: saída do LLM inválida; usando storyboard padrão")
+        prompts = [f"Shot {i}: {state['brief']}" for i in range(n)]
+    board = [Shot(index=i, prompt=p) for i, p in enumerate(prompts)]
+    return {"storyboard": dump(board), "logs": logs}
 
 
 def asset_designer(state: ProjectState) -> dict:
@@ -31,23 +51,29 @@ def asset_designer(state: ProjectState) -> dict:
 def animator(state: ProjectState) -> dict:
     shot = next_pending(state)
     shot.attempts += 1
-    shot.frames_path = f"data/projects/{state['project_id']}/shot_{shot.index}"
+    r = mock.call("video", f"Animator shot {shot.index} (tentativa {shot.attempts})", {
+        "prompt": f"{shot.prompt}. {STYLE_HINT[state['style']]}", "project_id": state["project_id"],
+        "sub": f"shot_{shot.index}", "seed": 1000 * shot.index + shot.attempts})
+    files = (r["result"] or {}).get("files")
+    shot.frames_path = files[0] if files else f"data/projects/{state['project_id']}/shot_{shot.index}"
     board = [shot if s.index == shot.index else s for s in shots(state)]
-    return {"storyboard": dump(board),
-            "logs": [mock.run("video", f"Animator shot {shot.index} (tentativa {shot.attempts})")]}
+    return {"storyboard": dump(board), "logs": [r["log"]]}
 
 
 def consistency_checker(state: ProjectState) -> dict:
     # O shot em avaliação é o pending com mais tentativas (acabou de ser animado).
     shot = max((s for s in shots(state) if s.status == "pending"), key=lambda s: s.attempts)
-    shot.score = mock.score_shot(shot.index, shot.attempts)
+    r = mock.call("consistency", f"verificando shot {shot.index}",
+                  {"prompt": shot.prompt, "image": shot.frames_path})
+    real = (r["result"] or {}).get("score")
+    shot.score = real if real is not None else mock.score_shot(shot.index, shot.attempts)
     ok = shot.score >= MIN_CONSISTENCY or shot.attempts >= MAX_ATTEMPTS
     if ok:
         shot.status = "done"
     board = [shot if s.index == shot.index else s for s in shots(state)]
     verdict = "aprovado" if ok else "regenerar"
     return {"storyboard": dump(board),
-            "logs": [mock.run("consistency", f"shot {shot.index} score={shot.score:.2f} -> {verdict}")]}
+            "logs": [r["log"], f"shot {shot.index} score={shot.score:.2f} -> {verdict}"]}
 
 
 def audio_designer(state: ProjectState) -> dict:

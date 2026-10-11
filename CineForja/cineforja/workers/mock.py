@@ -2,7 +2,7 @@
 
 Com CINEFORJA_WORKERS definido, delega aos workers HTTP; sem ele, simula em processo.
 """
-from .client import dispatch
+from .client import call, dispatch  # noqa: F401
 
 
 def run(task_type: str, what: str) -> str:

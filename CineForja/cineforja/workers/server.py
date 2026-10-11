@@ -11,6 +11,9 @@ import argparse
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from .. import config as _config
+from . import executors
+from .backends.ollama import BackendError
 from .router import choose_worker
 from .slot import Backend, MockBackend, ModelSlot
 
@@ -24,11 +27,16 @@ MAX_BODY = 1 << 20
 
 class WorkerServer(ThreadingHTTPServer):
     daemon_threads = True
+    request_queue_size = 128  # o padrão (5) derruba conexões em rajadas de pedidos
 
-    def __init__(self, kind: str, port: int = 0, backend: Backend | None = None) -> None:
+    def __init__(self, kind: str, port: int = 0, backend: Backend | None = None,
+                 cfg: _config.Config | None = None) -> None:
         super().__init__(("127.0.0.1", port), _Handler)
         self.kind = kind
-        self.backend = backend or MockBackend()
+        self.cfg = cfg or _config.Config()
+        self.executors = executors.build(self.cfg)
+        real = bool(self.executors)
+        self.backend = backend or (executors.GpuBackend(self.cfg) if real else MockBackend())
         self.slot = ModelSlot(self.backend)
 
     @property
@@ -75,9 +83,14 @@ class _Handler(BaseHTTPRequestHandler):
             return self._send(400, {"error": "invalid request"})
         if choose_worker(task) != self.server.kind:
             return self._send(400, {"error": f"task '{task}' does not belong to worker '{self.server.kind}'"})
-        model = MODEL_FOR_TASK.get(task, "cpu")
-        self.server.slot.run(model, lambda m: None)  # Fase 3: inferência real aqui
-        self._send(200, {"log": f"[{self.server.kind}] {what}", "model": model})
+        fn = self.server.executors.get(task)
+        model = (executors.model_name(task, self.server.cfg) if fn else None) or MODEL_FOR_TASK.get(task, "cpu")
+        payload = req.get("payload") or {}
+        try:
+            result = self.server.slot.run(model, (lambda m: fn(payload)) if fn else (lambda m: None))
+        except (BackendError, KeyError, OSError) as exc:
+            return self._send(502, {"error": str(exc)})
+        self._send(200, {"log": f"[{self.server.kind}] {what}", "model": model, "result": result})
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -85,7 +98,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--kind", choices=["cuda", "vulkan", "cpu"], required=True)
     p.add_argument("--port", type=int, required=True)
     args = p.parse_args(argv)
-    srv = WorkerServer(args.kind, args.port)
+    srv = WorkerServer(args.kind, args.port, cfg=_config.load())
     print(f"worker {args.kind} em {srv.url}", flush=True)
     try:
         srv.serve_forever()

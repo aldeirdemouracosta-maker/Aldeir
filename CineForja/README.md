@@ -4,9 +4,11 @@ Estúdio local multi-agente para gerar/editar vídeo CGI ou stop-motion em hardw
 (Tesla P100 16 GB via CUDA + RX 570 8 GB via Vulkan). Orquestração com LangGraph,
 persistência em SQLite e Human-in-the-Loop.
 
-**Status: Fase 2 (workers isolados)** — grafo completo, persistência, retomada, regeneração por
-consistência, 3 pontos de aprovação e workers CUDA/Vulkan como processos HTTP locais
-(127.0.0.1), com no máximo um modelo pesado residente por GPU. Os modelos ainda são simulados.
+**Status: Fase 3 (modelos reais, não validados em GPU)** — grafo, persistência, retomada,
+regeneração por consistência, 3 pontos de aprovação, workers CUDA/Vulkan isolados (um modelo
+pesado por GPU) e clientes reais para Ollama, ComfyUI e stable-diffusion.cpp. Cada serviço só é
+usado se configurado; sem configuração a tarefa continua simulada. Os clientes foram testados
+contra servidores falsos; **ainda não foram testados com as GPUs reais**.
 
 ## Uso
 ```
@@ -26,12 +28,30 @@ curl 127.0.0.1:8101/status   # modelo carregado + histórico load/unload
 ```
 Sem `CINEFORJA_WORKERS` as tarefas rodam em processo (modo simulado).
 
+### Modelos reais (variáveis lidas pelos workers)
+| Variável | Tarefa | GPU |
+|---|---|---|
+| `CINEFORJA_OLLAMA_URL`, `CINEFORJA_LLM_MODEL` | Director e ScriptWriter | CUDA |
+| `CINEFORJA_OLLAMA_URL`, `CINEFORJA_VLM_MODEL` | ConsistencyChecker (nota 0–10 do frame; vídeos exigem ffmpeg) | CUDA |
+| `CINEFORJA_COMFY_URL`, `CINEFORJA_COMFY_WORKFLOW_VIDEO` | Animator | CUDA |
+| `CINEFORJA_COMFY_URL`, `CINEFORJA_COMFY_WORKFLOW_IMAGE` | imagem pesada | CUDA |
+| `CINEFORJA_SD_BIN`, `CINEFORJA_SD_MODEL` | imagem leve (sd.cpp, build Vulkan) | Vulkan |
+| `CINEFORJA_OUTPUT_DIR`, `CINEFORJA_SHOTS` | pasta de saída (padrão `data/projects`), nº de shots (padrão 3) | — |
+
+Workflows do ComfyUI: monte o seu, exporte em **Save (API Format)** e troque os valores do
+texto e da semente por `"{{prompt}}"` e `"{{seed}}"`. O CineForja não inclui workflow pronto.
+Ollama e ComfyUI dividem a P100: ao trocar de um para o outro o worker descarrega o anterior
+(`keep_alive=0` no Ollama, `POST /free` no ComfyUI).
+
+Antes de tudo, rode `python scripts/check_hardware.py` na sua máquina.
+Áudio e upscale seguem simulados.
+
 **Nota de desempenho (para a Fase 5):** o loop atual alterna `video` ↔ `vlm` a cada shot, o que
 força descarregar/carregar modelos na P100. Animar todos os shots e só depois checar a consistência em lote reduz as trocas.
 
 ## Roadmap
 2. ~~Workers CUDA/Vulkan em processos separados (um modelo pesado por vez)~~ ✔
-3. Modelos reais: llama.cpp/Ollama, ComfyUI (Wan/LTX GGUF) na P100, stable-diffusion.cpp (Vulkan) na RX 570
+3. Modelos reais (clientes prontos; falta validar nas GPUs): Ollama, ComfyUI (Wan/LTX GGUF) na P100, stable-diffusion.cpp (Vulkan) na RX 570; áudio e upscale pendentes
 4. API FastAPI + frontend de aprovação
 5. Otimização e presets de estilo
 
