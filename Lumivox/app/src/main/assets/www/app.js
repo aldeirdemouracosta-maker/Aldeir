@@ -123,6 +123,70 @@ async function extractPdfText(file, onProgress){
   }
   return { text: pages.filter(Boolean).join('\n\n'), pages: pdf.numPages };
 }
+
+// ------------------------------------------------- leitura de texto (OCR) offline ---
+let ocrWorkerPromise = null;
+let ocrLogger = null;
+function loadScript(src){
+  return new Promise((resolve, reject) => {
+    const el = document.createElement('script');
+    el.src = src; el.onload = resolve;
+    el.onerror = () => reject(new Error('Não foi possível carregar o leitor de texto.'));
+    document.head.appendChild(el);
+  });
+}
+function getOcrWorker(){
+  if (!ocrWorkerPromise) {
+    ocrWorkerPromise = (async () => {
+      if (!window.Tesseract) await loadScript('./vendor/tesseract/tesseract.min.js');
+      const base = new URL('./vendor/tesseract/', window.location.href).href;
+      return window.Tesseract.createWorker('por', 1, {
+        workerPath: base + 'worker.min.js', corePath: base, langPath: base + 'lang',
+        cacheMethod: 'none', workerBlobURL: false,
+        logger: (m) => { if (ocrLogger) ocrLogger(m); }
+      });
+    })().catch((e) => { ocrWorkerPromise = null; throw e; });
+  }
+  return ocrWorkerPromise;
+}
+async function fileToCanvas(file, maxSide = 2200){
+  const bmp = await createImageBitmap(file);
+  const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(bmp.width * scale));
+  canvas.height = Math.max(1, Math.round(bmp.height * scale));
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  if (bmp.close) bmp.close();
+  return canvas;
+}
+async function ocrCanvas(canvas, label){
+  ocrLogger = (m) => {
+    if (m.status === 'recognizing text') setStatus(`${label} ${Math.round((m.progress || 0) * 100)}%`);
+    else if (m.status && m.status.startsWith('loading')) setStatus('PREPARANDO O LEITOR DE TEXTO...');
+  };
+  const worker = await getOcrWorker();
+  const { data } = await worker.recognize(canvas);
+  return String(data.text || '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+async function ocrPdfPages(file, maxPages, onProgress){
+  const pdfjs = await import('./vendor/pdfjs/pdf.min.mjs');
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdfjs/pdf.worker.min.mjs', window.location.href).href;
+  const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false }).promise;
+  const total = Math.min(pdf.numPages, maxPages), parts = [];
+  for (let n = 1; n <= total; n++) {
+    onProgress && onProgress(n, total);
+    const page = await pdf.getPage(n);
+    const viewport = page.getViewport({ scale: Math.min(2.5, 2200 / Math.max(page.getViewport({ scale: 1 }).width, page.getViewport({ scale: 1 }).height) * 1.0) });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(viewport.width); canvas.height = Math.round(viewport.height);
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    parts.push(await ocrCanvas(canvas, `LENDO PÁGINA ${n} DE ${total}:`));
+  }
+  return { text: parts.filter(Boolean).join('\n\n'), pages: total, totalPages: pdf.numPages };
+}
+
 const DESCRIBE_PROMPT = 'Você é um audiodescritor que ajuda uma pessoa cega. Descreva esta imagem em português do Brasil, em texto corrido e sem Markdown. ' +
   'Comece dizendo o que é a imagem (foto, documento, captura de tela, desenho...) em uma frase. Depois descreva as pessoas, objetos, cores, posições e o ambiente, do mais importante para o menos importante. ' +
   'Se houver texto ou números, transcreva exatamente o que está escrito. Se for um documento, tabela ou gráfico, explique a estrutura e os valores. ' +
@@ -214,14 +278,17 @@ const actions = {
   imagem(){
     openModal('DESCREVER IMAGEM', `
       <p>ESCOLHA UMA FOTO OU IMAGEM E UMA IA DESCREVE PARA VOCÊ. PRECISA DE INTERNET E DA SUA CHAVE DE API.</p>
-      <button type="button" class="pill" id="pickImage">📷 ESCOLHER IMAGEM</button>
+      <button type="button" class="pill" id="pickOcr">🔤 LER O TEXTO DA FOTO (SEM INTERNET, A FOTO NÃO SAI DO CELULAR)</button>
+      <button type="button" class="pill" id="pickImage">📷 DESCREVER COM IA (ENVIA A FOTO)</button>
       <div id="imageOut" class="output" aria-live="polite">A DESCRIÇÃO APARECERÁ AQUI.</div>
       <button type="button" class="pill" id="imageSend" hidden>📤 ENVIAR PARA A IA</button>
       <button type="button" class="pill" id="imageCancel" hidden>CANCELAR</button>
       <button type="button" class="pill" id="imageRead" hidden>🔊 OUVIR DESCRIÇÃO</button>
       ${aiSettingsHtml()}
     `, 'Escolha uma imagem para ouvir a descrição.');
+    $('#pickOcr').onclick = () => { imageMode = 'ocr'; $('#fileImage').click(); };
     $('#pickImage').onclick = () => {
+      imageMode = 'ai';
       if (!hasAI) { $('#imageOut').textContent = 'A DESCRIÇÃO POR IA FUNCIONA NO APLICATIVO ANDROID.'; return; }
       if (!native.hasKey(currentProvider())) {
         $('#imageOut').textContent = 'CADASTRE A CHAVE DE API ABAIXO PARA USAR A IA.'; speak('Cadastre a chave de API abaixo.'); return;
@@ -301,7 +368,7 @@ const actions = {
     openModal('BIBLIOTECA', html, items.length ? 'Biblioteca aberta com atividades salvas.' : 'Biblioteca vazia.');
   },
   ajuda(){
-    const text = 'Lumivox é um protótipo acessível. Use os botões grandes. Toque em ouvir texto para ler frases. Use ler PDF para ouvir documentos. Use descrever imagem para ouvir a descrição de uma foto, com a sua chave de inteligência artificial. Use Braille para converter letras. Use calculadora falada para ouvir resultados. Ative alto contraste e fonte ampliada se necessário.';
+    const text = 'Lumivox é um protótipo acessível. Use os botões grandes. Toque em ouvir texto para ler frases. Use ler PDF para ouvir documentos. Use descrever imagem para ler o texto de uma foto sem internet, ou para ouvir a descrição dela com a sua chave de inteligência artificial. Use Braille para converter letras. Use calculadora falada para ouvir resultados. Ative alto contraste e fonte ampliada se necessário.';
     openModal('AJUDA', `<p>${escapeHtml(text)}</p><p><strong>DICA:</strong> NO ANDROID, ABRA PELO CHROME E USE A OPÇÃO “ADICIONAR À TELA INICIAL”.</p>`, text);
   }
 };
@@ -348,8 +415,14 @@ $('#filePdf').addEventListener('change', async (e) => {
   try {
     const { text, pages } = await extractPdfText(f, (n, total) => setStatus(`LENDO PÁGINA ${n} DE ${total}...`));
     if (!text) {
-      out.textContent = 'ESTE PDF NÃO TEM TEXTO (PARECE SER UMA IMAGEM ESCANEADA). TENTE "DESCREVER IMAGEM" COM UMA FOTO DAS PÁGINAS.';
-      speak('Este PDF não tem texto. Parece ser uma imagem escaneada.'); return;
+      out.textContent = 'ESTE PDF NÃO TEM TEXTO DIGITAL (PARECE SER ESCANEADO). VOU TENTAR LER AS PÁGINAS COMO IMAGEM, ATÉ 10 PÁGINAS. PODE DEMORAR.';
+      speak('Este PDF parece escaneado. Vou tentar ler as páginas como imagem. Pode demorar.');
+      const scanned = await ocrPdfPages(f, 10, (n, total) => setStatus(`PREPARANDO PÁGINA ${n} DE ${total}...`));
+      if (!scanned.text) { out.textContent = 'NÃO ENCONTREI TEXTO LEGÍVEL NESTE PDF.'; speak('Não encontrei texto legível neste PDF.'); return; }
+      const note = scanned.totalPages > scanned.pages ? `\n\n[LIDAS AS ${scanned.pages} PRIMEIRAS DE ${scanned.totalPages} PÁGINAS]` : '';
+      out.textContent = scanned.text + note; lastModalText = scanned.text;
+      const btn2 = $('#pdfRead'); btn2.hidden = false; btn2.onclick = () => speak(scanned.text);
+      setStatus('PDF PRONTO.'); speak(scanned.text); return;
     }
     const LIMIT = 30000;
     out.textContent = text.length > LIMIT ? text.slice(0, LIMIT) + '\n\n[... TEXTO MOSTRADO ATÉ AQUI; A LEITURA EM VOZ CONTINUA ATÉ O FIM ...]' : text;
@@ -363,6 +436,7 @@ $('#filePdf').addEventListener('change', async (e) => {
   }
 });
 let pendingImage = null;
+let imageMode = 'ai';
 const PRIVACY_NOTE = {
   claude: 'SERÁ ENVIADA À ANTHROPIC (CLAUDE). O USO É COBRADO NA SUA CONTA.',
   gemini: 'SERÁ ENVIADA AO GOOGLE (GEMINI). NA CAMADA GRATUITA, O GOOGLE PODE USAR O CONTEÚDO PARA MELHORAR SEUS PRODUTOS; NA PAGA, NÃO.'
@@ -388,6 +462,17 @@ $('#fileImage').addEventListener('change', (e) => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
   const out = $('#imageOut');
   if (!out) return;
+  if (imageMode === 'ocr') {
+    out.textContent = 'LENDO O TEXTO DA FOTO... (A FOTO NÃO SAI DO CELULAR)'; setStatus('LENDO O TEXTO DA FOTO...');
+    speak('Lendo o texto da foto. Aguarde.');
+    fileToCanvas(f).then((canvas) => ocrCanvas(canvas, 'LENDO O TEXTO:')).then((text) => {
+      if (!text) { out.textContent = 'NÃO ENCONTREI TEXTO NESTA FOTO. TENTE COM MAIS LUZ E O TEXTO CENTRALIZADO.'; speak('Não encontrei texto nesta foto.'); return; }
+      out.textContent = text; lastModalText = text;
+      const btn = $('#imageRead'); btn.hidden = false; btn.onclick = () => speak(text);
+      setStatus('TEXTO PRONTO.'); speak(text);
+    }).catch(() => { out.textContent = 'NÃO FOI POSSÍVEL LER O TEXTO DESTA FOTO.'; speak('Não foi possível ler o texto desta foto.'); });
+    return;
+  }
   pendingImage = f;
   const prov = currentProvider();
   const msg = `FOTO ESCOLHIDA. ELA ${PRIVACY_NOTE[prov]}\nOS DADOS DA LOCALIZAÇÃO DA FOTO NÃO SÃO ENVIADOS.\n\nTOQUE EM "ENVIAR PARA A IA" PARA CONTINUAR.`;
