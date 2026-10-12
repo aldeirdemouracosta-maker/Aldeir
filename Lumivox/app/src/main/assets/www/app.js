@@ -216,6 +216,8 @@ const actions = {
       <p>ESCOLHA UMA FOTO OU IMAGEM E UMA IA DESCREVE PARA VOCÊ. PRECISA DE INTERNET E DA SUA CHAVE DE API.</p>
       <button type="button" class="pill" id="pickImage">📷 ESCOLHER IMAGEM</button>
       <div id="imageOut" class="output" aria-live="polite">A DESCRIÇÃO APARECERÁ AQUI.</div>
+      <button type="button" class="pill" id="imageSend" hidden>📤 ENVIAR PARA A IA</button>
+      <button type="button" class="pill" id="imageCancel" hidden>CANCELAR</button>
       <button type="button" class="pill" id="imageRead" hidden>🔊 OUVIR DESCRIÇÃO</button>
       ${aiSettingsHtml()}
     `, 'Escolha uma imagem para ouvir a descrição.');
@@ -226,6 +228,8 @@ const actions = {
       }
       $('#fileImage').click();
     };
+    $('#imageSend').onclick = sendPendingImage;
+    $('#imageCancel').onclick = () => { pendingImage = null; $('#imageSend').hidden = true; $('#imageCancel').hidden = true; $('#imageOut').textContent = 'ENVIO CANCELADO.'; speak('Envio cancelado.'); };
     bindAiSettings();
   },
   atividade(){
@@ -358,13 +362,19 @@ $('#filePdf').addEventListener('change', async (e) => {
     speak('Não foi possível ler este PDF.');
   }
 });
-$('#fileImage').addEventListener('change', async (e) => {
-  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
-  const out = $('#imageOut');
-  if (!out) return;
+let pendingImage = null;
+const PRIVACY_NOTE = {
+  claude: 'SERÁ ENVIADA À ANTHROPIC (CLAUDE). O USO É COBRADO NA SUA CONTA.',
+  gemini: 'SERÁ ENVIADA AO GOOGLE (GEMINI). NA CAMADA GRATUITA, O GOOGLE PODE USAR O CONTEÚDO PARA MELHORAR SEUS PRODUTOS; NA PAGA, NÃO.'
+};
+async function sendPendingImage(){
+  const f = pendingImage; pendingImage = null;
+  const out = $('#imageOut'), sendBtn = $('#imageSend'), cancelBtn = $('#imageCancel');
+  if (!f || !out) return;
+  if (sendBtn) sendBtn.hidden = true; if (cancelBtn) cancelBtn.hidden = true;
   out.textContent = 'DESCREVENDO A IMAGEM...'; setStatus('DESCREVENDO A IMAGEM...'); speak('Descrevendo a imagem. Aguarde.');
   try {
-    const b64 = await fileToJpegBase64(f);
+    const b64 = await fileToJpegBase64(f); // recodificar remove os metadados da foto (como a localização)
     const text = await askAI(currentProvider(), DESCRIBE_PROMPT, b64, 'image/jpeg');
     out.textContent = text; lastModalText = text;
     const btn = $('#imageRead'); btn.hidden = false; btn.onclick = () => speak(text);
@@ -373,6 +383,17 @@ $('#fileImage').addEventListener('change', async (e) => {
   } catch (err) {
     out.textContent = 'ERRO: ' + err.message; setStatus('ERRO NA DESCRIÇÃO.'); speak('Não consegui descrever a imagem. ' + err.message);
   }
+}
+$('#fileImage').addEventListener('change', (e) => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const out = $('#imageOut');
+  if (!out) return;
+  pendingImage = f;
+  const prov = currentProvider();
+  const msg = `FOTO ESCOLHIDA. ELA ${PRIVACY_NOTE[prov]}\nOS DADOS DA LOCALIZAÇÃO DA FOTO NÃO SÃO ENVIADOS.\n\nTOQUE EM "ENVIAR PARA A IA" PARA CONTINUAR.`;
+  out.textContent = msg;
+  $('#imageSend').hidden = false; $('#imageCancel').hidden = false;
+  speak('Foto escolhida. ' + (prov === 'gemini' ? 'Ela será enviada ao Google.' : 'Ela será enviada à Anthropic.') + ' Toque em enviar para a IA para continuar, ou em cancelar.');
 });
 modal.addEventListener('close', stopSpeaking);
 

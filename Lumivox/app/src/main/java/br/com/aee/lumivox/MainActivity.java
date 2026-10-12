@@ -6,6 +6,9 @@ import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyProperties;
+import android.util.Base64;
 import android.speech.tts.TextToSpeech;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
@@ -36,6 +39,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.security.KeyStore;
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
 
 public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST_CODE = 1001;
@@ -223,6 +231,54 @@ public class MainActivity extends Activity {
         return out;
     }
 
+
+    // ------------------------------------------------- chaves (Android Keystore) ---
+
+    private static final String KEYSTORE_ALIAS = "lumivox_ai_key";
+
+    private SecretKey keystoreKey() throws Exception {
+        KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
+        ks.load(null);
+        if (!ks.containsAlias(KEYSTORE_ALIAS)) {
+            KeyGenerator kg = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
+            kg.init(new KeyGenParameterSpec.Builder(KEYSTORE_ALIAS,
+                    KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                    .setKeySize(256)
+                    .build());
+            return kg.generateKey();
+        }
+        return (SecretKey) ks.getKey(KEYSTORE_ALIAS, null);
+    }
+
+    /** Criptografa com uma chave que nunca sai do cofre do Android (AES-GCM). */
+    private String encryptSecret(String plain) throws Exception {
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.ENCRYPT_MODE, keystoreKey());
+        byte[] ct = cipher.doFinal(plain.getBytes(StandardCharsets.UTF_8));
+        return Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP) + ":" + Base64.encodeToString(ct, Base64.NO_WRAP);
+    }
+
+    private String decryptSecret(String stored) throws Exception {
+        String[] parts = stored.split(":");
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.DECRYPT_MODE, keystoreKey(),
+                new GCMParameterSpec(128, Base64.decode(parts[0], Base64.NO_WRAP)));
+        return new String(cipher.doFinal(Base64.decode(parts[1], Base64.NO_WRAP)), StandardCharsets.UTF_8);
+    }
+
+    /** Lê a chave cadastrada; vazio se não houver ou se não puder ser descriptografada. */
+    private String readKey(String provider) {
+        String stored = prefs.getString("keyenc_" + provider, "");
+        if (stored.isEmpty()) return "";
+        try {
+            return decryptSecret(stored);
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
     // ------------------------------------------------------------------- IA ---
 
     private static boolean validProvider(String provider) {
@@ -375,7 +431,7 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public boolean hasKey(String provider) {
-            return validProvider(provider) && !prefs.getString("key_" + provider, "").isEmpty();
+            return validProvider(provider) && !prefs.getString("keyenc_" + provider, "").isEmpty();
         }
 
         @JavascriptInterface
@@ -383,12 +439,16 @@ public class MainActivity extends Activity {
             if (!validProvider(provider) || key == null) return;
             String clean = key.trim();
             if (clean.isEmpty() || clean.length() > 300 || clean.matches(".*\\s.*")) return;
-            prefs.edit().putString("key_" + provider, clean).apply();
+            try {
+                prefs.edit().putString("keyenc_" + provider, encryptSecret(clean)).remove("key_" + provider).apply();
+            } catch (Exception e) {
+                // Sem cofre seguro neste aparelho: não guarda a chave em texto puro.
+            }
         }
 
         @JavascriptInterface
         public void clearKey(String provider) {
-            if (validProvider(provider)) prefs.edit().remove("key_" + provider).apply();
+            if (validProvider(provider)) prefs.edit().remove("keyenc_" + provider).remove("key_" + provider).apply();
         }
 
         @JavascriptInterface
@@ -415,7 +475,7 @@ public class MainActivity extends Activity {
                 deliver(callbackId, false, "Escolha Claude ou Gemini.");
                 return;
             }
-            final String key = prefs.getString("key_" + provider, "");
+            final String key = readKey(provider);
             if (key.isEmpty()) {
                 deliver(callbackId, false, "Cadastre a chave de API nas configurações da IA.");
                 return;
