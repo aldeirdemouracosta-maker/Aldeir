@@ -61,3 +61,5 @@ body.high-contrast{--bg:#000;--bg2:#000;--panel:#000;--text:#fff;--muted:#fff;--
   .tile small{font-size:.68rem}
   .bottom-bar{position:sticky;bottom:0;background:linear-gradient(180deg,rgba(6,20,37,.2),rgba(6,20,37,.95));padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 }
+
+.ai-box{border:1px solid var(--line);border-radius:16px;margin:14px 0 0;padding:12px}.ai-box legend{font-weight:900;padding:0 8px;color:#dff4ff}.ai-box small{display:block;margin-top:8px;opacity:.85;line-height:1.4}.modal-card .pill{margin:4px 6px 10px 0}#modalContent>.output{margin:10px 0}

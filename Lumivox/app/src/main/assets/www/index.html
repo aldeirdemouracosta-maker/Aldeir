@@ -44,17 +44,17 @@
       <button class="tile red" data-action="pdf" aria-describedby="desc-pdf">
         <span class="tile-icon" aria-hidden="true">📄</span>
         <span>LER<br>PDF</span>
-        <small id="desc-pdf">Seleciona um arquivo PDF e avisa o nome para leitura assistida.</small>
+        <small id="desc-pdf">Escolhe um PDF e lê o texto em voz alta, sem internet.</small>
       </button>
       <button class="tile green" data-action="imagem" aria-describedby="desc-imagem">
         <span class="tile-icon" aria-hidden="true">📷</span>
         <span>DESCREVER<br>IMAGEM</span>
-        <small id="desc-imagem">Abre seleção de imagem e simula descrição acessível.</small>
+        <small id="desc-imagem">Descreve uma foto em voz alta usando IA (Claude ou Gemini).</small>
       </button>
       <button class="tile purple" data-action="atividade" aria-describedby="desc-atividade">
         <span class="tile-icon" aria-hidden="true">✏️</span>
         <span>CRIAR<br>ATIVIDADE</span>
-        <small id="desc-atividade">Cria um modelo simples de atividade adaptada.</small>
+        <small id="desc-atividade">Cria uma atividade adaptada, com IA ou por modelo simples.</small>
       </button>
       <button class="tile gold" data-action="braille" aria-describedby="desc-braille">
         <span class="tile-icon braille-dots" aria-hidden="true">⠿</span>
@@ -94,13 +94,14 @@
       <div id="modalContent"></div>
       <menu class="modal-actions">
         <button id="modalSpeak" type="button">🔊 OUVIR</button>
+        <button id="modalStop" type="button">⏹ PARAR</button>
         <button value="ok">FECHAR</button>
       </menu>
     </form>
   </dialog>
 
   <input id="filePdf" type="file" accept="application/pdf" hidden />
-  <input id="fileImage" type="file" accept="image/*" capture="environment" hidden />
+  <input id="fileImage" type="file" accept="image/*" hidden />
 
   <script src="app.js" defer></script>
 </body>

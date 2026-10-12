@@ -21,6 +21,113 @@ const safeStorage = {
 };
 window.__lumivoxMemoryStore = memoryStore;
 
+// ---------------------------------------------------------------- ponte nativa / IA ---
+const native = window.LumivoxAndroid;
+const hasAI = !!(native && typeof native.askAI === 'function');
+const AI_PROVIDERS = { claude: 'CLAUDE (ANTHROPIC)', gemini: 'GEMINI (GOOGLE)' };
+const pendingAI = {};
+window.LumivoxNative = {
+  onResult(id, ok, text){
+    const done = pendingAI[id]; delete pendingAI[id];
+    if (done) done(ok, String(text || ''));
+  }
+};
+function currentProvider(){
+  const saved = safeStorage.getItem('lumivox_ai_provider');
+  return saved === 'gemini' ? 'gemini' : 'claude';
+}
+function askAI(provider, prompt, imageB64, mime){
+  return new Promise((resolve, reject) => {
+    if (!hasAI) return reject(new Error('A IA funciona no aplicativo Android.'));
+    const id = 'ai' + Date.now() + Math.random().toString(36).slice(2, 8);
+    const timer = setTimeout(() => { delete pendingAI[id]; reject(new Error('A IA demorou demais para responder.')); }, 120000);
+    pendingAI[id] = (ok, text) => { clearTimeout(timer); ok ? resolve(text) : reject(new Error(text)); };
+    native.askAI(provider, prompt, imageB64 || '', mime || 'image/jpeg', id);
+  });
+}
+function aiSettingsHtml(){
+  const provider = currentProvider();
+  return `
+    <fieldset class="ai-box">
+      <legend>CONFIGURAR IA</legend>
+      <label for="aiProvider">QUAL IA USAR:</label>
+      <select id="aiProvider">
+        ${Object.entries(AI_PROVIDERS).map(([k, v]) => `<option value="${k}"${k === provider ? ' selected' : ''}>${v}</option>`).join('')}
+      </select>
+      <label for="aiKey">CHAVE DE API <span id="aiKeyState"></span>:</label>
+      <input id="aiKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="COLE SUA CHAVE AQUI" />
+      <label for="aiModel">MODELO:</label>
+      <input id="aiModel" autocapitalize="off" spellcheck="false" />
+      <button type="button" class="pill" id="aiSave">SALVAR</button>
+      <button type="button" class="pill" id="aiClear">APAGAR CHAVE</button>
+      <small>A chave fica só neste celular. Cada uso da IA é cobrado na sua conta do provedor.</small>
+    </fieldset>`;
+}
+function bindAiSettings(onChange){
+  const providerEl = $('#aiProvider'), keyEl = $('#aiKey'), modelEl = $('#aiModel'), stateEl = $('#aiKeyState');
+  const refresh = () => {
+    const prov = providerEl.value;
+    stateEl.textContent = hasAI && native.hasKey(prov) ? '(JÁ CADASTRADA)' : '(NÃO CADASTRADA)';
+    modelEl.value = hasAI ? native.getModel(prov) : '';
+    keyEl.value = '';
+  };
+  providerEl.addEventListener('change', () => { safeStorage.setItem('lumivox_ai_provider', providerEl.value); refresh(); onChange && onChange(); });
+  $('#aiSave').addEventListener('click', () => {
+    if (!hasAI) { setStatus('CONFIGURAÇÃO DE IA SÓ NO APLICATIVO ANDROID.'); return; }
+    const prov = providerEl.value;
+    safeStorage.setItem('lumivox_ai_provider', prov);
+    if (keyEl.value.trim()) native.saveKey(prov, keyEl.value.trim());
+    if (modelEl.value.trim()) native.setModel(prov, modelEl.value.trim());
+    refresh(); onChange && onChange();
+    speak(native.hasKey(prov) ? 'Configuração salva.' : 'Cole a chave de API para usar a IA.');
+  });
+  $('#aiClear').addEventListener('click', () => {
+    if (!hasAI) return;
+    native.clearKey(providerEl.value); refresh(); onChange && onChange(); speak('Chave apagada.');
+  });
+  refresh();
+}
+function stopSpeaking(){
+  if (native && typeof native.stopSpeaking === 'function') native.stopSpeaking();
+  else if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+  setStatus('LEITURA PARADA.');
+}
+async function fileToJpegBase64(file, maxSide = 1568){
+  const bmp = await createImageBitmap(file);
+  const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(bmp.width * scale));
+  canvas.height = Math.max(1, Math.round(bmp.height * scale));
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  if (bmp.close) bmp.close();
+  return canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+}
+async function extractPdfText(file, onProgress){
+  const pdfjs = await import('./vendor/pdfjs/pdf.min.mjs');
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdfjs/pdf.worker.min.mjs', window.location.href).href;
+  const data = new Uint8Array(await file.arrayBuffer());
+  const pdf = await pdfjs.getDocument({ data, isEvalSupported: false }).promise;
+  const pages = [];
+  for (let n = 1; n <= pdf.numPages; n++) {
+    onProgress && onProgress(n, pdf.numPages);
+    const page = await pdf.getPage(n);
+    const content = await page.getTextContent();
+    let line = '';
+    for (const item of content.items) {
+      line += item.str;
+      line += item.hasEOL ? '\n' : (item.str && !item.str.endsWith(' ') ? ' ' : '');
+    }
+    pages.push(line.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim());
+  }
+  return { text: pages.filter(Boolean).join('\n\n'), pages: pdf.numPages };
+}
+const DESCRIBE_PROMPT = 'Você é um audiodescritor que ajuda uma pessoa cega. Descreva esta imagem em português do Brasil, em texto corrido e sem Markdown. ' +
+  'Comece dizendo o que é a imagem (foto, documento, captura de tela, desenho...) em uma frase. Depois descreva as pessoas, objetos, cores, posições e o ambiente, do mais importante para o menos importante. ' +
+  'Se houver texto ou números, transcreva exatamente o que está escrito. Se for um documento, tabela ou gráfico, explique a estrutura e os valores. ' +
+  'Descreva só o que realmente aparece: não invente nem adivinhe o que não dá para ver, e avise se algo estiver ilegível ou cortado.';
+
 
 const brailleMap = {
   'a':'⠁','b':'⠃','c':'⠉','d':'⠙','e':'⠑','f':'⠋','g':'⠛','h':'⠓','i':'⠊','j':'⠚',
@@ -95,25 +202,65 @@ const actions = {
     `, 'Digite um texto e toque em ler texto.');
     $('#readTextBtn').onclick = () => speak($('#textToRead').value || 'Digite um texto para ouvir.');
   },
-  pdf(){ $('#filePdf').click(); },
-  imagem(){ $('#fileImage').click(); },
+  pdf(){
+    openModal('LER PDF', `
+      <p>ESCOLHA UM PDF E O LUMIVOX LÊ O TEXTO EM VOZ ALTA. FUNCIONA SEM INTERNET.</p>
+      <button type="button" class="pill" id="pickPdf">📄 ESCOLHER PDF</button>
+      <div id="pdfOut" class="output" aria-live="polite">O TEXTO APARECERÁ AQUI.</div>
+      <button type="button" class="pill" id="pdfRead" hidden>🔊 LER EM VOZ ALTA</button>
+    `, 'Escolha um PDF para ouvir o texto.');
+    $('#pickPdf').onclick = () => $('#filePdf').click();
+  },
+  imagem(){
+    openModal('DESCREVER IMAGEM', `
+      <p>ESCOLHA UMA FOTO OU IMAGEM E UMA IA DESCREVE PARA VOCÊ. PRECISA DE INTERNET E DA SUA CHAVE DE API.</p>
+      <button type="button" class="pill" id="pickImage">📷 ESCOLHER IMAGEM</button>
+      <div id="imageOut" class="output" aria-live="polite">A DESCRIÇÃO APARECERÁ AQUI.</div>
+      <button type="button" class="pill" id="imageRead" hidden>🔊 OUVIR DESCRIÇÃO</button>
+      ${aiSettingsHtml()}
+    `, 'Escolha uma imagem para ouvir a descrição.');
+    $('#pickImage').onclick = () => {
+      if (!hasAI) { $('#imageOut').textContent = 'A DESCRIÇÃO POR IA FUNCIONA NO APLICATIVO ANDROID.'; return; }
+      if (!native.hasKey(currentProvider())) {
+        $('#imageOut').textContent = 'CADASTRE A CHAVE DE API ABAIXO PARA USAR A IA.'; speak('Cadastre a chave de API abaixo.'); return;
+      }
+      $('#fileImage').click();
+    };
+    bindAiSettings();
+  },
   atividade(){
     openModal('CRIAR ATIVIDADE', `
       <label for="subject">TEMA DA ATIVIDADE:</label>
       <input id="subject" value="TABELA PERIODICA" />
       <label for="level">NÍVEL:</label>
       <select id="level"><option>INICIAL</option><option>INTERMEDIÁRIO</option><option>AVANÇADO</option></select>
-      <button type="button" class="pill" id="makeActivity">GERAR MODELO</button>
-      <div id="activityOut" class="output" aria-live="polite">O MODELO APARECERÁ AQUI.</div>
-    `, 'Gerador simples de atividade adaptada.');
+      <button type="button" class="pill" id="makeActivityAI">✨ GERAR COM IA</button>
+      <button type="button" class="pill" id="makeActivity">MODELO SIMPLES (SEM IA)</button>
+      <div id="activityOut" class="output" aria-live="polite">A ATIVIDADE APARECERÁ AQUI.</div>
+      ${aiSettingsHtml()}
+    `, 'Gerador de atividade adaptada.');
+    const read = () => ({ subject: ($('#subject').value || 'CONTEÚDO').toUpperCase(), level: $('#level').value });
+    const show = (subject, activity) => { $('#activityOut').textContent = activity; saveLibrary(`ATIVIDADE - ${subject}`, activity); lastModalText = activity; };
     $('#makeActivity').onclick = () => {
-      const subject = ($('#subject').value || 'CONTEÚDO').toUpperCase();
-      const level = $('#level').value;
-      const activity = `ATIVIDADE ADAPTADA - ${subject}\nNÍVEL: ${level}\n\n1. OBSERVE O SÍMBOLO E MARQUE A RESPOSTA CORRETA.\n[   ] OPÇÃO A    [   ] OPÇÃO B    [   ] OPÇÃO C\n\n2. LIGUE O NOME AO SÍMBOLO CORRETO.\n\n3. COMPLETE COM AJUDA DO PROFESSOR.\n\nRECOMENDAÇÕES: LETRA CAIXA ALTA, FONTE GRANDE, ALTO CONTRASTE E POUCOS ITENS POR PÁGINA.`;
-      $('#activityOut').textContent = activity;
-      saveLibrary(`ATIVIDADE - ${subject}`, activity);
-      speak('Atividade criada e salva na biblioteca.');
+      const { subject, level } = read();
+      show(subject, `ATIVIDADE ADAPTADA - ${subject}\nNÍVEL: ${level}\n\n1. OBSERVE O SÍMBOLO E MARQUE A RESPOSTA CORRETA.\n[   ] OPÇÃO A    [   ] OPÇÃO B    [   ] OPÇÃO C\n\n2. LIGUE O NOME AO SÍMBOLO CORRETO.\n\n3. COMPLETE COM AJUDA DO PROFESSOR.\n\nRECOMENDAÇÕES: LETRA CAIXA ALTA, FONTE GRANDE, ALTO CONTRASTE E POUCOS ITENS POR PÁGINA.`);
+      speak('Modelo criado e salvo na biblioteca.');
     };
+    $('#makeActivityAI').onclick = async () => {
+      if (!hasAI || !native.hasKey(currentProvider())) {
+        $('#activityOut').textContent = 'CADASTRE A CHAVE DE API ABAIXO PARA GERAR COM IA, OU USE O MODELO SIMPLES.'; speak('Cadastre a chave de API abaixo.'); return;
+      }
+      const { subject, level } = read();
+      $('#activityOut').textContent = 'GERANDO...'; setStatus('GERANDO ATIVIDADE...');
+      try {
+        const prompt = `Crie uma atividade escolar adaptada para estudantes cegos ou com baixa visão sobre "${subject}", nível ${level.toLowerCase()}. ` +
+          'Use frases curtas, letras em caixa alta, no máximo 5 questões simples e, no final, o gabarito. Não dependa de figuras nem de cores. ' +
+          'Responda em português do Brasil, em texto simples, sem Markdown.';
+        show(subject, await askAI(currentProvider(), prompt));
+        speak('Atividade criada e salva na biblioteca.');
+      } catch (e) { $('#activityOut').textContent = 'ERRO: ' + e.message; speak('Não consegui gerar a atividade. ' + e.message); }
+    };
+    bindAiSettings();
   },
   braille(){
     openModal('BRAILLE', `
@@ -150,7 +297,7 @@ const actions = {
     openModal('BIBLIOTECA', html, items.length ? 'Biblioteca aberta com atividades salvas.' : 'Biblioteca vazia.');
   },
   ajuda(){
-    const text = 'Lumivox é um protótipo acessível. Use os botões grandes. Toque em ouvir texto para ler frases. Use Braille para converter letras. Use calculadora falada para ouvir resultados. Ative alto contraste e fonte ampliada se necessário.';
+    const text = 'Lumivox é um protótipo acessível. Use os botões grandes. Toque em ouvir texto para ler frases. Use ler PDF para ouvir documentos. Use descrever imagem para ouvir a descrição de uma foto, com a sua chave de inteligência artificial. Use Braille para converter letras. Use calculadora falada para ouvir resultados. Ative alto contraste e fonte ampliada se necessário.';
     openModal('AJUDA', `<p>${escapeHtml(text)}</p><p><strong>DICA:</strong> NO ANDROID, ABRA PELO CHROME E USE A OPÇÃO “ADICIONAR À TELA INICIAL”.</p>`, text);
   }
 };
@@ -164,6 +311,7 @@ document.addEventListener('click', (e) => {
 });
 
 $('#modalSpeak').addEventListener('click', () => speak(lastModalText));
+$('#modalStop').addEventListener('click', stopSpeaking);
 $('#speakIntro').addEventListener('click', () => speak('Menu principal. Ouvir texto. Ler PDF. Descrever imagem. Criar atividade. Braille. Calculadora falada. Biblioteca. Ajuda.'));
 $('#voiceBtn').addEventListener('click', () => speak('Olá. Eu sou o Lumivox. Escolha uma opção no menu.'));
 $('#contrastToggle').addEventListener('click', () => {
@@ -188,19 +336,48 @@ $('#settingsBtn').addEventListener('click', () => {
     </div>
   `, 'Recursos de acessibilidade. Alto contraste. Fonte ampliada. Leitura do menu.');
 });
-$('#filePdf').addEventListener('change', (e) => {
-  const f = e.target.files[0]; if (!f) return;
-  const text = `PDF selecionado: ${f.name}. Nesta primeira versão, o aplicativo confirma o arquivo. Para leitura completa de PDF, a próxima etapa é integrar um leitor PDF interno.`;
-  openModal('LER PDF', `<p>${escapeHtml(text)}</p>`, text); speak(text); e.target.value = '';
+$('#filePdf').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const out = $('#pdfOut');
+  if (!out) return;
+  out.textContent = 'LENDO O PDF...'; setStatus('LENDO O PDF...');
+  try {
+    const { text, pages } = await extractPdfText(f, (n, total) => setStatus(`LENDO PÁGINA ${n} DE ${total}...`));
+    if (!text) {
+      out.textContent = 'ESTE PDF NÃO TEM TEXTO (PARECE SER UMA IMAGEM ESCANEADA). TENTE "DESCREVER IMAGEM" COM UMA FOTO DAS PÁGINAS.';
+      speak('Este PDF não tem texto. Parece ser uma imagem escaneada.'); return;
+    }
+    const LIMIT = 30000;
+    out.textContent = text.length > LIMIT ? text.slice(0, LIMIT) + '\n\n[... TEXTO MOSTRADO ATÉ AQUI; A LEITURA EM VOZ CONTINUA ATÉ O FIM ...]' : text;
+    lastModalText = text;
+    const btn = $('#pdfRead'); btn.hidden = false; btn.onclick = () => speak(text);
+    setStatus(`PDF PRONTO: ${pages} PÁGINA(S).`);
+    speak(`PDF pronto, ${pages} página${pages > 1 ? 's' : ''}. ` + text);
+  } catch (err) {
+    out.textContent = 'NÃO FOI POSSÍVEL LER ESTE PDF. ELE PODE ESTAR PROTEGIDO POR SENHA OU DANIFICADO.';
+    speak('Não foi possível ler este PDF.');
+  }
 });
-$('#fileImage').addEventListener('change', (e) => {
-  const f = e.target.files[0]; if (!f) return;
-  const text = `Imagem selecionada: ${f.name}. Descrição simulada: arquivo de imagem carregado para análise acessível. A próxima etapa é integrar descrição automática com IA.`;
-  openModal('DESCREVER IMAGEM', `<p>${escapeHtml(text)}</p>`, text); speak(text); e.target.value = '';
+$('#fileImage').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const out = $('#imageOut');
+  if (!out) return;
+  out.textContent = 'DESCREVENDO A IMAGEM...'; setStatus('DESCREVENDO A IMAGEM...'); speak('Descrevendo a imagem. Aguarde.');
+  try {
+    const b64 = await fileToJpegBase64(f);
+    const text = await askAI(currentProvider(), DESCRIBE_PROMPT, b64, 'image/jpeg');
+    out.textContent = text; lastModalText = text;
+    const btn = $('#imageRead'); btn.hidden = false; btn.onclick = () => speak(text);
+    saveLibrary(`DESCRIÇÃO - ${f.name || 'IMAGEM'}`, text);
+    setStatus('DESCRIÇÃO PRONTA.'); speak(text);
+  } catch (err) {
+    out.textContent = 'ERRO: ' + err.message; setStatus('ERRO NA DESCRIÇÃO.'); speak('Não consegui descrever a imagem. ' + err.message);
+  }
 });
+modal.addEventListener('close', stopSpeaking);
 
 window.addEventListener('load', () => {
   if (safeStorage.getItem('lumivox_contrast') === '1') document.body.classList.add('high-contrast');
   document.documentElement.style.setProperty('--font-scale', safeStorage.getItem('lumivox_font_scale') || '1');
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('service-worker.js').catch(()=>{});
+  if (!native && 'serviceWorker' in navigator) navigator.serviceWorker.register('service-worker.js').catch(()=>{});
 });
