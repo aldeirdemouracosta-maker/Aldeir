@@ -1,0 +1,39 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'br.com.aee.lumivox'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'br.com.aee.lumivox'
+        minSdk 23
+        targetSdk 35
+        versionCode 1
+        versionName '1.0.0'
+    }
+
+    signingConfigs {
+        release {
+            def envStoreFile = System.getenv('LUMIVOX_KEYSTORE_PATH')
+            def localStoreFile = file('release/lumivox-release.keystore')
+            storeFile envStoreFile ? file(envStoreFile) : localStoreFile
+            storePassword System.getenv('LUMIVOX_KEYSTORE_PASSWORD') ?: 'lumivox2026'
+            keyAlias System.getenv('LUMIVOX_KEY_ALIAS') ?: 'lumivox'
+            keyPassword System.getenv('LUMIVOX_KEY_PASSWORD') ?: 'lumivox2026'
+        }
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix '.debug'
+            versionNameSuffix '-debug'
+        }
+        release {
+            minifyEnabled false
+            shrinkResources false
+            signingConfig signingConfigs.release
+        }
+    }
+}
