@@ -2,6 +2,7 @@
 tem modo apresentação com as setas do teclado e pode ser impresso em PDF)."""
 from __future__ import annotations
 
+import re
 from html import escape
 from typing import Any
 
@@ -15,9 +16,12 @@ def _num(v: Any, default: float = 0.0) -> float:
         return default
 
 
+_HEX = re.compile(r"#[0-9A-Fa-f]{6}")
+
+
 def _color(v: Any, default: str) -> str:
     s = str(v or "")
-    return s if len(s) == 7 and s.startswith("#") else default
+    return s if _HEX.fullmatch(s) else default
 
 
 def _element_html(e: dict[str, Any], theme: dict[str, Any]) -> str:

@@ -201,6 +201,46 @@ def test_anthropic_provider_builds_structured_request(monkeypatch):
     assert "temperature" not in calls
 
 
+def test_anthropic_effort_only_for_models_that_support_it(monkeypatch):
+    anthropic = pytest.importorskip("anthropic")
+    seen = []
+
+    class Block:
+        type = "text"
+        text = json.dumps({"title": "IA", "subtitle": "", "slides": [{"layout": "title", "title": "IA"}]})
+
+    class Msg:
+        stop_reason = "end_turn"
+        content = [Block()]
+
+    class Stream:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get_final_message(self):
+            return Msg()
+
+    class FakeMessages:
+        def stream(self, **kw):
+            seen.append(kw)
+            return Stream()
+
+    class FakeClient:
+        def __init__(self, api_key=None):
+            self.beta = type("B", (), {"messages": FakeMessages()})()
+            self.messages = FakeMessages()
+
+    monkeypatch.setattr(anthropic, "Anthropic", FakeClient)
+    for model in ("claude-haiku-4-5", "claude-opus-5-5"):
+        ai.generate_outline("tema", 4, "pt", "", {"provider": "anthropic", "anthropic_model": model,
+                                                  "anthropic_api_key": "k", "anthropic_effort": "medium"})
+    assert "effort" not in seen[0]["output_config"]
+    assert seen[1]["output_config"]["effort"] == "medium"
+
+
 # ---------------------------------------------------------------- imagens ---
 
 def test_fill_images_uses_results_and_placeholders(monkeypatch):
@@ -310,6 +350,13 @@ def test_html_export_is_self_contained_and_escaped():
     assert html.count('class="slide"') == 4
     assert "<script>alert(1)</script>" not in html
     assert "data:image/png;base64" in html
+
+
+def test_html_export_rejects_malformed_colors():
+    pres = _rich_presentation()
+    pres["slides"][0]["elements"][2]["color"] = '#"onx=1'
+    html = build_html(pres).decode()
+    assert 'onx=1' not in html
 
 
 # ----------------------------------------------------------------- servidor ---

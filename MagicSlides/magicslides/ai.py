@@ -97,6 +97,8 @@ def build_user_prompt(text: str, slides: int, language: str, tone: str) -> str:
 
 # ----------------------------------------------------------------- Claude ---
 
+# Haiku 4.5 e Sonnet 4.5 (e anteriores) recusam o parâmetro `effort`.
+_NO_EFFORT_PREFIXES = ("claude-haiku-4", "claude-sonnet-4-5", "claude-3")
 _FALLBACK_MODELS = ("claude-opus-5", "claude-opus-5-5", "claude-fable-5-1")
 
 
@@ -114,8 +116,10 @@ def generate_anthropic(text: str, slides: int, language: str, tone: str, cfg: di
         max_tokens=32000,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": build_user_prompt(text, slides, language, tone)}],
-        output_config={"effort": effort, "format": {"type": "json_schema", "schema": OUTLINE_SCHEMA}},
+        output_config={"format": {"type": "json_schema", "schema": OUTLINE_SCHEMA}},
     )
+    if not model.startswith(_NO_EFFORT_PREFIXES):
+        kwargs["output_config"]["effort"] = effort
     use_fallbacks = model in _FALLBACK_MODELS
     try:
         client = anthropic.Anthropic(api_key=key) if key else anthropic.Anthropic()
