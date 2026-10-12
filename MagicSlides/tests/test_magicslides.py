@@ -1,6 +1,7 @@
 import base64
 import io
 import json
+import sys
 import threading
 import urllib.error
 import urllib.request
@@ -199,6 +200,19 @@ def test_anthropic_provider_builds_structured_request(monkeypatch):
     assert calls["fallbacks"] == "default"
     assert calls["output_config"]["format"]["type"] == "json_schema"
     assert "temperature" not in calls
+
+
+@pytest.mark.skipif(not sys.platform.startswith("win"), reason="DPAPI só existe no Windows")
+def test_api_keys_are_encrypted_on_disk_on_windows():
+    config.save({"anthropic_api_key": "sk-ant-segredo123"})
+    assert "sk-ant-segredo123" not in config.config_path().read_text(encoding="utf-8")
+    assert config.load()["anthropic_api_key"] == "sk-ant-segredo123"
+
+
+def test_old_plaintext_config_still_loads():
+    config.config_path().parent.mkdir(parents=True, exist_ok=True)
+    config.config_path().write_text(json.dumps({"anthropic_api_key": "sk-antigo"}), encoding="utf-8")
+    assert config.load()["anthropic_api_key"] == "sk-antigo"
 
 
 def test_anthropic_effort_only_for_models_that_support_it(monkeypatch):

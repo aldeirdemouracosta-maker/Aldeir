@@ -7,6 +7,7 @@ PIXABAY_API_KEY) são usadas quando o campo correspondente estiver vazio.
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import sys
@@ -45,6 +46,51 @@ DEFAULTS: dict[str, Any] = {
 }
 
 _lock = threading.Lock()
+_DPAPI_PREFIX = "dpapi:"
+
+
+def _dpapi(data: bytes, protect: bool) -> bytes:
+    """Criptografa/descriptografa com o DPAPI do Windows (atrelado ao usuário)."""
+    import ctypes
+    from ctypes import wintypes
+
+    class _Blob(ctypes.Structure):
+        _fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.POINTER(ctypes.c_char))]
+
+    crypt32, kernel32 = ctypes.windll.crypt32, ctypes.windll.kernel32
+    fn = crypt32.CryptProtectData if protect else crypt32.CryptUnprotectData
+    fn.argtypes = [ctypes.POINTER(_Blob), ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
+                   ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(_Blob)]
+    fn.restype = wintypes.BOOL
+    kernel32.LocalFree.argtypes = [ctypes.c_void_p]
+    buf = ctypes.create_string_buffer(data, len(data))
+    src = _Blob(len(data), ctypes.cast(buf, ctypes.POINTER(ctypes.c_char)))
+    out = _Blob()
+    if not fn(ctypes.byref(src), None, None, None, None, 0, ctypes.byref(out)):
+        raise OSError("DPAPI falhou")
+    try:
+        return ctypes.string_at(out.pbData, out.cbData)
+    finally:
+        kernel32.LocalFree(ctypes.cast(out.pbData, ctypes.c_void_p))
+
+
+def _protect(value: str) -> str:
+    """No Windows grava a chave criptografada (o chmod 0600 não vale lá)."""
+    if not value or not sys.platform.startswith("win"):
+        return value
+    try:
+        return _DPAPI_PREFIX + base64.b64encode(_dpapi(value.encode("utf-8"), True)).decode("ascii")
+    except Exception:
+        return value
+
+
+def _unprotect(value: Any) -> Any:
+    if not isinstance(value, str) or not value.startswith(_DPAPI_PREFIX):
+        return value  # texto puro (arquivo antigo) ou outro sistema
+    try:
+        return _dpapi(base64.b64decode(value[len(_DPAPI_PREFIX):]), False).decode("utf-8")
+    except Exception:
+        return ""  # outro usuário/PC: pede a chave de novo em vez de quebrar
 
 
 def config_dir() -> Path:
@@ -68,7 +114,7 @@ def load() -> dict[str, Any]:
     try:
         stored = json.loads(config_path().read_text(encoding="utf-8"))
         if isinstance(stored, dict):
-            data.update({k: v for k, v in stored.items() if k in DEFAULTS})
+            data.update({k: (_unprotect(v) if k in SECRET_KEYS else v) for k, v in stored.items() if k in DEFAULTS})
     except (OSError, ValueError):
         pass
     return _clean(data)
@@ -115,7 +161,8 @@ def save(update: dict[str, Any]) -> dict[str, Any]:
         path = config_path()
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        on_disk = {k: (_protect(v) if k in SECRET_KEYS else v) for k, v in data.items()}
+        tmp.write_text(json.dumps(on_disk, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(tmp, path)
         try:
             os.chmod(path, 0o600)
