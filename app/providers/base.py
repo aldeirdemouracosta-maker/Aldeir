@@ -21,6 +21,7 @@ def strip_think(text: str) -> str:
 class Provider(Protocol):
     name: str
 
-    async def generate(self, model: str, prompt: str, system: str | None = None) -> str: ...
+    async def generate(self, model: str, prompt: str, system: str | None = None,
+                       history: list[dict] | None = None) -> str: ...  # history: [{role, content}] user/assistant
 
     async def list_models(self) -> list[str]: ...

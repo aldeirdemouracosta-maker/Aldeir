@@ -17,8 +17,9 @@ class LocalCompatibleProvider:
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    async def generate(self, model: str, prompt: str, system: str | None = None) -> str:
-        messages = ([{"role": "system", "content": system}] if system else [])
+    async def generate(self, model: str, prompt: str, system: str | None = None,
+                       history: list[dict] | None = None) -> str:
+        messages = ([{"role": "system", "content": system}] if system else []) + list(history or [])
         messages.append({"role": "user", "content": prompt})
         try:
             r = await self._client.post(

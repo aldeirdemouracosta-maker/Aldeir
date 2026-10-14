@@ -17,14 +17,21 @@ class OllamaProvider:
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    async def generate(self, model: str, prompt: str, system: str | None = None) -> str:
-        body: dict = {"model": model, "prompt": prompt, "stream": False}
-        if system:
-            body["system"] = system
+    async def generate(self, model: str, prompt: str, system: str | None = None,
+                       history: list[dict] | None = None) -> str:
+        if history:  # com histórico: /api/chat (messages), conforme a documentação do Ollama
+            msgs = ([{"role": "system", "content": system}] if system else []) + history
+            path, body = "/api/chat", {"model": model, "stream": False,
+                                       "messages": msgs + [{"role": "user", "content": prompt}]}
+        else:
+            path, body = "/api/generate", {"model": model, "prompt": prompt, "stream": False}
+            if system:
+                body["system"] = system
         try:
-            r = await self._client.post("/api/generate", json=body)
+            r = await self._client.post(path, json=body)
             r.raise_for_status()
-            return strip_think(r.json()["response"])
+            j = r.json()
+            return strip_think(j["message"]["content"] if history else j["response"])
         except httpx.HTTPStatusError as e:
             raise ProviderError(f"Ollama respondeu {e.response.status_code}: {e.response.text[:200]}") from e
         except (httpx.HTTPError, KeyError, ValueError) as e:

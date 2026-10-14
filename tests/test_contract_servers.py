@@ -100,7 +100,7 @@ def test_smoke_script_passes_against_contract_server(provider, fixture, request)
     out = r.stdout + r.stderr
     assert r.returncode == 0, out
     assert "0 falha(s)" in out and "[FALHA" not in out
-    for step in ("chat", "summarize", "coder code_only", "rag indexar", "langid", "planner plan_run"):
+    for step in ("chat", "summarize", "chat com memória de sessão", "coder code_only", "rag indexar", "langid", "planner plan_run"):
         assert f"] {step}" in out, (step, out)
     assert "] rag buscar (semântica)" in out and "[OK     ] rag buscar" in out
 

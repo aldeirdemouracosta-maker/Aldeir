@@ -45,6 +45,7 @@ projeto e uma suíte nova para cada correção. Resultado medido: 156 testes Pyt
 - Vision, Speech e Voice por HTTP (`llama-server --mmproj`; servidor de áudio compatível com OpenAI); adaptadores próprios de
   ReazonSpeech/SenseVoice/MeloTTS/Piper **cancelados** (manifesto: `external`). Backends em processo mantidos como legado até validação ao vivo.
 - `probe()` de rede nunca roda no loop de eventos e tem cache de 5 s.
+- Memória de sessão do Chat (`session`, `/sessions/{id}`, `swarm chat`): só grava depois do sucesso do modelo; limites por sessão.
 - Providers removem `<think>…</think>` (Qwen3); Qwen3-0.6B entrou no manifesto como candidato, sem afirmar que é melhor.
 
 ## Avaliado e deliberadamente NÃO adicionado

@@ -24,6 +24,19 @@ def llm(model: str, prompt: str, system: str = "") -> str:
     return "ok"
 
 
+def chat_llm(messages: list[dict]) -> str:
+    """'Modelo' com memória: só lembra o nome se ele estiver no HISTÓRICO que recebeu."""
+    import re
+    *prev, last = messages
+    if "?" in last["content"] and "nome" in last["content"].lower():          # é uma pergunta sobre o nome
+        for m in prev:
+            hit = re.search(r"meu nome é (\w+)", m["content"], re.I) if m["role"] == "user" else None
+            if hit:
+                return f"Seu nome é {hit.group(1)}."
+        return "Não sei seu nome."
+    return f"Prazer! ({len(prev)} mensagens de contexto)"
+
+
 def embed(text: str) -> list[float]:
     t = text.lower()
     return [float(any(w in t for w in ("gato", "felino", "dorme", "animal"))),
@@ -74,6 +87,11 @@ class OllamaHandler(_Base):
             if b.get("stream") is not False:
                 return self._json(400, {"error": "este teste exige stream=false"})
             self._json(200, {"model": b["model"], "response": llm(b["model"], b["prompt"], b.get("system", "")), "done": True})
+        elif self.path == "/api/chat":
+            if b.get("stream") is not False or not b.get("messages"):
+                return self._json(400, {"error": "stream=false e messages são obrigatórios"})
+            self._json(200, {"model": b["model"], "message": {"role": "assistant", "content": chat_llm(b["messages"])},
+                             "done": True})
         elif self.path == "/api/embed":
             ins = b["input"] if isinstance(b["input"], list) else [b["input"]]
             self._json(200, {"model": b["model"], "embeddings": [embed(t) for t in ins]})
@@ -94,8 +112,9 @@ class OpenAIHandler(_Base):
             system = next((m["content"] for m in msgs if m["role"] == "system"), "")
             user = msgs[-1]["content"]
             text = user if isinstance(user, str) else next(p["text"] for p in user if p["type"] == "text")
-            self._json(200, {"choices": [{"index": 0, "message": {"role": "assistant",
-                                                                    "content": llm(b["model"], text, system)}}]})
+            convo = [m for m in msgs if m["role"] != "system"]
+            reply = chat_llm(convo) if len(convo) > 1 else llm(b["model"], text, system)
+            self._json(200, {"choices": [{"index": 0, "message": {"role": "assistant", "content": reply}}]})
         elif self.path == "/v1/embeddings":
             self._json(200, {"object": "list", "data": [{"index": 0, "embedding": embed(b["input"])}]})
         else:

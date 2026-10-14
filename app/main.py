@@ -23,6 +23,7 @@ from app.api.routes import build_router
 from app.api.security import add_security
 from app.config import Settings, load_agent_config
 from app.dashboard import STATIC_DIR, build_dashboard_router
+from app.core.conversations import ConversationStore
 from app.core.coordination import ResourceCoordinator
 from app.core.manager import AgentManager, AgentSpec, ModelManager
 from app.core.memory import MemoryManager
@@ -62,23 +63,31 @@ def build_service(settings: Settings, provider, vision=None, speech=None, voice=
                              ocr or PaddleOcrBackend(), clip or ChineseClipBackend())
 
 
-def build_specs(service: MultimodalService, registry: AgentRegistry, ctx: RunContext) -> dict[str, AgentSpec]:
+def build_specs(service: MultimodalService, registry: AgentRegistry, ctx: RunContext,
+                conversations: ConversationStore | None = None) -> dict[str, AgentSpec]:
     text = lambda cls: AgentSpec(cls.name, cls.actions, cls)
+    chat = AgentSpec(ChatAgent.name, ChatAgent.actions, lambda p, m: ChatAgent(p, m, conversations))
     media = lambda cls: AgentSpec(cls.name, cls.actions, lambda _p, _m: cls(service), text_model=False)
     planner = AgentSpec(PlannerAgent.name, PlannerAgent.actions,
                         lambda p, m: PlannerAgent(p, m, registry, ctx))
     plain = AgentSpec(LangIdAgent.name, LangIdAgent.actions, lambda _p, _m: LangIdAgent(), text_model=False)
-    return {s.name: s for s in (text(ChatAgent), text(CoderAgent), media(VisionAgent), media(SpeechAgent),
+    return {s.name: s for s in (chat, text(CoderAgent), media(VisionAgent), media(SpeechAgent),
                                 media(VoiceAgent), media(RagAgent), media(OcrAgent), plain, planner,
                                 media(RetrievalAgent))}
 
 
+def build_conversations(settings: Settings) -> ConversationStore:
+    path = settings.conversations_path or (settings.state_path.parent / "conversations.db" if settings.state_path else ":memory:")
+    return ConversationStore(path)
+
+
 def build_manager(settings: Settings, provider, store: StateStore | None = None,
-                  service: MultimodalService | None = None, ctx: RunContext | None = None) -> AgentManager:
+                  service: MultimodalService | None = None, ctx: RunContext | None = None,
+                  conversations: ConversationStore | None = None) -> AgentManager:
     store = store or StateStore(settings.state_path or ":memory:")
     service = service or build_service(settings, provider)
     registry = AgentRegistry()
-    return AgentManager(registry, build_specs(service, registry, ctx or RunContext()), provider, store,
+    return AgentManager(registry, build_specs(service, registry, ctx or RunContext(), conversations), provider, store,
                         load_agent_config(settings.agents_file))
 
 
@@ -104,7 +113,8 @@ def create_app(settings: Settings | None = None, provider=None,
     provider = provider or build_provider(settings)
     service = service or build_service(settings, provider)
     ctx = RunContext()
-    manager = build_manager(settings, provider, service=service, ctx=ctx)
+    conversations = build_conversations(settings)
+    manager = build_manager(settings, provider, service=service, ctx=ctx, conversations=conversations)
     @asynccontextmanager
     async def lifespan(_app):
         yield
@@ -118,7 +128,7 @@ def create_app(settings: Settings | None = None, provider=None,
     orchestrator = build_orchestrator(settings, router, memory)
     ctx.run_step = orchestrator.run_nested
     app.include_router(build_router(manager, orchestrator, ModelManager(provider),
-                                    monitor or ResourceMonitor()))
+                                    monitor or ResourceMonitor(), conversations))
     app.include_router(build_multimodal_router(service))
     app.include_router(build_dashboard_router())
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

@@ -92,3 +92,9 @@ python scripts/smoke.py --vision-url http://127.0.0.1:8081 --audio-url http://12
 ```
 Não baixa nada. Cada passo sai como OK, AVISO (qualidade), FALHA (contrato quebrado) ou PULADO (modelo ausente); cole a saída para análise.
 Modelos que "pensam" (Qwen3) têm o bloco `<think>…</think>` removido pelo provedor.
+
+## Memória do Chat
+`chat` com `"session": "nome"` no payload lembra a conversa (últimas 12 mensagens / 6.000 caracteres vão ao modelo; 40 ficam guardadas).
+Sem `session` nada é gravado. O **texto** das conversas fica em SQLite local (`conversations.db`, separado do estado dos agentes);
+`GET /sessions/{id}` lê e `DELETE /sessions/{id}` apaga. No terminal: `swarm chat --session ana` (e `--clear` para apagar).
+Resumo e tradução não usam a memória. Com histórico o Ollama é chamado por `/api/chat` (contrato conferido na documentação).

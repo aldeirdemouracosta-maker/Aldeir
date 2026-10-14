@@ -124,6 +124,12 @@ async def smoke(args) -> int:
             code, b = await run(c, "translate", {"text": "Bom dia, tudo bem?", "target": "inglês"})
             out = b.get("output", "")
             report("translate", ("OK" if "morning" in out.lower() else "AVISO") if code == 200 else "FALHA", out[:60])
+            sid = f"smoke-{int(time.time())}"
+            await run(c, "chat", {"text": "Meu nome é Ana. Guarde isso.", "session": sid})
+            code, b = await run(c, "chat", {"text": "Qual é o meu nome? Responda só o nome.", "session": sid})
+            out = b.get("output", "")
+            report("chat com memória de sessão", ("OK" if "ana" in out.lower() else "AVISO") if code == 200 else "FALHA", out[:60])
+            await c.delete(f"/sessions/{sid}")
             ps = await asyncio.gather(*(run(c, "chat", {"text": f"Diga o número {i}"}) for i in range(4)))
             report("4 pedidos em paralelo", "OK" if all(p[0] == 200 for p in ps) else "FALHA",
                    f"códigos {[p[0] for p in ps]}, {max(p[1]['_ms'] for p in ps)} ms o mais lento")

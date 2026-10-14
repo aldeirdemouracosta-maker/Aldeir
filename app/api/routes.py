@@ -4,6 +4,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from app.core.conversations import ConversationError, ConversationStore, check_session
 from app.core.manager import AgentManager, ManagerError, ModelManager, UnknownAgent
 from app.core.models import OutputError, ProviderError, RouteError, SwarmError, TaskResult, UnavailableError
 from app.core.resources import ResourceMonitor
@@ -27,7 +28,7 @@ class ModelBody(BaseModel):
 
 
 def build_router(manager: AgentManager, orch: Orchestrator, models: ModelManager,
-                 monitor: ResourceMonitor) -> APIRouter:
+                 monitor: ResourceMonitor, conversations: ConversationStore) -> APIRouter:
     api = APIRouter()
     registry = manager.registry
 
@@ -94,6 +95,20 @@ def build_router(manager: AgentManager, orch: Orchestrator, models: ModelManager
     async def events(limit: int = 50):
         return manager.store.events(max(1, min(limit, 200)))
 
+    @api.get("/sessions/{session}")
+    async def session_history(session: str):
+        try:
+            return conversations.history(check_session(session), max_messages=40, max_chars=100_000)
+        except ConversationError as e:
+            raise HTTPException(status_code=422, detail=str(e)) from e
+
+    @api.delete("/sessions/{session}")
+    async def session_clear(session: str):
+        try:
+            return {"session": session, "deleted": conversations.clear(session)}
+        except ConversationError as e:
+            raise HTTPException(status_code=422, detail=str(e)) from e
+
     @api.post("/feedback")
     async def feedback(body: FeedbackBody):
         if body.rating not in (1, -1):
@@ -136,6 +151,8 @@ def build_router(manager: AgentManager, orch: Orchestrator, models: ModelManager
             raise HTTPException(status_code=409, detail=str(e)) from e
         except (ProviderError, UnavailableError, AdmissionError) as e:
             raise HTTPException(status_code=503, detail=str(e)) from e
+        except ConversationError as e:
+            raise HTTPException(status_code=422, detail=str(e)) from e
         except OutputError as e:  # modelo/plano fora do formato exigido
             raise HTTPException(status_code=422, detail=str(e)) from e
         except SwarmError as e:  # caminho/mídia inválidos (workspace, assets)

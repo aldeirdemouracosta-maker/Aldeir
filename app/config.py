@@ -25,6 +25,7 @@ class Settings:
     request_timeout: float = 120.0
     agents_file: Path = DEFAULT_AGENTS_FILE
     state_path: Path | None = None  # None = só em memória
+    conversations_path: Path | None = None  # None = ao lado do estado (ou memória, sem estado)
     media_dir: Path | None = None  # None = diretório temporário (não persiste)
     embed_model: str = "nomic-embed-text:latest"
     vision_url: str = ""       # llama-server com --mmproj; vazio = backend em processo (transformers)
@@ -56,6 +57,7 @@ class Settings:
             port=int(e.get("SWARM_PORT", cls.port)),
             provider=e.get("SWARM_PROVIDER", cls.provider),
             provider_url=e.get("SWARM_PROVIDER_URL", cls.provider_url),
+            conversations_path=Path(e["SWARM_CONVERSATIONS"]) if e.get("SWARM_CONVERSATIONS") else None,
             media_dir=Path(e["SWARM_MEDIA"]) if e.get("SWARM_MEDIA") else Path.home() / ".swarm" / "media",
             embed_model=e.get("SWARM_EMBED_MODEL", cls.embed_model),
             vision_url=e.get("SWARM_VISION_URL", ""), vision_name=e.get("SWARM_VISION_NAME", ""),

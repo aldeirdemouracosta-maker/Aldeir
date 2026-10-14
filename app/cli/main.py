@@ -179,6 +179,38 @@ def tune(agent: str, models: str = typer.Option("", help="candidatos separados p
 
 
 @app.command()
+def chat(session: str = typer.Option("padrao", help="nome da conversa (memória local em ~/.swarm/conversations.db)"),
+         clear: bool = typer.Option(False, help="apaga a memória desta sessão e sai")) -> None:
+    """Conversa interativa com memória por sessão. Linha vazia ou Ctrl+C sai."""
+    from app.core.conversations import ConversationError
+    from app.main import build_conversations, build_manager
+
+    settings = Settings.from_env()
+    store = build_conversations(settings)
+    try:
+        if clear:
+            console.print(f"{store.clear(session)} mensagem(ns) apagada(s)")
+            return
+        manager = build_manager(settings, build_provider(settings), conversations=store)
+        agent = manager.registry.get("chat")
+        console.print(f"sessão [bold]{session}[/bold] · modelo {agent.model} · Enter vazio sai")
+        while True:
+            try:
+                line = console.input("[bold]você>[/bold] ").strip()
+            except (EOFError, KeyboardInterrupt):
+                break
+            if not line:
+                break
+            try:
+                console.print(asyncio.run(agent.run("chat", {"text": line, "session": session})), markup=False)
+            except (SwarmError, ValueError) as e:
+                console.print(f"[red]erro:[/red] {e}")
+    except ConversationError as e:
+        console.print(f"[red]erro:[/red] {e}")
+        raise typer.Exit(1) from e
+
+
+@app.command()
 def serve(port: int = 8000) -> None:
     """Sobe a API em 127.0.0.1."""
     import uvicorn
