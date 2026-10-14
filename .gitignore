@@ -1,6 +1,41 @@
+# Ambientes e caches
+.venv/
+.offline-wheels/
+.uv-cache/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
 build/
-.gradle/
 dist/
+# Segredos
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+# Modelos e pesos
+*.gguf
+*.onnx
+*.safetensors
+*.bin
+*.pt
+models/
+# Dados locais
+*.db
+*.sqlite
+*.sqlite3
+.swarm/
+*.wav
+# Sistema/IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Lumivox/Android
+.gradle/
 local.properties
 *.iml
-.idea/

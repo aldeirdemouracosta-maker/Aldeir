@@ -7,6 +7,6 @@ workflows:
     scripts:
       - name: Build debug APK
         script: |
-          gradle :app:assembleDebug --stacktrace
+          cd lumivox && gradle :app:assembleDebug --stacktrace
     artifacts:
-      - app/build/outputs/apk/debug/*.apk
+      - lumivox/app/build/outputs/apk/debug/*.apk

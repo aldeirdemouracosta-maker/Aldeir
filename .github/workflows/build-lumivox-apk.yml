@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches: [ main, master ]
+    paths: [ 'lumivox/**', '.github/workflows/build-lumivox-apk.yml' ]
 
 jobs:
   build-apk:
@@ -11,6 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    defaults:
+      run:
+        working-directory: lumivox
 
     steps:
       - name: Baixar código do repositório
@@ -65,5 +69,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Lumivox-Android-APK
-          path: dist/*.apk
+          path: lumivox/dist/*.apk
           retention-days: 14
