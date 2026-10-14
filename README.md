@@ -14,7 +14,7 @@ Reconstrução do MICROAGENTS AI (referência v0.5.3). Agentes locais, minimalis
 | 3 Gerenciamento (AgentManager, ModelManager, StateStore, recursos, Origin/Fetch Metadata) | implementado; 47 testes aprovados |
 | 4 Multimodal (Vision, Speech, Voice, RAG; dependências opcionais) | implementado com backends simulados; backends reais NÃO executados |
 | 5 Estabilidade (MemoryManager, Scheduler, Orchestrator, locks, Coordinator) | implementado; 80 testes aprovados |
-| 6 | não iniciada |
+| 6 Dashboard (HTML/CSS/JS nativos, ~8 KB) | implementado; 89 testes Python + 7 JS aprovados; renderizado em Chromium real |
 
 ## Uso
 ```
@@ -52,3 +52,10 @@ fila máxima (`SWARM_MAX_QUEUE`, 429 se cheia), timeout (`SWARM_JOB_TIMEOUT`, 50
 Limitações: estimativas de RAM por agente são aproximadas; um job grande pode ser adiado por jobs pequenos
 (inanição possível); cancelar/timeout interrompe a espera, mas inferência síncrona em thread (mídia) só termina quando
 a thread terminar; locks são cooperativos (não impedem processos alheios).
+
+## Dashboard (Fase 6)
+`swarm serve` → http://127.0.0.1:8000/dashboard (ou `/`). Somente leitura: agentes e disponibilidade real, modelos instalados/carregados,
+CPU/RAM/GPU/VRAM, fila, limites e histórico de jobs; atualiza a cada 3 s e pausa com a aba oculta.
+Segurança: Host validado (anti DNS rebinding), Origin e Fetch Metadata; navegação direta a `/` e `/dashboard` é permitida;
+leituras cross-site dos dados são recusadas (403); CSP sem `unsafe-inline`; texto da API só entra via `textContent`.
+Testes JS: `node --test tests/js/lib.test.cjs`. Validação visual feita só em Chromium headless no Linux; Windows/Edge/Firefox não testados.

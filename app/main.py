@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.agents.chat import ChatAgent
 from app.agents.coder import CoderAgent
@@ -16,6 +17,7 @@ from app.api.multimodal_routes import build_multimodal_router
 from app.api.routes import build_router
 from app.api.security import add_security
 from app.config import Settings, load_agent_config
+from app.dashboard import STATIC_DIR, build_dashboard_router
 from app.core.coordination import ResourceCoordinator
 from app.core.manager import AgentManager, AgentSpec, ModelManager
 from app.core.memory import MemoryManager
@@ -90,4 +92,6 @@ def create_app(settings: Settings | None = None, provider=None,
     app.include_router(build_router(manager, orchestrator, ModelManager(provider),
                                     monitor or ResourceMonitor()))
     app.include_router(build_multimodal_router(service))
+    app.include_router(build_dashboard_router())
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     return app

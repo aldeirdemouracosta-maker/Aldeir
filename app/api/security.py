@@ -9,6 +9,14 @@ from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+HEADERS = {
+    "Content-Security-Policy": ("default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; "
+                                "img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"),
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Cache-Control": "no-store",
+}
 
 
 def add_security(app: FastAPI, settings) -> None:
@@ -25,7 +33,10 @@ def add_security(app: FastAPI, settings) -> None:
                 return PlainTextResponse("requisição cross-site recusada", status_code=403)
         elif site == "cross-site" and request.url.path not in ("/", "/dashboard"):
             return PlainTextResponse("leitura cross-site recusada", status_code=403)
-        return await call_next(request)
+        response = await call_next(request)
+        for k, v in HEADERS.items():
+            response.headers.setdefault(k, v)
+        return response
 
     # adicionado por último = executa primeiro: Host inválido nunca chega ao guard
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed))
