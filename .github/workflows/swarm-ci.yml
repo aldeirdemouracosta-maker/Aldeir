@@ -1,0 +1,32 @@
+name: SWARM LITE AI - testes
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ['app/**', 'tests/**', 'evals/**', 'configs/**', 'scripts/**', 'pyproject.toml', '.github/workflows/swarm-ci.yml']
+  push:
+    branches: [ main, master ]
+    paths: ['app/**', 'tests/**', 'evals/**', 'configs/**', 'scripts/**', 'pyproject.toml', '.github/workflows/swarm-ci.yml']
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, python: '3.11' }
+          - { os: ubuntu-latest, python: '3.13' }
+          - { os: windows-latest, python: '3.12' }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Instalar
+        run: python -m pip install -e ".[dev]"
+      - name: Verificar (testes Python e JS, segredos, arquivos grandes)
+        run: python scripts/check.py

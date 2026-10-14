@@ -16,11 +16,21 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8"]
 
+# Backends opcionais (pesos NÃO incluídos; o projeto nunca baixa modelos sozinho). Sem versões fixadas: não verificadas.
+vision = ["transformers", "torch", "pillow"]
+speech = ["faster-whisper"]
+voice = ["kokoro-onnx"]
+ocr = ["paddleocr"]
+retrieval = ["transformers", "torch", "pillow"]
+
 [project.scripts]
 swarm = "app.cli.main:app"
 
 [tool.setuptools.packages.find]
 include = ["app*"]
+
+[tool.setuptools.package-data]
+"app.dashboard" = ["static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -5,24 +5,26 @@ Reconstrução do MICROAGENTS AI (referência v0.5.3). Agentes locais, minimalis
 > **Estado honesto:** o código do MICROAGENTS AI original não estava disponível. Nada foi recuperado;
 > tudo aqui é reimplementação incremental. Os números históricos (174 testes Python etc.) **não** valem para este projeto.
 
-## Status das fases
-| Fase | Estado |
+## Status
+| Bloco | Estado |
 |---|---|
-| 0 Diagnóstico | feito (ver `docs/fase0.md`) |
-| 1 Núcleo (API, CLI, Chat, Coder, Ollama, Registry/Router) | implementado, 13 testes aprovados |
-| 2 Coding Terminal (workspace, patches, runner, memória) | implementado; 37 testes no total aprovados |
-| 3 Gerenciamento (AgentManager, ModelManager, StateStore, recursos, Origin/Fetch Metadata) | implementado; 47 testes aprovados |
-| 4 Multimodal (Vision, Speech, Voice, RAG; dependências opcionais) | implementado com backends simulados; backends reais NÃO executados |
-| 5 Estabilidade (MemoryManager, Scheduler, Orchestrator, locks, Coordinator) | implementado; 80 testes aprovados |
-| 6 Dashboard (HTML/CSS/JS nativos, ~8 KB) | implementado; 89 testes Python + 7 JS aprovados; renderizado em Chromium real |
+| Fases 0–6 (núcleo, terminal supervisionado, gerenciamento, multimodal, estabilidade, dashboard) | implementadas |
+| 10 agentes: chat, coder, vision, speech, voice, rag, ocr, langid, planner, retrieval | registrados; disponibilidade real por agente |
+| Auditoria (`docs/auditoria.md`) | feita: código morto removido, 9 falhas corrigidas |
+| Autotreinamento sem tocar pesos (`swarm tune`, `evals/`, `/feedback`) | implementado |
+| Testes | 156 Python + 7 JavaScript aprovados (backends reais simulados) |
+| Hardware real (Ollama, modelos, Windows 11, CI) | **não validado** |
 
 ## Uso
 ```
 python -m venv .venv && .venv/bin/pip install -e .[dev]     # Windows: .venv\Scripts\pip
+swarm status        # resumo do runtime
 swarm agents        # agentes e disponibilidade real
+swarm models        # modelos de referência (instalar: swarm models install ID --sha256 ...)
+swarm tune chat     # avalia modelos instalados e recomenda (--apply troca)
 swarm run summarize "texto"
 swarm serve         # 127.0.0.1:8000
-pytest
+python scripts/check.py   # antes de cada push: testes, segredos, arquivos grandes
 ```
 Provedor: `SWARM_PROVIDER=ollama|local_compatible`, `SWARM_PROVIDER_URL=...`. Modelos em `configs/agents.yaml`;
 o projeto nunca baixa modelos sozinho.
@@ -59,3 +61,23 @@ CPU/RAM/GPU/VRAM, fila, limites e histórico de jobs; atualiza a cada 3 s e paus
 Segurança: Host validado (anti DNS rebinding), Origin e Fetch Metadata; navegação direta a `/` e `/dashboard` é permitida;
 leituras cross-site dos dados são recusadas (403); CSP sem `unsafe-inline`; texto da API só entra via `textContent`.
 Testes JS: `node --test tests/js/lib.test.cjs`. Validação visual feita só em Chromium headless no Linux; Windows/Edge/Firefox não testados.
+
+## Agentes e modelos de referência
+Fonte: PDF de pesquisa (modelos < 1 GB). Detalhes, tamanhos e licenças em `configs/models.yaml`.
+| Agente | Função | Referência | Adaptador |
+|---|---|---|---|
+| chat | conversa, resumo, tradução | Qwen2.5-0.5B-Instruct (GGUF) | pronto (Ollama / llama-server) |
+| coder | código, revisão, `code_only` | Qwen2.5-Coder-0.5B-Instruct | pronto |
+| vision | descrição de imagem | SmolVLM (original) | pronto, não validado |
+| ocr | texto em imagens | PP-OCR (PaddleOCR) | pronto, não validado |
+| speech | transcrição | Whisper Tiny; ReazonSpeech / SenseVoice (ref.) | Whisper pronto; outros planejados |
+| voice | síntese WAV | Kokoro; Piper pt-BR / MeloTTS (ref.) | Kokoro pronto; outros planejados |
+| rag | busca semântica com referência | nomic-embed-text (Ollama); BGE / Ruri (ref.) | Ollama pronto; outros planejados |
+| langid | idioma do texto | heurística própria, sem modelo | pronto e medido |
+| retrieval | imagens por texto | Chinese-CLIP | pronto, não validado |
+| planner | plano de até 5 passos entre as ações | Qwen2.5 (JSON) | pronto; `plan_run` com passos manuais |
+
+## Autotreinamento (sem alterar pesos)
+`evals/<agente>.yaml` define casos objetivos. `swarm tune <agente>` mede acerto e latência de cada modelo instalado,
+guarda o resultado e recomenda; só `--apply` troca o modelo (com margem mínima de 10 pontos sobre o atual para não trocar por ruído).
+`POST /feedback {job_id, rating: 1|-1}` registra a opinião por agente/modelo (sem guardar texto). Fine-tuning não existe e exige autorização explícita.

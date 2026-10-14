@@ -4,6 +4,8 @@ import sys
 
 import pytest
 
+from tests.helpers import symlink
+
 from app.terminal.memory import SessionMemory
 from app.terminal.patches import PatchError, PatchManager
 from app.terminal.processes import LimitedProcess
@@ -34,7 +36,7 @@ def test_rejects_traversal_and_absolute(ws, bad):
 
 
 def test_rejects_symlink_even_inside_root(ws):
-    os.symlink(ws.root / "a.py", ws.root / "link.py")
+    symlink(ws.root / "a.py", ws.root / "link.py")
     with pytest.raises(WorkspaceError):
         ws.read("link.py")
 
@@ -43,7 +45,7 @@ def test_rejects_symlink_dir_escape(ws, tmp_path):
     outside = tmp_path / "outside"
     outside.mkdir()
     (outside / "s.txt").write_text("segredo")
-    os.symlink(outside, ws.root / "esc")
+    symlink(outside, ws.root / "esc")
     with pytest.raises(WorkspaceError):
         ws.read("esc/s.txt")
     assert all("segredo" not in t for _, _, t in ws.search("segredo"))

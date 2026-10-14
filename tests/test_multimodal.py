@@ -4,7 +4,7 @@ import struct
 import wave
 
 import pytest
-from tests.helpers import client as TestClient
+from tests.helpers import symlink, client as TestClient
 
 from app.config import Settings
 from app.core.models import UnavailableError
@@ -96,7 +96,7 @@ def test_assets_validate_type_size_and_path(store):
 def test_assets_reject_symlink_and_new_output_never_overwrites(store, tmp_path):
     outside = tmp_path / "fora.png"
     outside.write_bytes(PNG)
-    os.symlink(outside, store.root / "l.png")
+    symlink(outside, store.root / "l.png")
     with pytest.raises(WorkspaceError):
         store.path("l.png", "image")
     a = store.new_output("../../etc/x", "wav")
