@@ -16,6 +16,8 @@ Reconstrução do MICROAGENTS AI (referência v0.5.3). Agentes locais, minimalis
 | Hardware real (Ollama, modelos, Windows 11, CI) | **não validado** |
 
 ## Uso
+Passo a passo completo (Linux e PowerShell) em `docs/instalacao.md`.
+
 ```
 python -m venv .venv && .venv/bin/pip install -e .[dev]     # Windows: .venv\Scripts\pip
 swarm status        # resumo do runtime

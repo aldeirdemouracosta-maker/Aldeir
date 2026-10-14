@@ -13,6 +13,12 @@ from app.core.router import ActionRouter
 from app.main import build_provider, build_registry
 
 app = typer.Typer(help="SWARM LITE AI", no_args_is_help=True)
+
+
+@app.callback()
+def _setup() -> None:
+    from app.stdio import utf8_stdio
+    utf8_stdio()  # Windows: saída redirecionada em cp1252 quebraria com "→" e acentos raros
 console = Console()
 
 
@@ -36,7 +42,8 @@ def agents() -> None:
 
 
 @app.command()
-def run(action: str, text: str = "", path: str = "") -> None:
+def run(action: str, text: str = typer.Argument("", help="texto da ação"),
+        path: str = typer.Option("", help="arquivo de mídia, relativo a SWARM_MEDIA")) -> None:
     """Executa uma ação, ex.: swarm run summarize "texto"; mídia: swarm run image_describe --path foto.png."""
     _, _, registry = _runtime()
     try:

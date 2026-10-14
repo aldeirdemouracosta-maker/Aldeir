@@ -25,6 +25,7 @@ import httpx  # noqa: E402
 
 from app.config import Settings  # noqa: E402
 from app.main import build_provider, create_app  # noqa: E402
+from app.stdio import utf8_stdio  # noqa: E402
 
 RESULTS: list[tuple[str, str, str]] = []
 
@@ -181,6 +182,7 @@ async def smoke(args) -> int:
 
 
 def main() -> int:
+    utf8_stdio()
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--provider", default="ollama", choices=["ollama", "local_compatible"])
     p.add_argument("--url", default="http://127.0.0.1:11434")

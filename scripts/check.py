@@ -64,6 +64,9 @@ def run(cmd: list[str]) -> bool:
 
 
 def main() -> int:
+    sys.path.insert(0, str(ROOT))
+    from app.stdio import utf8_stdio
+    utf8_stdio()
     errors, warnings = scan(tracked())
     for w in warnings:
         print("AVISO:", w)
