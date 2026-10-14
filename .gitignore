@@ -45,3 +45,7 @@ local.properties
 *.p12
 lumivox-signing*/
 LEIA-ME-ASSINATURA*
+# Cobertura de testes
+.coverage
+.coverage.*
+htmlcov/
