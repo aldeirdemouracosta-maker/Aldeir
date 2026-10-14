@@ -141,6 +141,12 @@ class Orchestrator:
             return True
         return False
 
+    def find_job(self, job_id: str) -> dict | None:
+        """Metadados de um job recente (em andamento ou no histórico)."""
+        if job_id in self._meta:
+            return self._meta[job_id]
+        return next((m for m in self._history if m["id"] == job_id), None)
+
     def snapshot(self) -> dict:
         coord = ({"capacity": self.coordinator.capacity, "in_use": self.coordinator.in_use()}
                  if self.coordinator else None)

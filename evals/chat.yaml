@@ -1,0 +1,18 @@
+# Suíte do Chat: verificações objetivas e baratas (um modelo de 0.5B precisa passar o básico).
+cases:
+  - id: resumo-curto
+    action: summarize
+    payload: {text: "A reunião de ontem definiu que o lançamento será em março. O orçamento foi aprovado em 50 mil reais e a equipe de testes começa na semana que vem."}
+    check: {max_chars: 400, contains: [março]}
+  - id: traducao-en
+    action: translate
+    payload: {text: "Bom dia, tudo bem?", target: "inglês"}
+    check: {regex: "(?i)good morning", max_chars: 200}
+  - id: pergunta-simples
+    action: chat
+    payload: {text: "Quanto é 2 + 2? Responda só com o número."}
+    check: {contains: ["4"], max_chars: 200}
+  - id: sem-vazio
+    action: chat
+    payload: {text: "Diga olá."}
+    check: {regex: "\\S", max_chars: 500}

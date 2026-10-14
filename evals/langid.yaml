@@ -1,0 +1,22 @@
+# Suíte do LangID (sem modelo): mede o detector de verdade.
+cases:
+  - {id: pt-1, action: lang_detect, payload: {text: "O gato dorme no sofá porque não quer ir para a rua com a chuva"}, check: {regex: "^pt "}}
+  - {id: pt-2, action: lang_detect, payload: {text: "Eu gostaria de saber quando você vai chegar em casa hoje à noite"}, check: {regex: "^pt "}}
+  - {id: en-1, action: lang_detect, payload: {text: "The quick brown fox jumps over the lazy dog and it was not happy"}, check: {regex: "^en "}}
+  - {id: es-1, action: lang_detect, payload: {text: "El perro de mi vecino no quiere comer porque está muy cansado"}, check: {regex: "^es "}}
+  - {id: fr-1, action: lang_detect, payload: {text: "Le chat est sur la table et il ne veut pas descendre de là"}, check: {regex: "^fr "}}
+  - {id: de-1, action: lang_detect, payload: {text: "Der Hund ist nicht im Haus und die Katze schläft auf dem Sofa"}, check: {regex: "^de "}}
+  - {id: ja-1, action: lang_detect, payload: {text: "今日はとても良い天気ですね。散歩に行きましょう"}, check: {regex: "^ja "}}
+  - {id: zh-1, action: lang_detect, payload: {text: "今天天气很好，我们一起去公园散步吧"}, check: {regex: "^zh "}}
+  - {id: short, action: lang_detect, payload: {text: "ok"}, check: {regex: "^und "}}
+  # frases novas, escritas depois do ajuste do detector (medem generalização)
+  - {id: pt-3, action: lang_detect, payload: {text: "Amanhã vamos ao mercado comprar frutas e verduras para o jantar"}, check: {regex: "^pt "}}
+  - {id: pt-4, action: lang_detect, payload: {text: "Os alunos entregaram o trabalho depois do prazo, mas a professora aceitou"}, check: {regex: "^pt "}}
+  - {id: en-2, action: lang_detect, payload: {text: "We are going to the market tomorrow to buy some fruit for dinner"}, check: {regex: "^en "}}
+  - {id: en-3, action: lang_detect, payload: {text: "She said that the meeting would be moved to next week because of the weather"}, check: {regex: "^en "}}
+  - {id: es-2, action: lang_detect, payload: {text: "Mañana vamos al mercado a comprar fruta y verdura para la cena de esta noche"}, check: {regex: "^es "}}
+  - {id: fr-2, action: lang_detect, payload: {text: "Nous allons au marché demain pour acheter des fruits et des légumes pour le dîner"}, check: {regex: "^fr "}}
+  - {id: it-2, action: lang_detect, payload: {text: "Domani andiamo al mercato per comprare la frutta e la verdura per la cena"}, check: {regex: "^it "}}
+  - {id: de-2, action: lang_detect, payload: {text: "Morgen gehen wir auf den Markt, um Obst und Gemüse für das Abendessen zu kaufen"}, check: {regex: "^de "}}
+  - {id: ru-2, action: lang_detect, payload: {text: "Завтра мы пойдём на рынок покупать фрукты и овощи на ужин"}, check: {regex: "^ru "}}
+  - {id: ko-2, action: lang_detect, payload: {text: "내일 우리는 저녁 식사를 위해 시장에 가서 과일과 채소를 살 거예요"}, check: {regex: "^ko "}}

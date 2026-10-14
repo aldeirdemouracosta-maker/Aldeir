@@ -127,6 +127,58 @@ def status() -> None:
 
 
 @app.command()
+def tune(agent: str, models: str = typer.Option("", help="candidatos separados por vírgula (padrão: todos os instalados)"),
+         apply: bool = typer.Option(False, help="aplica a recomendação (troca o modelo do agente)"),
+         evals_dir: str = "evals") -> None:
+    """Avalia modelos candidatos com a suíte do agente e recomenda o melhor. Não altera pesos."""
+    from pathlib import Path
+
+    from app.core.tuning import SuiteError, evaluate, load_suite, recommend, record
+    from app.main import build_manager
+
+    async def go() -> None:
+        settings = Settings.from_env()
+        provider = build_provider(settings)
+        manager = build_manager(settings, provider)
+        spec = manager.factories.get(agent)
+        if spec is None:
+            raise SuiteError(f"agente desconhecido: {agent}")
+        suite = load_suite(agent, Path(evals_dir))
+        current = manager.status()
+        current = next(s["model"] for s in current if s["name"] == agent)
+        if spec.text_model:
+            installed = await provider.list_models()
+            wanted = [m.strip() for m in models.split(",") if m.strip()] or installed
+            candidates = [m for m in wanted if m in installed]
+            for m in set(wanted) - set(candidates):
+                console.print(f"[yellow]ignorado (não instalado):[/yellow] {m}")
+        else:
+            candidates = [""]  # agente sem modelo de texto (ex.: langid): avalia a implementação
+        for model in candidates:
+            r = await evaluate(spec.build(provider, model), suite, settings.job_timeout)
+            record(manager.store, suite, model, r)
+            console.print(f"{model or agent}: {r['passed']}/{r['total']} · {r['latency_ms']} ms (mediana)")
+            for f in r["fails"]:
+                console.print(f"  [red]✗[/red] {f}")
+        if not spec.text_model:
+            return
+        rec = recommend(manager.store.latest_evals(agent, suite.sha), current)
+        console.print(f"recomendação: {rec.reason}")
+        if rec.model and apply:
+            await manager.set_model(agent, rec.model)
+            console.print(f"modelo de {agent} trocado para {rec.model}")
+        elif rec.model:
+            console.print(f"para aplicar: swarm tune {agent} --models {rec.model} --apply")
+        await provider.aclose()
+
+    try:
+        asyncio.run(go())
+    except (SwarmError, ValueError) as e:
+        console.print(f"[red]erro:[/red] {e}")
+        raise typer.Exit(1) from e
+
+
+@app.command()
 def serve(port: int = 8000) -> None:
     """Sobe a API em 127.0.0.1."""
     import uvicorn

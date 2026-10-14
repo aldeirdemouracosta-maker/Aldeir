@@ -17,6 +17,11 @@ class RunBody(BaseModel):
     priority: str = "normal"
 
 
+class FeedbackBody(BaseModel):
+    job_id: str
+    rating: int  # +1 ou -1
+
+
 class ModelBody(BaseModel):
     model: str
 
@@ -88,6 +93,20 @@ def build_router(manager: AgentManager, orch: Orchestrator, models: ModelManager
     @api.get("/management/events")
     async def events(limit: int = 50):
         return manager.store.events(max(1, min(limit, 200)))
+
+    @api.post("/feedback")
+    async def feedback(body: FeedbackBody):
+        if body.rating not in (1, -1):
+            raise HTTPException(status_code=422, detail="rating deve ser 1 ou -1")
+        job = orch.find_job(body.job_id)
+        if job is None or job["status"] != "done":
+            raise HTTPException(status_code=404, detail="job concluído não encontrado (só os recentes)")
+        manager.store.add_feedback(job["id"], job["agent"], job["model"], job["action"], body.rating)
+        return {"job_id": job["id"], "rating": body.rating}
+
+    @api.get("/management/feedback")
+    async def feedback_summary():
+        return manager.store.feedback_summary()
 
     @api.get("/scheduler")
     async def scheduler():

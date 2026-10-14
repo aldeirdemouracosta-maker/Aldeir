@@ -1,0 +1,18 @@
+# Suíte do Coder: foco no problema real observado (resposta com Markdown/explicação quando só se pede código).
+cases:
+  - id: code-only-soma
+    action: code_generate
+    payload: {text: "Função Python soma(a, b) que retorna a soma.", output_mode: code_only}
+    check: {contains: ["def soma"], not_contains: ["```"], max_chars: 600}
+  - id: code-only-par
+    action: code_generate
+    payload: {text: "Função Python eh_par(n) que retorna True se n for par.", output_mode: code_only}
+    check: {contains: ["def eh_par"], not_contains: ["```"], max_chars: 600}
+  - id: explica
+    action: code_explain
+    payload: {text: "def f(x): return x * 2"}
+    check: {regex: "(?i)(dobro|multiplic|double|2)", max_chars: 1200}
+  - id: revisa
+    action: code_review
+    payload: {text: "def div(a, b):\n    return a / b"}
+    check: {regex: "(?i)(zero|divis)", max_chars: 1500}

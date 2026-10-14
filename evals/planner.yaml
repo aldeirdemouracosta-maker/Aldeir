@@ -1,0 +1,10 @@
+# Suíte do Planner: o plano precisa ser JSON válido que passa na validação (ações reais, até 5 passos).
+cases:
+  - id: plano-idioma
+    action: plan_create
+    payload: {text: "Detecte o idioma do texto 'The cat is on the table and it is not happy'."}
+    check: {json: true, contains: [lang_detect]}
+  - id: plano-resumo
+    action: plan_create
+    payload: {text: "Resuma o texto 'Reunião adiada para sexta' e depois traduza o resumo para inglês."}
+    check: {json: true, contains: [summarize, translate]}
