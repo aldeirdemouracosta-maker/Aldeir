@@ -1,0 +1,35 @@
+"""Provedor Ollama (API nativa). Nunca baixa modelos sozinho."""
+from __future__ import annotations
+
+import httpx
+
+from app.core.models import ProviderError
+
+
+class OllamaProvider:
+    name = "ollama"
+
+    def __init__(self, base_url: str, timeout: float = 120.0,
+                 client: httpx.AsyncClient | None = None) -> None:
+        self._client = client or httpx.AsyncClient(base_url=base_url, timeout=timeout)
+
+    async def generate(self, model: str, prompt: str, system: str | None = None) -> str:
+        body: dict = {"model": model, "prompt": prompt, "stream": False}
+        if system:
+            body["system"] = system
+        try:
+            r = await self._client.post("/api/generate", json=body)
+            r.raise_for_status()
+            return r.json()["response"]
+        except httpx.HTTPStatusError as e:
+            raise ProviderError(f"Ollama respondeu {e.response.status_code}: {e.response.text[:200]}") from e
+        except (httpx.HTTPError, KeyError, ValueError) as e:
+            raise ProviderError(f"Ollama indisponível: {e}") from e
+
+    async def list_models(self) -> list[str]:
+        try:
+            r = await self._client.get("/api/tags")
+            r.raise_for_status()
+            return sorted(m["name"] for m in r.json().get("models", []))
+        except (httpx.HTTPError, KeyError, ValueError) as e:
+            raise ProviderError(f"Ollama indisponível: {e}") from e

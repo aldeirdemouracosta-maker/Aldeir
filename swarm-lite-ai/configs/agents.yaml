@@ -1,0 +1,8 @@
+# Modelos são referências históricas; o usuário decide o que instalar.
+agents:
+  chat:
+    enabled: true
+    model: qwen2.5:0.5b
+  coder:
+    enabled: true
+    model: qwen2.5-coder:0.5b

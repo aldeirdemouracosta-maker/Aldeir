@@ -1,0 +1,39 @@
+"""Tipos de dados compartilhados."""
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass, field
+from typing import Any
+
+
+@dataclass
+class TaskRequest:
+    action: str
+    payload: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class TaskResult:
+    agent: str
+    action: str
+    ok: bool
+    output: str = ""
+    error: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+class SwarmError(Exception):
+    """Erro esperado e tratável da aplicação."""
+
+
+class RegistryError(SwarmError):
+    pass
+
+
+class RouteError(SwarmError):
+    pass
+
+
+class ProviderError(SwarmError):
+    pass
