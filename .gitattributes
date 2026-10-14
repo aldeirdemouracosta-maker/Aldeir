@@ -1,0 +1,17 @@
+# SWARM LITE AI: LF sempre. No Windows, `core.autocrlf=true` converteria os arquivos e quebraria hashes, diffs e patches.
+# Só os caminhos do SWARM são regidos aqui; Lumivox e MagicSlides ficam como estão para não gerar ruído no histórico.
+/app/** text eol=lf
+/tests/** text eol=lf
+/scripts/** text eol=lf
+/docs/** text eol=lf
+/README.md text eol=lf
+/pyproject.toml text eol=lf
+/.env.example text eol=lf
+/.github/workflows/swarm-ci.yml text eol=lf
+/tests/fixtures/** binary
+*.pdf binary
+*.docx binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.wav binary

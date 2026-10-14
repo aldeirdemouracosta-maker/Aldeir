@@ -199,7 +199,7 @@ def test_orchestrator_queue_full_and_unknown_action():
 
 # --- Locks e coordenação (processos cooperativos) ---
 def test_filelock_mutual_exclusion_across_threads(tmp_path):
-    counter, errors = {"n": 0, "inside": 0, "max": 0}, []
+    counter = {"n": 0, "inside": 0, "max": 0}
 
     def work():
         for _ in range(20):

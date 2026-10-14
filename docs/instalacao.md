@@ -59,3 +59,17 @@ Se o repositório for privado, o Git pedirá login do GitHub na primeira vez.
 - `swarm chat --session ana` — conversa com memória · `swarm tune chat` — compara os modelos instalados
 - Para comparar com o Qwen3: `ollama pull qwen3:0.6b` e `swarm tune chat --models qwen2.5:0.5b,qwen3:0.6b`
 - PDF/DOCX no RAG: `pip install -e ".[docs]"` (já incluído em `.[dev]`)
+
+## Compatibilidade Linux e Windows: o que é garantido e o que é ferramenta
+Tudo que o projeto precisa instala **igual nos dois sistemas**: dependências Python por `pip` (inclusive `psutil` e `ruff`);
+no Windows o `winget` instala Python, Git e Ollama. Não há ferramenta extra obrigatória.
+
+Corrigido no código (vale para os dois), depois de uma sondagem de portabilidade:
+- nomes de arquivo inseguros no Windows (`nul`, `CON.txt`, `a.txt:fluxo`, ponto/espaço no fim, `< > | ? *`) são recusados **em todos os sistemas**;
+- timeout e Ctrl+C matam a **árvore** de processos, não só o processo (também era falha no Linux);
+- a gravação atômica de arquivos tenta de novo se o Windows bloquear o arquivo por instantes (antivírus, editor);
+- saída em UTF-8 mesmo redirecionada; `.gitattributes` e `.editorconfig` fixam fim de linha LF.
+
+Limitações conhecidas no Windows (**não testadas**): caminhos acima de 260 caracteres exigem habilitar "caminhos longos" no sistema;
+junções de diretório do NTFS não são detectadas como links simbólicos (o teste de contenção por `resolve()` as cobre, mas não foi exercitado);
+`nvidia-smi` só detecta GPU NVIDIA. O workflow `swarm-ci.yml` testa Ubuntu e Windows, mas **ainda não foi executado**.

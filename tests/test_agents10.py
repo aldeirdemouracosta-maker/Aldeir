@@ -1,4 +1,3 @@
-import asyncio
 import json
 
 import pytest
@@ -8,7 +7,6 @@ from app.agents.langid import LangIdAgent, detect_language
 from app.agents.planner import MAX_STEPS, PlanError, PlannerAgent, RunContext, parse_plan_json, validate_plan
 from app.config import Settings
 from app.core.models import OutputError
-from app.core.scheduler import AdmissionError
 from app.main import build_service, create_app
 from app.multimodal.documents import DocumentIndex
 from tests.helpers import client as make_client

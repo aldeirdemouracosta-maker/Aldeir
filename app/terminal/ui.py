@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from typing import Callable
+from collections.abc import Callable
 
 from app.core.models import SwarmError
 from app.terminal.memory import SessionMemory

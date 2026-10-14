@@ -73,6 +73,11 @@ def main() -> int:
     for e in errors:
         print("ERRO:", e)
     ok = not errors
+    ruff_bin = Path(sys.executable).parent
+    if shutil.which("ruff") or (ruff_bin / "ruff").exists() or (ruff_bin / "ruff.exe").exists():
+        ok &= run([sys.executable, "-m", "ruff", "check", "app", "tests", "scripts"])
+    else:
+        print("AVISO: ruff não encontrado (pip install -e '.[dev]'); lint NÃO foi executado")
     ok &= run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"])
     if shutil.which("node"):
         ok &= run(["node", "--test", "tests/js/lib.test.cjs"])

@@ -1,7 +1,4 @@
 import asyncio
-import os
-import struct
-import wave
 
 import pytest
 from tests.helpers import symlink, client as TestClient

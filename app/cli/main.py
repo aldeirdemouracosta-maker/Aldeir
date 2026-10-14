@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.table import Table
 
 from app.config import Settings
-from app.core.models import ProviderError, RouteError, SwarmError
+from app.core.models import SwarmError
 from app.core.router import ActionRouter
 from app.main import build_provider, build_registry
 

@@ -14,7 +14,7 @@ import io
 import time
 import wave
 from pathlib import Path
-from typing import Sequence
+from collections.abc import Sequence
 
 import httpx
 

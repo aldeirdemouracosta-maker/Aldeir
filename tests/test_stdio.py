@@ -20,7 +20,7 @@ def test_utf8_stdio_survives_a_cp1252_stream(monkeypatch):
     utf8_stdio()
     print("passo → ok ção")
     sys.stdout.flush()
-    assert "passo → ok ção".encode("utf-8") in raw.getvalue()
+    assert "passo → ok ção".encode() in raw.getvalue()
 
 
 def test_utf8_stdio_ignores_streams_without_reconfigure(monkeypatch):

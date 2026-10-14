@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-from pathlib import Path
 
 from app.core.models import SwarmError, UnavailableError
 from app.multimodal.assets import AssetStore

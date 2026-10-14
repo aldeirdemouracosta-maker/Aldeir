@@ -47,7 +47,7 @@ class Settings:
     allowed_hosts: tuple[str, ...] = field(default=("127.0.0.1", "localhost"))
 
     @classmethod
-    def from_env(cls) -> "Settings":
+    def from_env(cls) -> Settings:
         e = os.environ
         cfg = Path(e["SWARM_CONFIG_DIR"]) if e.get("SWARM_CONFIG_DIR") else None
         return cls(

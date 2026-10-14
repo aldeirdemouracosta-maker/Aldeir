@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pypdf", "mammoth"]  # pypdf+mammoth (2,3 MB) deixam os testes de PDF/DOCX rodarem no CI
+dev = ["pytest>=8", "ruff", "pypdf", "mammoth"]  # pypdf+mammoth (2,3 MB) deixam os testes de PDF/DOCX rodarem no CI
 
 # Backends opcionais (pesos NÃO incluídos; o projeto nunca baixa modelos sozinho). Sem versões fixadas: não verificadas.
 docs = ["pypdf", "mammoth"]  # PDF e DOCX no RAG (leves; o MarkItDown trouxe 193 MB e foi descartado)
@@ -36,3 +36,14 @@ include = ["app*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+extend-exclude = ["lumivox", "MagicSlides", "build"]
+
+[tool.ruff.lint]
+# Só o que acha erro de verdade: pyflakes (F), bugbear (B), modernização (UP), erros graves (E7/E9).
+# Estilo (E702 ponto-e-vírgula, E731 lambda, E741) fica de fora de propósito: o código é enxuto e os testes são terse.
+select = ["F", "B", "UP", "E7", "E9"]
+ignore = ["E702", "E731", "E741"]

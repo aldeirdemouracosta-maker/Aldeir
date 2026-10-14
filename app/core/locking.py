@@ -70,7 +70,7 @@ class FileLock:
             self.path.unlink(missing_ok=True)
             self._held = False
 
-    def __enter__(self) -> "FileLock":
+    def __enter__(self) -> FileLock:
         self.acquire()
         return self
 

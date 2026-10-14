@@ -6,12 +6,29 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 
+import psutil
+
 
 @dataclass
 class ProcResult:
     returncode: int | None
     output: str
     timed_out: bool = False
+
+
+def kill_tree(proc: subprocess.Popen) -> None:
+    """Mata o processo e todos os descendentes (testes que abrem servidores, shells, etc.).
+    `Popen.kill()` sozinho deixa os filhos órfãos tanto no Linux quanto no Windows."""
+    try:
+        parent = psutil.Process(proc.pid)
+        victims = parent.children(recursive=True) + [parent]   # filhos primeiro, capturados antes de matar o pai
+    except psutil.NoSuchProcess:
+        return
+    for p in victims:
+        try:
+            p.kill()
+        except psutil.NoSuchProcess:
+            pass
 
 
 class LimitedProcess:
@@ -31,10 +48,10 @@ class LimitedProcess:
             self._proc.wait(timeout=self.timeout)
         except subprocess.TimeoutExpired:
             timed_out = True
-            self._proc.kill()
+            kill_tree(self._proc)
             self._proc.wait()
-        except BaseException:  # Ctrl+C: não deixa o filho órfão
-            self._proc.kill()
+        except BaseException:  # Ctrl+C: não deixa o filho (nem os netos) órfão
+            kill_tree(self._proc)
             raise
         reader.join(timeout=5)
         out = "".join(chunks)

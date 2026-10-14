@@ -4,7 +4,7 @@ from __future__ import annotations
 import array
 import wave
 from pathlib import Path
-from typing import Sequence
+from collections.abc import Sequence
 
 
 def sniff_image(head: bytes) -> str | None:

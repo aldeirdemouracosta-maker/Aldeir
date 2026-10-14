@@ -19,6 +19,19 @@ class PatchError(SwarmError):
     pass
 
 
+def _replace_with_retry(src: str, dst: Path, attempts: int = 6) -> None:
+    """os.replace atômico. No Windows ele levanta PermissionError se outro processo (antivírus, indexador,
+    editor) estiver com o destino aberto; esses bloqueios costumam durar milissegundos."""
+    for n in range(attempts):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if n == attempts - 1:
+                raise
+            time.sleep(0.05 * (n + 1))
+
+
 @dataclass
 class Proposal:
     id: int
@@ -130,7 +143,7 @@ class PatchManager:
         try:
             with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
                 f.write(text)
-            os.replace(tmp, path)
+            _replace_with_retry(tmp, path)
         except BaseException:
             Path(tmp).unlink(missing_ok=True)
             raise

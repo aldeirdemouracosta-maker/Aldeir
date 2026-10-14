@@ -7,7 +7,7 @@ import math
 import sqlite3
 import threading
 from pathlib import Path
-from typing import Awaitable, Callable
+from collections.abc import Awaitable, Callable
 
 Embed = Callable[[str], Awaitable[list[float]]]
 
@@ -28,7 +28,7 @@ def chunk_text(text: str, max_chars: int = 800) -> list[tuple[int, int, str]]:
 
 def cosine(a: list[float], b: list[float]) -> float:
     na, nb = math.sqrt(sum(x * x for x in a)), math.sqrt(sum(x * x for x in b))
-    return sum(x * y for x, y in zip(a, b)) / (na * nb) if na and nb else 0.0
+    return sum(x * y for x, y in zip(a, b, strict=True)) / (na * nb) if na and nb else 0.0
 
 
 class DocumentIndex:

@@ -40,7 +40,7 @@ def test_store_limits_prune_and_caps():
     assert [m["content"] for m in s.history("a", max_messages=3)] == [f"m{MAX_STORED + 12}", f"m{MAX_STORED + 13}", f"m{MAX_STORED + 14}"]
     s.add("c", "user", "x" * (MAX_MESSAGE_CHARS + 500))
     assert len(s.history("c")[0]["content"]) == MAX_MESSAGE_CHARS
-    for i in range(5):
+    for _ in range(5):
         s.add("d", "user", "y" * 100)
     assert len(s.history("d", max_chars=250)) == 2                            # teto de caracteres respeitado
     assert len(s.history("d", max_chars=10)) == 1                             # nunca devolve vazio se há mensagem

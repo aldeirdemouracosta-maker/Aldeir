@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import subprocess
-from typing import Callable
+from collections.abc import Callable
 
 import psutil
 

@@ -14,6 +14,20 @@ class WorkspaceError(SwarmError):
     pass
 
 
+# Nomes que o Windows trata de forma especial: dispositivos (CON, NUL, COM1…), fluxos NTFS ocultos ("a.txt:x"),
+# caracteres proibidos e ponto/espaço no fim. Recusados em TODOS os sistemas: assim o mesmo workspace é seguro
+# no Linux e no Windows, e um arquivo criado num não vira armadilha no outro.
+_RESERVED = re.compile(r"^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])$", re.IGNORECASE)
+_FORBIDDEN = re.compile(r'[<>:"|?*\x00-\x1f]')
+
+
+def check_component(part: str) -> None:
+    if part in (".", ".."):
+        return
+    if _FORBIDDEN.search(part) or part != part.rstrip(" .") or _RESERVED.match(part.split(".", 1)[0]):
+        raise WorkspaceError(f"nome não permitido (inseguro no Windows): {part!r}")
+
+
 class Workspace:
     def __init__(self, root: str | Path, max_file_bytes: int = 512_000) -> None:
         self.root = Path(root).resolve()
@@ -23,6 +37,8 @@ class Workspace:
         """Converte caminho relativo em absoluto seguro dentro da raiz."""
         if not rel or "\x00" in rel or Path(rel).is_absolute() or re.match(r"^[A-Za-z]:", rel):
             raise WorkspaceError(f"caminho inválido: {rel!r}")
+        for part in Path(rel).parts:
+            check_component(part)
         lexical = self.root / rel
         # symlink em qualquer componente existente é recusado (inclusive dentro da raiz)
         probe = self.root

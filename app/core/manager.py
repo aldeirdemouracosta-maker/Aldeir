@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable
+from collections.abc import Callable
 
 from app.agents.base import Agent
 from app.core.models import ProviderError, SwarmError
