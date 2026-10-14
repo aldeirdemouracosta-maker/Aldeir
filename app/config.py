@@ -21,6 +21,12 @@ class Settings:
     state_path: Path | None = None  # None = só em memória
     media_dir: Path | None = None  # None = diretório temporário (não persiste)
     embed_model: str = "nomic-embed-text:latest"
+    max_concurrent: int = 2
+    max_queue: int = 16
+    job_timeout: float = 120.0
+    headroom_mb: int = 1024
+    coord_dir: Path | None = None  # None = sem coordenação entre processos
+    coord_capacity: int = 1
     allowed_hosts: tuple[str, ...] = field(default=("127.0.0.1", "localhost", "testserver"))
 
     @classmethod
@@ -33,6 +39,11 @@ class Settings:
             provider_url=e.get("SWARM_PROVIDER_URL", cls.provider_url),
             media_dir=Path(e["SWARM_MEDIA"]) if e.get("SWARM_MEDIA") else Path.home() / ".swarm" / "media",
             embed_model=e.get("SWARM_EMBED_MODEL", cls.embed_model),
+            max_concurrent=int(e.get("SWARM_MAX_CONCURRENT", cls.max_concurrent)),
+            max_queue=int(e.get("SWARM_MAX_QUEUE", cls.max_queue)),
+            job_timeout=float(e.get("SWARM_JOB_TIMEOUT", cls.job_timeout)),
+            headroom_mb=int(e.get("SWARM_HEADROOM_MB", cls.headroom_mb)),
+            coord_dir=Path(e["SWARM_COORD_DIR"]) if e.get("SWARM_COORD_DIR") else None,
             request_timeout=float(e.get("SWARM_TIMEOUT", cls.request_timeout)),
             state_path=Path(e["SWARM_STATE"]) if e.get("SWARM_STATE") else Path.home() / ".swarm" / "state.db",
         )

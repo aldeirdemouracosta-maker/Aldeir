@@ -10,6 +10,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from app.core.locking import FileLock
 from app.core.models import SwarmError
 from app.terminal.workspace import Workspace
 
@@ -69,6 +70,11 @@ class PatchManager:
     def apply(self, pid: int, *, authorized: bool) -> Path:
         if authorized is not True:
             raise PatchError("aplicação requer autorização explícita")
+        self.dir.mkdir(parents=True, exist_ok=True)
+        with FileLock(self.dir / "patch.lock", owner="apply"):
+            return self._apply_locked(pid)
+
+    def _apply_locked(self, pid: int) -> Path:
         p = self.get(pid)
         path = self.ws.resolve(p.path, must_exist=False)
         current = self.ws.read(p.path) if path.exists() else None
@@ -89,6 +95,11 @@ class PatchManager:
 
     def undo(self) -> str:
         """Desfaz a última aplicação ainda não desfeita."""
+        self.dir.mkdir(parents=True, exist_ok=True)
+        with FileLock(self.dir / "patch.lock", owner="undo"):
+            return self._undo_locked()
+
+    def _undo_locked(self) -> str:
         stack: list[dict] = []
         for e in self._history():
             if e["op"] == "apply":

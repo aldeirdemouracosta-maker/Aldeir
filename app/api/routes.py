@@ -7,19 +7,21 @@ from pydantic import BaseModel, Field
 from app.core.manager import AgentManager, ManagerError, ModelManager
 from app.core.models import ProviderError, RouteError, SwarmError, TaskResult, UnavailableError
 from app.core.resources import ResourceMonitor
-from app.core.router import ActionRouter
+from app.core.orchestrator import JobCancelled, JobTimeout, Orchestrator
+from app.core.scheduler import PRIORITIES, AdmissionError, QueueFull
 
 
 class RunBody(BaseModel):
     action: str
     payload: dict = Field(default_factory=dict)
+    priority: str = "normal"
 
 
 class ModelBody(BaseModel):
     model: str
 
 
-def build_router(manager: AgentManager, router: ActionRouter, models: ModelManager,
+def build_router(manager: AgentManager, orch: Orchestrator, models: ModelManager,
                  monitor: ResourceMonitor) -> APIRouter:
     api = APIRouter()
     registry = manager.registry
@@ -87,20 +89,37 @@ def build_router(manager: AgentManager, router: ActionRouter, models: ModelManag
     async def events(limit: int = 50):
         return manager.store.events(max(1, min(limit, 200)))
 
+    @api.get("/scheduler")
+    async def scheduler():
+        return orch.snapshot()
+
+    @api.post("/scheduler/jobs/{job_id}/cancel")
+    async def cancel(job_id: str):
+        if not orch.cancel(job_id):
+            raise HTTPException(status_code=404, detail=f"job não encontrado: {job_id}")
+        return {"job": job_id, "cancelled": True}
+
     @api.post("/run")
     async def run(body: RunBody):
+        if body.priority not in PRIORITIES:
+            raise HTTPException(status_code=422, detail="priority deve ser high, normal ou low")
         try:
-            agent = router.route(body.action)
+            output, job_id = await orch.run(body.action, body.payload, PRIORITIES[body.priority])
         except RouteError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
-        try:
-            output = await agent.run(body.action, body.payload)
         except ValueError as e:
             raise HTTPException(status_code=422, detail=str(e)) from e
-        except (ProviderError, UnavailableError) as e:
+        except QueueFull as e:
+            raise HTTPException(status_code=429, detail=str(e)) from e
+        except JobTimeout as e:
+            raise HTTPException(status_code=504, detail=str(e)) from e
+        except JobCancelled as e:
+            raise HTTPException(status_code=409, detail=str(e)) from e
+        except (ProviderError, UnavailableError, AdmissionError) as e:
             raise HTTPException(status_code=503, detail=str(e)) from e
         except SwarmError as e:  # caminho/mídia inválidos (workspace, assets)
             raise HTTPException(status_code=400, detail=str(e)) from e
-        return TaskResult(agent.name, body.action, True, output).to_dict()
+        agent = orch.router.route(body.action)
+        return {**TaskResult(agent.name, body.action, True, output).to_dict(), "job_id": job_id}
 
     return api

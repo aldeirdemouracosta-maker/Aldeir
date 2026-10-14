@@ -13,7 +13,8 @@ Reconstrução do MICROAGENTS AI (referência v0.5.3). Agentes locais, minimalis
 | 2 Coding Terminal (workspace, patches, runner, memória) | implementado; 37 testes no total aprovados |
 | 3 Gerenciamento (AgentManager, ModelManager, StateStore, recursos, Origin/Fetch Metadata) | implementado; 47 testes aprovados |
 | 4 Multimodal (Vision, Speech, Voice, RAG; dependências opcionais) | implementado com backends simulados; backends reais NÃO executados |
-| 5–6 | não iniciadas |
+| 5 Estabilidade (MemoryManager, Scheduler, Orchestrator, locks, Coordinator) | implementado; 80 testes aprovados |
+| 6 | não iniciada |
 
 ## Uso
 ```
@@ -42,3 +43,12 @@ Pesos/pacotes são opcionais e nunca baixados pelo projeto: `SWARM_VISION_MODEL`
 `SWARM_VOICE_MODEL` + `SWARM_VOICE_VOICES`. Sem eles o agente aparece como indisponível, com o motivo.
 RAG usa embeddings do Ollama (`SWARM_EMBED_MODEL`, padrão `nomic-embed-text:latest`) e SQLite.
 **Não implementado:** backend de embeddings ONNX. **Não validado:** SmolVLM, Whisper e Kokoro reais.
+
+## Estabilidade (Fase 5)
+`/run` passa pelo Orchestrator: fila com prioridade (`high|normal|low`), limite de concorrência (`SWARM_MAX_CONCURRENT`),
+fila máxima (`SWARM_MAX_QUEUE`, 429 se cheia), timeout (`SWARM_JOB_TIMEOUT`, 504), cancelamento
+(`POST /scheduler/jobs/{id}/cancel`) e admissão por RAM (`SWARM_HEADROOM_MB`). Estado em `GET /scheduler`.
+`SWARM_COORD_DIR` ativa o ResourceCoordinator (slots em disco entre processos cooperativos).
+Limitações: estimativas de RAM por agente são aproximadas; um job grande pode ser adiado por jobs pequenos
+(inanição possível); cancelar/timeout interrompe a espera, mas inferência síncrona em thread (mídia) só termina quando
+a thread terminar; locks são cooperativos (não impedem processos alheios).

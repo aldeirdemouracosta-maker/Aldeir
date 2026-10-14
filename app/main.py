@@ -16,7 +16,11 @@ from app.api.multimodal_routes import build_multimodal_router
 from app.api.routes import build_router
 from app.api.security import add_security
 from app.config import Settings, load_agent_config
+from app.core.coordination import ResourceCoordinator
 from app.core.manager import AgentManager, AgentSpec, ModelManager
+from app.core.memory import MemoryManager
+from app.core.orchestrator import Orchestrator
+from app.core.scheduler import ResourceScheduler
 from app.core.registry import AgentRegistry
 from app.core.resources import ResourceMonitor
 from app.core.router import ActionRouter
@@ -63,16 +67,27 @@ def build_registry(settings: Settings, provider) -> AgentRegistry:
     return build_manager(settings, provider, StateStore(":memory:")).registry
 
 
+def build_orchestrator(settings: Settings, router: ActionRouter,
+                       memory: MemoryManager | None = None) -> Orchestrator:
+    memory = memory or MemoryManager(settings.headroom_mb)
+    coord = ResourceCoordinator(settings.coord_dir, settings.coord_capacity) if settings.coord_dir else None
+    sched = ResourceScheduler(memory, settings.max_concurrent, settings.max_queue)
+    return Orchestrator(router, sched, settings.job_timeout, coord)
+
+
 def create_app(settings: Settings | None = None, provider=None,
                monitor: ResourceMonitor | None = None,
-               service: MultimodalService | None = None) -> FastAPI:
+               service: MultimodalService | None = None,
+               memory: MemoryManager | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
     provider = provider or build_provider(settings)
     service = service or build_service(settings, provider)
     manager = build_manager(settings, provider, service=service)
     app = FastAPI(title="SWARM LITE AI", docs_url=None, redoc_url=None)
     add_security(app, settings)
-    app.include_router(build_router(manager, ActionRouter(manager.registry),
-                                    ModelManager(provider), monitor or ResourceMonitor()))
+    router = ActionRouter(manager.registry)
+    orchestrator = build_orchestrator(settings, router, memory)
+    app.include_router(build_router(manager, orchestrator, ModelManager(provider),
+                                    monitor or ResourceMonitor()))
     app.include_router(build_multimodal_router(service))
     return app
