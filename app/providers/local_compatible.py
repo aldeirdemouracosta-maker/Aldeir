@@ -4,6 +4,7 @@ from __future__ import annotations
 import httpx
 
 from app.core.models import ProviderError
+from app.providers.base import strip_think
 
 
 class LocalCompatibleProvider:
@@ -23,7 +24,7 @@ class LocalCompatibleProvider:
             r = await self._client.post(
                 "/v1/chat/completions", json={"model": model, "messages": messages, "stream": False})
             r.raise_for_status()
-            return r.json()["choices"][0]["message"]["content"]
+            return strip_think(r.json()["choices"][0]["message"]["content"])
         except httpx.HTTPStatusError as e:
             raise ProviderError(f"servidor respondeu {e.response.status_code}") from e
         except (httpx.HTTPError, KeyError, IndexError, ValueError) as e:

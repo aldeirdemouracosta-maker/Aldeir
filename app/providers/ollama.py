@@ -4,6 +4,7 @@ from __future__ import annotations
 import httpx
 
 from app.core.models import ProviderError
+from app.providers.base import strip_think
 
 
 class OllamaProvider:
@@ -23,7 +24,7 @@ class OllamaProvider:
         try:
             r = await self._client.post("/api/generate", json=body)
             r.raise_for_status()
-            return r.json()["response"]
+            return strip_think(r.json()["response"])
         except httpx.HTTPStatusError as e:
             raise ProviderError(f"Ollama respondeu {e.response.status_code}: {e.response.text[:200]}") from e
         except (httpx.HTTPError, KeyError, ValueError) as e:

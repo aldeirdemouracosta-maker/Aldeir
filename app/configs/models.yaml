@@ -32,6 +32,22 @@ models:
     recommended_ram_mb: 2048
     status: wired
     notes: Pode ser compartilhado com o Chat em máquinas com pouco espaço.
+  - id: qwen3-0.6b-q8_0
+    agents: [chat, coder, planner]
+    provider: llama.cpp / ollama
+    url: https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf
+    filename: Qwen3-0.6B-Q8_0.gguf
+    sha256: null
+    size_mb: 640          # aproximado; nome do arquivo e tamanho NÃO verificados (Hugging Face inacessível daqui)
+    license: Apache-2.0
+    capabilities: [chat, summarize, translate, code_generate, plan_create]
+    languages: [multi]
+    backend: llama-server (API compatível) ou Ollama (qwen3:0.6b)
+    minimum_ram_mb: 1024
+    status: wired
+    notes: >
+      Candidato mais novo que o Qwen2.5-0.5B (mais baixado entre os modelos abaixo de 1B, segundo relatório secundário).
+      Pensa por padrão: o provedor remove <think>…</think>. Não assuma que é melhor: rode `swarm tune chat --models qwen3:0.6b,qwen2.5:0.5b`.
   - id: llm-jp-3-150m-instruct3
     agents: [chat]
     provider: transformers
