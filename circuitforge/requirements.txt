@@ -1,0 +1,7 @@
+# CircuitForge – dependências de execução
+# Requer também o ngspice no sistema (apt install ngspice) e, para a IA, o Ollama (https://ollama.com).
+numpy>=1.26
+pandas>=2.1
+plotly>=5.22
+streamlit>=1.50
+ollama>=0.4.0

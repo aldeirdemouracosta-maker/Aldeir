@@ -1,0 +1,16 @@
+# docker compose up --build
+# Primeira vez, baixe um modelo leve:  docker compose exec ollama ollama pull qwen2.5:1.5b
+services:
+  app:
+    build: .
+    ports: ["8501:8501"]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    depends_on: [ollama]
+  ollama:
+    image: ollama/ollama:latest
+    volumes: ["ollama:/root/.ollama"]
+    # Para usar GPU NVIDIA, descomente:
+    # deploy: {resources: {reservations: {devices: [{driver: nvidia, count: all, capabilities: [gpu]}]}}}
+volumes:
+  ollama:

@@ -1,0 +1,15 @@
+# Dependências só para fine-tune (não são necessárias para rodar o CircuitForge).
+# Escolha UMA das abordagens e siga a documentação atual do projeto escolhido para a versão do PyTorch/CUDA.
+
+# --- A) Unsloth ---
+# unsloth
+# trl
+# peft
+# accelerate
+# bitsandbytes
+
+# --- B) LLaMA-Factory ---
+# llamafactory[torch,metrics]
+
+datasets
+transformers
