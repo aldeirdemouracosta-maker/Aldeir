@@ -3,6 +3,10 @@
 Python **3.11 ou superior** é obrigatório. Ubuntu 22.04 vem com 3.10: use o 24.04 ou instale um Python mais novo.
 Tudo foi testado em **Linux (Python 3.13)**. Os passos de Windows/PowerShell abaixo **não foram executados**.
 
+> **Observação do proprietário:** ferramentas de agentes de código (Codex) funcionam com problemas no Windows. Para o trabalho com
+> agentes, prefira Linux. Se só houver Windows, o WSL2 (Ubuntu dentro do Windows) é uma alternativa que costuma resolver, mas
+> **não foi testada aqui**.
+
 ## Linux (Ubuntu/Debian) — recomendado
 ```bash
 sudo apt update && sudo apt install -y python3 python3-venv git curl
