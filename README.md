@@ -98,3 +98,9 @@ Modelos que "pensam" (Qwen3) têm o bloco `<think>…</think>` removido pelo pro
 Sem `session` nada é gravado. O **texto** das conversas fica em SQLite local (`conversations.db`, separado do estado dos agentes);
 `GET /sessions/{id}` lê e `DELETE /sessions/{id}` apaga. No terminal: `swarm chat --session ana` (e `--clear` para apagar).
 Resumo e tradução não usam a memória. Com histórico o Ollama é chamado por `/api/chat` (contrato conferido na documentação).
+
+## PDF e DOCX no RAG
+`rag_index` aceita `.pdf` e `.docx` além de texto (`pip install -e ".[docs]"`: pypdf + mammoth, 2,3 MB; o MarkItDown foi testado e descartado
+por trazer 193 MB). Cada página do PDF começa com `[página N]`, então os trechos citam a página. Limites: 20 MB e 500 páginas por PDF, proteção contra
+DOCX "zip bomb", PDF com senha recusado, PDF escaneado sem texto aponta para o agente `ocr`. **Tabelas do DOCX perdem a estrutura de linhas.**
+A busca vetorial é em Python puro: 1 mil trechos = 136 ms, 5 mil = 0,6 s, 20 mil = 2,6 s (medido); acima de 5 mil o `rag_index` avisa.

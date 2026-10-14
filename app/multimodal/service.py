@@ -7,10 +7,12 @@ from pathlib import Path
 
 from app.core.models import SwarmError, UnavailableError
 from app.multimodal.assets import AssetStore
+from app.multimodal.convert import DOC_EXT, convert_to_text
 from app.multimodal.documents import DocumentIndex
 from app.multimodal.media import write_wav
 
 TEXT_EXT = {".txt", ".md", ".py", ".rst", ".json", ".yaml", ".yml", ".toml", ".csv"}
+INDEX_EXT = TEXT_EXT | DOC_EXT
 IMAGE_EXT = {".png", ".jpg", ".jpeg"}
 MAX_FILES = 200
 
@@ -62,17 +64,22 @@ class MultimodalService:
     async def _embed(self, text: str) -> list[float]:
         return await self.provider.embed(self.embed_model, text)
 
+    async def _text_of(self, f, r: str) -> str:
+        if f.suffix.lower() in DOC_EXT:
+            return await asyncio.to_thread(convert_to_text, self.assets.ws.resolve(r))  # resolve: symlink/hardlink
+        return self.assets.ws.read(r)  # limites, binário, symlink: mesmas regras do workspace
+
     async def index_path(self, rel: str) -> dict:
         target = self.assets.ws.resolve(rel)
         files = [target] if target.is_file() else [
-            f for f in self.assets.ws.files() if f.suffix.lower() in TEXT_EXT and target in f.parents
+            f for f in self.assets.ws.files() if f.suffix.lower() in INDEX_EXT and target in f.parents
         ][:MAX_FILES]
         done = chunks = 0
         skipped: list[str] = []
         for f in files:
             r = self.assets.ws.rel(f)
             try:
-                text = self.assets.ws.read(r)  # limites, binário, symlink: mesmas regras do workspace
+                text = await self._text_of(f, r)
             except SwarmError as e:
                 if f == target:
                     raise  # arquivo pedido diretamente: o erro é a resposta

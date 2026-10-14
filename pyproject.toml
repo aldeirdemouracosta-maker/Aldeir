@@ -14,9 +14,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "pypdf", "mammoth"]  # pypdf+mammoth (2,3 MB) deixam os testes de PDF/DOCX rodarem no CI
 
 # Backends opcionais (pesos NÃO incluídos; o projeto nunca baixa modelos sozinho). Sem versões fixadas: não verificadas.
+docs = ["pypdf", "mammoth"]  # PDF e DOCX no RAG (leves; o MarkItDown trouxe 193 MB e foi descartado)
 vision = ["transformers", "torch", "pillow"]
 speech = ["faster-whisper"]
 voice = ["kokoro-onnx"]

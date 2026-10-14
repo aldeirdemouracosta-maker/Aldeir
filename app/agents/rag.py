@@ -7,6 +7,9 @@ from app.agents.base import Agent
 from app.multimodal.service import MultimodalService
 
 
+SLOW_CHUNKS = 5_000  # acima disto a busca passa de ~0,6 s (medido: 1k=136 ms, 5k=624 ms, 20k=2,6 s)
+
+
 class RagAgent(Agent):
     name = "rag"
     actions = ("rag_index", "rag_search")
@@ -31,8 +34,10 @@ class RagAgent(Agent):
                 raise ValueError("payload.path é obrigatório")
             r = await self.service.index_path(path)
             note = f"; {len(r['skipped'])} ignorado(s): {'; '.join(r['skipped'][:3])}" if r["skipped"] else ""
+            slow = (f"; AVISO: {r['chunks']} trechos — a busca em Python puro leva ~{r['chunks'] * 0.13 / 1000:.1f} s "
+                    f"(medido: 0,13 ms/trecho); considere o sqlite-vec" if r["chunks"] > SLOW_CHUNKS else "")
             return (f"{r['files']} arquivo(s), {r['new_chunks']} trecho(s) novos; "
-                    f"índice: {r['documents']} docs / {r['chunks']} trechos{note}")
+                    f"índice: {r['documents']} docs / {r['chunks']} trechos{note}{slow}")
         text = payload.get("text")
         if not isinstance(text, str) or not text.strip():
             raise ValueError("payload.text é obrigatório")
