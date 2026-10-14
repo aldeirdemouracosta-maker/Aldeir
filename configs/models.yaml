@@ -1,0 +1,157 @@
+# Manifesto de modelos de referência (fonte: pesquisa "SWARM LITE AI — modelos sub-1 GB").
+# Tamanhos e licenças vêm do PDF; sha256 está vazio de propósito: NENHUM hash foi verificado.
+# O instalador exige sha256 (aqui ou em --sha256, copiado da página oficial do arquivo).
+# status: wired = existe adaptador no código | planned = só referência, adaptador ainda não escrito
+models:
+  - id: qwen2.5-0.5b-instruct-q5_0
+    agents: [chat]
+    provider: llama.cpp / ollama
+    url: https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q5_0.gguf
+    filename: qwen2.5-0.5b-instruct-q5_0.gguf
+    sha256: null
+    size_mb: 490
+    license: Apache-2.0
+    capabilities: [chat, summarize, translate]
+    languages: [multi]
+    backend: llama-server (API compatível) ou Ollama
+    minimum_ram_mb: 1024
+    recommended_ram_mb: 2048
+    status: wired
+  - id: qwen2.5-coder-0.5b-instruct-q4_k_m
+    agents: [coder, planner, chat]
+    provider: llama.cpp / ollama
+    url: https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf
+    filename: qwen2.5-coder-0.5b-instruct-q4_k_m.gguf
+    sha256: null
+    size_mb: 491
+    license: Apache-2.0
+    capabilities: [code_generate, code_explain, code_review, code_propose]
+    languages: [multi]
+    backend: llama-server (API compatível) ou Ollama
+    minimum_ram_mb: 1024
+    recommended_ram_mb: 2048
+    status: wired
+    notes: Pode ser compartilhado com o Chat em máquinas com pouco espaço.
+  - id: llm-jp-3-150m-instruct3
+    agents: [chat]
+    provider: transformers
+    url: null            # repositório inteiro; baixar manualmente os arquivos necessários
+    source: https://huggingface.co/llm-jp/llm-jp-3-150m-instruct3
+    filename: null
+    sha256: null
+    size_mb: 305
+    license: Apache-2.0
+    capabilities: [chat]
+    languages: [ja]
+    backend: transformers
+    minimum_ram_mb: null
+    status: planned
+    notes: Perfil japonês ultraleve; experimental e sem alinhamento de segurança (aviso dos autores).
+  - id: pp-ocr-mobile
+    agents: [ocr]
+    provider: paddleocr
+    url: null
+    source: https://github.com/PaddlePaddle/PaddleOCR
+    filename: null
+    sha256: null
+    size_mb: 21
+    license: Apache-2.0
+    capabilities: [ocr_extract]
+    languages: [zh, en, ja, latin]
+    backend: PaddleOCR (SWARM_OCR_DET / SWARM_OCR_REC apontam as pastas dos modelos)
+    minimum_ram_mb: 512
+    status: wired
+  - id: chinese-clip-vit-base-patch16
+    agents: [retrieval]
+    provider: transformers
+    url: null
+    source: https://huggingface.co/OFA-Sys/chinese-clip-vit-base-patch16
+    filename: null
+    sha256: null
+    size_mb: 753
+    license: MIT
+    capabilities: [retrieval_index, retrieval_search]
+    languages: [zh]
+    backend: transformers (SWARM_CLIP_MODEL aponta a pasta)
+    minimum_ram_mb: 2048
+    status: wired
+  - id: reazonspeech-k2-v2-int8
+    agents: [speech]
+    provider: sherpa-onnx
+    url: null
+    source: https://huggingface.co/reazon-research/reazonspeech-k2-v2
+    filename: null
+    sha256: null
+    size_mb: 161
+    license: Apache-2.0
+    capabilities: [speech_transcribe]
+    languages: [ja]
+    backend: sherpa-onnx
+    status: planned
+  - id: sensevoice-small
+    agents: [speech, langid]
+    provider: funasr
+    url: null
+    source: https://github.com/QwenAudio/SenseVoice
+    filename: null
+    sha256: null
+    size_mb: 936
+    license: "código MIT; pesos sob FunASR Model Open Source License (revisar antes de redistribuir)"
+    capabilities: [speech_transcribe, language_id, emotion, audio_event]
+    languages: [zh, yue, en, ja, ko]
+    backend: funasr
+    status: planned
+    notes: model.pt usa pickle; baixar só da fonte oficial e conferir hash.
+  - id: melotts-japanese
+    agents: [voice]
+    provider: melotts
+    url: null
+    source: https://huggingface.co/myshell-ai/MeloTTS-Japanese
+    filename: null
+    sha256: null
+    size_mb: 208
+    license: MIT
+    capabilities: [voice_speak]
+    languages: [ja]
+    backend: melotts (PyTorch)
+    status: planned
+  - id: piper-pt_BR-faber-medium
+    agents: [voice]
+    provider: piper
+    url: https://huggingface.co/rhasspy/piper-voices/resolve/main/pt/pt_BR/faber/medium/pt_BR-faber-medium.onnx
+    filename: pt_BR-faber-medium.onnx
+    sha256: null
+    size_mb: 63
+    license: MIT
+    capabilities: [voice_speak]
+    languages: [pt-BR]
+    backend: piper (ONNX)
+    minimum_ram_mb: 512
+    status: planned
+    notes: Única voz pt-BR do PDF; os demais modelos de voz/fala são ja/zh.
+  - id: bge-small-zh-v1.5
+    agents: [rag]
+    provider: transformers
+    url: https://huggingface.co/BAAI/bge-small-zh-v1.5/resolve/main/model.safetensors
+    filename: model.safetensors
+    sha256: null
+    size_mb: 96
+    license: MIT
+    capabilities: [rag_index, rag_search]
+    languages: [zh]
+    backend: transformers
+    status: planned
+    notes: Hoje o RAG gera embeddings via Ollama/servidor compatível (nomic-embed-text); este é só referência.
+  - id: ruri-v3-30m
+    agents: [rag]
+    provider: transformers
+    url: null
+    source: https://huggingface.co/cl-nagoya/ruri-v3-30m
+    filename: null
+    sha256: null
+    size_mb: 147
+    license: Apache-2.0
+    capabilities: [rag_index, rag_search]
+    languages: [ja]
+    backend: transformers
+    status: planned

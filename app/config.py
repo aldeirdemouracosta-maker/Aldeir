@@ -26,6 +26,8 @@ class Settings:
     job_timeout: float = 120.0
     queue_timeout: float = 60.0
     headroom_mb: int = 1024
+    models_file: Path = DEFAULT_AGENTS_FILE.parent / "models.yaml"
+    models_dir: Path = Path.home() / ".swarm" / "models"
     coord_dir: Path | None = None  # None = sem coordenação entre processos
     coord_capacity: int = 1
     allowed_hosts: tuple[str, ...] = field(default=("127.0.0.1", "localhost"))
@@ -45,6 +47,7 @@ class Settings:
             job_timeout=float(e.get("SWARM_JOB_TIMEOUT", cls.job_timeout)),
             queue_timeout=float(e.get("SWARM_QUEUE_TIMEOUT", cls.queue_timeout)),
             headroom_mb=int(e.get("SWARM_HEADROOM_MB", cls.headroom_mb)),
+            models_dir=Path(e["SWARM_MODELS_DIR"]) if e.get("SWARM_MODELS_DIR") else cls.models_dir,
             coord_dir=Path(e["SWARM_COORD_DIR"]) if e.get("SWARM_COORD_DIR") else None,
             request_timeout=float(e.get("SWARM_TIMEOUT", cls.request_timeout)),
             state_path=Path(e["SWARM_STATE"]) if e.get("SWARM_STATE") else Path.home() / ".swarm" / "state.db",

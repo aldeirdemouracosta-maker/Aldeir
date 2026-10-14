@@ -72,6 +72,60 @@ def terminal(root: str = ".", model: str = "") -> None:
             console.print(asyncio.run(term.handle(line)), markup=False, highlight=False)
 
 
+models_app = typer.Typer(help="Modelos de referência: listar, instalar (arquivo único, com SHA-256) e remover.")
+app.add_typer(models_app, name="models")
+
+
+@models_app.callback(invoke_without_command=True)
+def models_list(ctx: typer.Context) -> None:
+    """Sem subcomando: lista o manifesto e o que está instalado."""
+    if ctx.invoked_subcommand:
+        return
+    from app.core.model_files import installed_path, load_manifests
+    s = Settings.from_env()
+    table = Table("id", "agentes", "MB", "licença", "adaptador", "instalado")
+    for m in load_manifests(s.models_file).values():
+        table.add_row(m.id, ",".join(m.agents), f"{m.size_mb:g}", m.license[:28], m.status,
+                      "sim" if installed_path(m, s.models_dir) else "não")
+    console.print(table)
+
+
+@models_app.command("install")
+def models_install(model_id: str, sha256: str = typer.Option("", help="SHA-256 da página oficial do arquivo"),
+                   allow_large: bool = typer.Option(False, help="autoriza arquivos acima de 1 GB")) -> None:
+    from app.core.model_files import ModelFileError, install, load_manifests
+    s = Settings.from_env()
+    manifests = load_manifests(s.models_file)
+    if model_id not in manifests:
+        console.print(f"[red]erro:[/red] modelo desconhecido: {model_id}")
+        raise typer.Exit(1)
+    try:
+        console.print(f"instalado em {asyncio.run(install(manifests[model_id], s.models_dir, sha256=sha256 or None, allow_large=allow_large))}")
+    except ModelFileError as e:
+        console.print(f"[red]erro:[/red] {e}")
+        raise typer.Exit(1) from e
+
+
+@models_app.command("remove")
+def models_remove(model_id: str) -> None:
+    from app.core.model_files import load_manifests, remove
+    s = Settings.from_env()
+    m = load_manifests(s.models_file).get(model_id)
+    console.print("removido" if m and remove(m, s.models_dir) else "nada para remover")
+
+
+@app.command()
+def status() -> None:
+    """Estado do runtime: agentes disponíveis, recursos e provedor."""
+    from app.core.resources import ResourceMonitor
+    settings, provider, registry = _runtime()
+    snap = ResourceMonitor().snapshot()
+    ok = [n for n in registry.names() if asyncio.run(registry.get(n).available())[0]]
+    console.print(f"provedor: {settings.provider} @ {settings.provider_url}")
+    console.print(f"agentes disponíveis: {len(ok)}/{len(registry.names())} ({', '.join(ok) or 'nenhum'})")
+    console.print(f"CPU {snap['cpu_percent']}% · RAM livre {snap['ram_available_mb']} MB · GPUs {len(snap['gpus'])}")
+
+
 @app.command()
 def serve(port: int = 8000) -> None:
     """Sobe a API em 127.0.0.1."""
