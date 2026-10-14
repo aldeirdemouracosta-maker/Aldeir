@@ -33,3 +33,13 @@ class LocalCompatibleProvider:
             return sorted(m["id"] for m in r.json().get("data", []))
         except (httpx.HTTPError, KeyError, ValueError) as e:
             raise ProviderError(f"servidor local indisponível: {e}") from e
+
+    async def embed(self, model: str, text: str) -> list[float]:
+        try:
+            r = await self._client.post("/v1/embeddings", json={"model": model, "input": text})
+            r.raise_for_status()
+            return [float(x) for x in r.json()["data"][0]["embedding"]]
+        except httpx.HTTPStatusError as e:
+            raise ProviderError(f"servidor respondeu {e.response.status_code} ao gerar embedding") from e
+        except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError) as e:
+            raise ProviderError(f"servidor local indisponível: {e}") from e

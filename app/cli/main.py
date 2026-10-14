@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.table import Table
 
 from app.config import Settings
-from app.core.models import ProviderError, RouteError
+from app.core.models import ProviderError, RouteError, SwarmError
 from app.core.router import ActionRouter
 from app.main import build_provider, build_registry
 
@@ -37,12 +37,12 @@ def agents() -> None:
 
 @app.command()
 def run(action: str, text: str) -> None:
-    """Executa uma ação, ex.: swarm run summarize "texto"."""
+    """Executa uma ação, ex.: swarm run summarize "texto". Para mídia, TEXT é o caminho (dentro de ~/.swarm/media)."""
     _, _, registry = _runtime()
     try:
         agent = ActionRouter(registry).route(action)
-        console.print(asyncio.run(agent.run(action, {"text": text})))
-    except (RouteError, ProviderError, ValueError) as e:
+        console.print(asyncio.run(agent.run(action, {"text": text, "path": text})))
+    except (SwarmError, ValueError) as e:
         console.print(f"[red]erro:[/red] {e}")
         raise typer.Exit(1) from e
 

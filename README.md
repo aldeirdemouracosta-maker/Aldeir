@@ -12,7 +12,8 @@ Reconstrução do MICROAGENTS AI (referência v0.5.3). Agentes locais, minimalis
 | 1 Núcleo (API, CLI, Chat, Coder, Ollama, Registry/Router) | implementado, 13 testes aprovados |
 | 2 Coding Terminal (workspace, patches, runner, memória) | implementado; 37 testes no total aprovados |
 | 3 Gerenciamento (AgentManager, ModelManager, StateStore, recursos, Origin/Fetch Metadata) | implementado; 47 testes aprovados |
-| 4–6 | não iniciadas |
+| 4 Multimodal (Vision, Speech, Voice, RAG; dependências opcionais) | implementado com backends simulados; backends reais NÃO executados |
+| 5–6 | não iniciadas |
 
 ## Uso
 ```
@@ -33,3 +34,11 @@ Bind em loopback, validação de Host (`TrustedHostMiddleware`), Coder só devol
 O modelo só **propõe** texto; `/apply` pede confirmação humana, faz backup em `.swarm/backups` e `/undo` restaura.
 Nenhuma saída de modelo é executada. `/test` roda apenas `pytest` com timeout — **não é um sandbox**:
 os testes do projeto executam código com as suas permissões.
+
+## Multimodal (Fase 4)
+Mídia fica em `SWARM_MEDIA` (padrão `~/.swarm/media`); caminhos são relativos a essa pasta. PNG/JPEG ≤10 MB, áudio ≤25 MB,
+tipo validado por assinatura. Saídas WAV vão para `out/` e nunca sobrescrevem arquivos.
+Pesos/pacotes são opcionais e nunca baixados pelo projeto: `SWARM_VISION_MODEL`, `SWARM_SPEECH_MODEL`,
+`SWARM_VOICE_MODEL` + `SWARM_VOICE_VOICES`. Sem eles o agente aparece como indisponível, com o motivo.
+RAG usa embeddings do Ollama (`SWARM_EMBED_MODEL`, padrão `nomic-embed-text:latest`) e SQLite.
+**Não implementado:** backend de embeddings ONNX. **Não validado:** SmolVLM, Whisper e Kokoro reais.

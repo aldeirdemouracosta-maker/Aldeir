@@ -37,3 +37,7 @@ class RouteError(SwarmError):
 
 class ProviderError(SwarmError):
     pass
+
+
+class UnavailableError(SwarmError):
+    """Agente ou dependência opcional indisponível (pesos ou pacotes ausentes)."""

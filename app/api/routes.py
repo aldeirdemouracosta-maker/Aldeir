@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.core.manager import AgentManager, ManagerError, ModelManager
-from app.core.models import ProviderError, RouteError, TaskResult
+from app.core.models import ProviderError, RouteError, SwarmError, TaskResult, UnavailableError
 from app.core.resources import ResourceMonitor
 from app.core.router import ActionRouter
 
@@ -97,8 +97,10 @@ def build_router(manager: AgentManager, router: ActionRouter, models: ModelManag
             output = await agent.run(body.action, body.payload)
         except ValueError as e:
             raise HTTPException(status_code=422, detail=str(e)) from e
-        except ProviderError as e:
+        except (ProviderError, UnavailableError) as e:
             raise HTTPException(status_code=503, detail=str(e)) from e
+        except SwarmError as e:  # caminho/mídia inválidos (workspace, assets)
+            raise HTTPException(status_code=400, detail=str(e)) from e
         return TaskResult(agent.name, body.action, True, output).to_dict()
 
     return api

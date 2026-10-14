@@ -143,9 +143,9 @@ def client():
 
 
 def test_api_health_agents_run(client):
-    assert client.get("/health").json()["agents"] == 2
+    assert client.get("/health").json()["agents"] == 6
     names = {a["name"]: a for a in client.get("/agents").json()}
-    assert set(names) == {"chat", "coder"}
+    assert set(names) == {"chat", "coder", "vision", "speech", "voice", "rag"}
     assert names["chat"]["available"] is True
     assert names["coder"]["available"] is False  # modelo coder não instalado no fake
     r = client.post("/run", json={"action": "chat", "payload": {"text": "oi"}})

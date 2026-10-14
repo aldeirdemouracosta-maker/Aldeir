@@ -41,3 +41,13 @@ class OllamaProvider:
             return sorted(m["name"] for m in r.json().get("models", []))
         except (httpx.HTTPError, KeyError, ValueError) as e:
             raise ProviderError(f"Ollama indisponível: {e}") from e
+
+    async def embed(self, model: str, text: str) -> list[float]:
+        try:
+            r = await self._client.post("/api/embed", json={"model": model, "input": text})
+            r.raise_for_status()
+            return [float(x) for x in r.json()["embeddings"][0]]
+        except httpx.HTTPStatusError as e:
+            raise ProviderError(f"Ollama respondeu {e.response.status_code} ao gerar embedding") from e
+        except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError) as e:
+            raise ProviderError(f"Ollama indisponível: {e}") from e

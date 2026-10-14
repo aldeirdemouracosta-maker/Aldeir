@@ -1,7 +1,10 @@
 """AgentManager (ativar/desativar, modelo por agente) e ModelManager (modelos do provedor)."""
 from __future__ import annotations
 
-from app.agents.base import Agent, TextAgent
+from dataclasses import dataclass
+from typing import Callable
+
+from app.agents.base import Agent
 from app.core.models import ProviderError, SwarmError
 from app.core.registry import AgentRegistry
 from app.core.state import StateStore
@@ -25,8 +28,16 @@ class ModelManager:
         return await fn() if fn else []
 
 
+@dataclass(frozen=True)
+class AgentSpec:
+    name: str
+    actions: tuple[str, ...]
+    build: Callable[[object, str], Agent]  # (provider, modelo) -> agente
+    text_model: bool = True  # False: o modelo do agente não é um modelo de texto trocável
+
+
 class AgentManager:
-    def __init__(self, registry: AgentRegistry, factories: dict[str, type[Agent]], provider,
+    def __init__(self, registry: AgentRegistry, factories: dict[str, AgentSpec], provider,
                  store: StateStore, defaults: dict[str, dict]) -> None:
         self.registry, self.factories, self.provider, self.store = registry, factories, provider, store
         saved = store.agent_states()
@@ -39,7 +50,7 @@ class AgentManager:
                 self._instantiate(name)
 
     def _instantiate(self, name: str) -> None:
-        self.registry.register(self.factories[name](self.provider, self._state[name]["model"]))
+        self.registry.register(self.factories[name].build(self.provider, self._state[name]["model"]))
 
     def _check(self, name: str) -> None:
         if name not in self.factories:
@@ -69,7 +80,7 @@ class AgentManager:
 
     async def set_model(self, name: str, model: str) -> None:
         self._check(name)
-        if not issubclass(self.factories[name], TextAgent):
+        if not self.factories[name].text_model:
             raise ManagerError(f"agente {name} não usa modelo de texto")
         if not isinstance(model, str) or not model.strip():
             raise ManagerError("modelo vazio")
