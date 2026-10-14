@@ -5,7 +5,7 @@ import threading
 import time
 
 import pytest
-from fastapi.testclient import TestClient
+from tests.helpers import client as TestClient
 
 from app.agents.base import Agent
 from app.config import Settings

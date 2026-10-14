@@ -14,6 +14,10 @@ class ManagerError(SwarmError):
     pass
 
 
+class UnknownAgent(ManagerError):
+    pass
+
+
 class ModelManager:
     """Consulta o provedor. Nunca baixa, carrega nem descarrega modelos."""
 
@@ -54,7 +58,7 @@ class AgentManager:
 
     def _check(self, name: str) -> None:
         if name not in self.factories:
-            raise ManagerError(f"agente desconhecido: {name}")
+            raise UnknownAgent(f"agente desconhecido: {name}")
 
     def _persist(self, name: str, event: str) -> None:
         self.store.set_agent_state(name, self._state[name])

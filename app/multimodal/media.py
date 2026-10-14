@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import array
-import math
 import wave
 from pathlib import Path
 from typing import Sequence
@@ -39,12 +38,3 @@ def write_wav(path: Path, samples: Sequence[float], rate: int) -> None:
         w.setframerate(rate)
         w.writeframes(pcm.tobytes())
 
-
-def wav_info(path: Path) -> dict:
-    with wave.open(str(path), "rb") as w:
-        return {"rate": w.getframerate(), "channels": w.getnchannels(),
-                "seconds": w.getnframes() / w.getframerate()}
-
-
-def sine(seconds: float = 0.2, rate: int = 16000, hz: float = 440.0) -> list[float]:
-    return [0.5 * math.sin(2 * math.pi * hz * i / rate) for i in range(int(seconds * rate))]

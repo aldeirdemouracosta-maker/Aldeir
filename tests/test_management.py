@@ -1,7 +1,7 @@
 import asyncio
 
 import pytest
-from fastapi.testclient import TestClient
+from tests.helpers import client as TestClient
 
 from app.config import Settings
 from app.core.manager import ManagerError
@@ -33,15 +33,13 @@ def run(c):
 
 
 # --- StateStore ---
-def test_state_store_prefs_agents_events(tmp_path):
+def test_state_store_agents_events(tmp_path):
     db = tmp_path / "x" / "s.db"
     s = StateStore(db)
-    s.set_pref("tema", {"escuro": True})
     s.set_agent_state("chat", {"enabled": False})
     s.log_event("a", {"n": 1}); s.log_event("b")
     s.close()
     s2 = StateStore(db)
-    assert s2.get_pref("tema") == {"escuro": True} and s2.get_pref("nada", 7) == 7
     assert s2.agent_states() == {"chat": {"enabled": False}}
     assert [e["kind"] for e in s2.events()] == ["b", "a"]
     assert len(s2.events(limit=1)) == 1

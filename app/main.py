@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import tempfile
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -72,7 +73,8 @@ def build_registry(settings: Settings, provider) -> AgentRegistry:
 def build_orchestrator(settings: Settings, router: ActionRouter,
                        memory: MemoryManager | None = None) -> Orchestrator:
     memory = memory or MemoryManager(settings.headroom_mb)
-    coord = ResourceCoordinator(settings.coord_dir, settings.coord_capacity) if settings.coord_dir else None
+    coord = ResourceCoordinator(settings.coord_dir, settings.coord_capacity,
+                               ttl=settings.job_timeout * 2 + 60) if settings.coord_dir else None
     sched = ResourceScheduler(memory, settings.max_concurrent, settings.max_queue)
     return Orchestrator(router, sched, settings.job_timeout, coord)
 
@@ -85,7 +87,14 @@ def create_app(settings: Settings | None = None, provider=None,
     provider = provider or build_provider(settings)
     service = service or build_service(settings, provider)
     manager = build_manager(settings, provider, service=service)
-    app = FastAPI(title="SWARM LITE AI", docs_url=None, redoc_url=None)
+    @asynccontextmanager
+    async def lifespan(_app):
+        yield
+        close = getattr(provider, "aclose", None)
+        if close:
+            await close()
+
+    app = FastAPI(title="SWARM LITE AI", docs_url=None, redoc_url=None, lifespan=lifespan)
     add_security(app, settings)
     router = ActionRouter(manager.registry)
     orchestrator = build_orchestrator(settings, router, memory)

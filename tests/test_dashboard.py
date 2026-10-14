@@ -3,7 +3,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
+from tests.helpers import client as TestClient
 
 from app.config import Settings
 from app.core.resources import ResourceMonitor

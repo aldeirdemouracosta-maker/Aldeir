@@ -4,7 +4,7 @@ import struct
 import wave
 
 import pytest
-from fastapi.testclient import TestClient
+from tests.helpers import client as TestClient
 
 from app.config import Settings
 from app.core.models import UnavailableError
@@ -12,7 +12,8 @@ from app.main import build_service, create_app
 from app.multimodal.assets import AssetError, AssetStore
 from app.multimodal.documents import DocumentIndex, chunk_text, cosine
 from app.multimodal.executors import KokoroBackend, SmolVLMBackend, WhisperBackend
-from app.multimodal.media import sine, sniff_audio, sniff_image, wav_info, write_wav
+from app.multimodal.media import sniff_audio, sniff_image, write_wav
+from tests.helpers import sine, wav_info
 from app.terminal.workspace import WorkspaceError
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 20

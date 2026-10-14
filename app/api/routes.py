@@ -4,7 +4,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.core.manager import AgentManager, ManagerError, ModelManager
+from app.core.manager import AgentManager, ManagerError, ModelManager, UnknownAgent
 from app.core.models import ProviderError, RouteError, SwarmError, TaskResult, UnavailableError
 from app.core.resources import ResourceMonitor
 from app.core.orchestrator import JobCancelled, JobTimeout, Orchestrator
@@ -72,7 +72,7 @@ def build_router(manager: AgentManager, orch: Orchestrator, models: ModelManager
         return {"agent": name, "ok": True}
 
     def _code(e: ManagerError) -> int:
-        return 404 if "desconhecido" in str(e) else 409
+        return 404 if isinstance(e, UnknownAgent) else 409
 
     @api.get("/management/models")
     async def management_models():

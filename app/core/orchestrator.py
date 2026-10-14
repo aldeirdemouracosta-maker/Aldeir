@@ -102,5 +102,7 @@ class Orchestrator:
         return False
 
     def snapshot(self) -> dict:
-        return {**self.scheduler.snapshot(), "timeout": self.timeout,
+        coord = ({"capacity": self.coordinator.capacity, "in_use": self.coordinator.in_use()}
+                 if self.coordinator else None)
+        return {**self.scheduler.snapshot(), "timeout": self.timeout, "coordination": coord,
                 "jobs": list(self._meta.values()), "recent": list(self._history)[-20:]}

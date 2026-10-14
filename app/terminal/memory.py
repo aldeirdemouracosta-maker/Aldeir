@@ -1,4 +1,4 @@
-"""SessionMemory: histórico curto, resumo e arquivos recentes. Não gerencia RAM."""
+"""SessionMemory: histórico curto e arquivos recentes. Não gerencia RAM."""
 from __future__ import annotations
 
 import json
@@ -11,7 +11,6 @@ class SessionMemory:
     def __init__(self, max_turns: int = 20, max_files: int = 10, db_path: Path | None = None) -> None:
         self.turns: deque[tuple[str, str]] = deque(maxlen=max_turns)
         self.recent_files: deque[str] = deque(maxlen=max_files)
-        self.summary = ""
         self._db = None
         if db_path:
             db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -29,12 +28,8 @@ class SessionMemory:
         self.recent_files.append(rel)
         self._save()
 
-    def set_summary(self, text: str) -> None:
-        self.summary = text
-        self._save()
-
     def context(self) -> str:
-        parts = [f"Resumo: {self.summary}"] if self.summary else []
+        parts = []
         if self.recent_files:
             parts.append("Arquivos recentes: " + ", ".join(self.recent_files))
         parts += [f"{r}: {t}" for r, t in self.turns]
@@ -42,8 +37,7 @@ class SessionMemory:
 
     def _save(self) -> None:
         if self._db:
-            blob = json.dumps({"turns": list(self.turns), "files": list(self.recent_files),
-                               "summary": self.summary})
+            blob = json.dumps({"turns": list(self.turns), "files": list(self.recent_files)})
             self._db.execute("insert or replace into session values('state', ?)", (blob,))
             self._db.commit()
 
@@ -53,7 +47,6 @@ class SessionMemory:
             d = json.loads(row[0])
             self.turns.extend(tuple(t) for t in d["turns"])
             self.recent_files.extend(d["files"])
-            self.summary = d["summary"]
 
     def close(self) -> None:
         if self._db:

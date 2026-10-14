@@ -36,12 +36,12 @@ def agents() -> None:
 
 
 @app.command()
-def run(action: str, text: str) -> None:
-    """Executa uma ação, ex.: swarm run summarize "texto". Para mídia, TEXT é o caminho (dentro de ~/.swarm/media)."""
+def run(action: str, text: str = "", path: str = "") -> None:
+    """Executa uma ação, ex.: swarm run summarize "texto"; mídia: swarm run image_describe --path foto.png."""
     _, _, registry = _runtime()
     try:
         agent = ActionRouter(registry).route(action)
-        console.print(asyncio.run(agent.run(action, {"text": text, "path": text})))
+        console.print(asyncio.run(agent.run(action, {"text": text, "path": path})))
     except (SwarmError, ValueError) as e:
         console.print(f"[red]erro:[/red] {e}")
         raise typer.Exit(1) from e

@@ -1,7 +1,5 @@
-"""Host, Origin e Fetch Metadata. Navegação direta (sem Origin) continua permitida."""
+"""Host, Origin (mesma origem exata) e Fetch Metadata. Navegação direta (sem Origin) continua permitida."""
 from __future__ import annotations
-
-from urllib.parse import urlparse
 
 from fastapi import FastAPI
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -9,6 +7,7 @@ from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+MAX_BODY = 1_000_000  # bytes; só vale com Content-Length (uvicorn não limita corpo chunked)
 HEADERS = {
     "Content-Security-Policy": ("default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; "
                                 "img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"),
@@ -26,8 +25,10 @@ def add_security(app: FastAPI, settings) -> None:
     async def origin_guard(request: Request, call_next):
         origin = request.headers.get("origin")
         site = request.headers.get("sec-fetch-site")
-        if origin and urlparse(origin).hostname not in allowed:
+        if origin and origin != f"{request.url.scheme}://{request.headers.get('host')}":  # origem idêntica: esquema+host+porta
             return PlainTextResponse("origin não permitido", status_code=403)
+        if int(request.headers.get("content-length") or 0) > MAX_BODY:
+            return PlainTextResponse("corpo grande demais", status_code=413)
         if request.method not in SAFE_METHODS:
             if site and site not in ("same-origin", "none"):
                 return PlainTextResponse("requisição cross-site recusada", status_code=403)

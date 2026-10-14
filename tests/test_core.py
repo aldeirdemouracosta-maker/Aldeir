@@ -2,7 +2,7 @@ import asyncio
 
 import httpx
 import pytest
-from fastapi.testclient import TestClient
+from tests.helpers import client as TestClient
 
 from app.agents.base import Agent
 from app.agents.chat import ChatAgent

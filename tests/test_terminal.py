@@ -154,11 +154,10 @@ def test_session_memory_bounds_and_persistence(tmp_path):
     for i in range(3):
         m.add_turn("user", f"t{i}")
     m.touch_file("a.py")
-    m.set_summary("resumo")
     m.close()
     m2 = SessionMemory(max_turns=2, db_path=db)
     assert [t for _, t in m2.turns] == ["t1", "t2"]
-    assert list(m2.recent_files) == ["a.py"] and m2.summary == "resumo"
+    assert list(m2.recent_files) == ["a.py"]
 
 
 # --- Terminal: fluxo /edit → /diff → /apply → /test → /undo ---

@@ -1,14 +1,8 @@
 """Tipos de dados compartilhados."""
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from typing import Any
-
-
-@dataclass
-class TaskRequest:
-    action: str
-    payload: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

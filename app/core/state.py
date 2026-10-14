@@ -1,4 +1,4 @@
-"""StateStore: preferências, estado de agentes e eventos em SQLite. Não guarda conversas."""
+"""StateStore: estado dos agentes e eventos (auditoria) em SQLite. Não guarda conversas nem conteúdo."""
 from __future__ import annotations
 
 import json
@@ -6,7 +6,6 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
-from typing import Any
 
 
 class StateStore:
@@ -17,7 +16,6 @@ class StateStore:
         self._lock = threading.Lock()
         with self._lock, self._db:
             self._db.executescript("""
-                create table if not exists prefs(key text primary key, value text not null);
                 create table if not exists agents(name text primary key, state text not null);
                 create table if not exists events(
                     id integer primary key autoincrement, ts real not null,
@@ -27,14 +25,6 @@ class StateStore:
     def _put(self, sql: str, args: tuple) -> None:
         with self._lock, self._db:
             self._db.execute(sql, args)
-
-    def set_pref(self, key: str, value: Any) -> None:
-        self._put("insert or replace into prefs values(?,?)", (key, json.dumps(value)))
-
-    def get_pref(self, key: str, default: Any = None) -> Any:
-        with self._lock:
-            row = self._db.execute("select value from prefs where key=?", (key,)).fetchone()
-        return json.loads(row[0]) if row else default
 
     def set_agent_state(self, name: str, state: dict) -> None:
         self._put("insert or replace into agents values(?,?)", (name, json.dumps(state)))

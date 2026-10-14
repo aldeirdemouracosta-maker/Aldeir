@@ -13,6 +13,9 @@ class OllamaProvider:
                  client: httpx.AsyncClient | None = None) -> None:
         self._client = client or httpx.AsyncClient(base_url=base_url, timeout=timeout)
 
+    async def aclose(self) -> None:
+        await self._client.aclose()
+
     async def generate(self, model: str, prompt: str, system: str | None = None) -> str:
         body: dict = {"model": model, "prompt": prompt, "stream": False}
         if system:

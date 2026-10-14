@@ -1,4 +1,4 @@
-"""Execução limitada de processos: sem shell, timeout, saída truncada, cancelável."""
+"""Execução limitada de processos: sem shell, timeout, saída truncada, mata o filho se interrompido."""
 from __future__ import annotations
 
 import subprocess
@@ -12,19 +12,12 @@ class ProcResult:
     returncode: int | None
     output: str
     timed_out: bool = False
-    cancelled: bool = False
 
 
 class LimitedProcess:
     def __init__(self, argv: list[str], cwd: Path, timeout: float, max_output: int = 20_000) -> None:
         self.argv, self.cwd, self.timeout, self.max_output = argv, cwd, timeout, max_output
         self._proc: subprocess.Popen | None = None
-        self._cancelled = False
-
-    def cancel(self) -> None:
-        self._cancelled = True
-        if self._proc and self._proc.poll() is None:
-            self._proc.kill()
 
     def run(self) -> ProcResult:
         self._proc = subprocess.Popen(
@@ -40,8 +33,11 @@ class LimitedProcess:
             timed_out = True
             self._proc.kill()
             self._proc.wait()
+        except BaseException:  # Ctrl+C: não deixa o filho órfão
+            self._proc.kill()
+            raise
         reader.join(timeout=5)
         out = "".join(chunks)
         if len(out) > self.max_output:
             out = out[: self.max_output] + "\n… (saída truncada)"
-        return ProcResult(self._proc.returncode, out, timed_out, self._cancelled)
+        return ProcResult(self._proc.returncode, out, timed_out)

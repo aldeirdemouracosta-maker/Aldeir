@@ -27,7 +27,7 @@ class Settings:
     headroom_mb: int = 1024
     coord_dir: Path | None = None  # None = sem coordenação entre processos
     coord_capacity: int = 1
-    allowed_hosts: tuple[str, ...] = field(default=("127.0.0.1", "localhost", "testserver"))
+    allowed_hosts: tuple[str, ...] = field(default=("127.0.0.1", "localhost"))
 
     @classmethod
     def from_env(cls) -> "Settings":

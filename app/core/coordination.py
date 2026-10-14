@@ -1,9 +1,9 @@
-"""ResourceCoordinator: capacidade compartilhada entre processos cooperativos (N slots em disco)."""
+"""ResourceCoordinator: capacidade compartilhada entre processos cooperativos (N slots em disco).
+
+O lease (ttl) precisa ser maior que o timeout dos jobs, senão outro processo pode tomar o slot em uso."""
 from __future__ import annotations
 
-import json
 import os
-import time
 from pathlib import Path
 
 from app.core.locking import try_create
@@ -12,14 +12,6 @@ from app.core.locking import try_create
 class Slot:
     def __init__(self, path: Path) -> None:
         self.path = path
-
-    def renew(self) -> None:
-        try:
-            info = json.loads(self.path.read_text(encoding="utf-8"))
-            info["ts"] = time.time()
-            self.path.write_text(json.dumps(info), encoding="utf-8")
-        except (OSError, ValueError):
-            pass
 
     def release(self) -> None:
         self.path.unlink(missing_ok=True)
