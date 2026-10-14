@@ -33,3 +33,11 @@ class OllamaProvider:
             return sorted(m["name"] for m in r.json().get("models", []))
         except (httpx.HTTPError, KeyError, ValueError) as e:
             raise ProviderError(f"Ollama indisponível: {e}") from e
+
+    async def loaded_models(self) -> list[str]:
+        try:
+            r = await self._client.get("/api/ps")
+            r.raise_for_status()
+            return sorted(m["name"] for m in r.json().get("models", []))
+        except (httpx.HTTPError, KeyError, ValueError) as e:
+            raise ProviderError(f"Ollama indisponível: {e}") from e

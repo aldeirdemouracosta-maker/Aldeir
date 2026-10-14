@@ -11,7 +11,8 @@ Reconstrução do MICROAGENTS AI (referência v0.5.3). Agentes locais, minimalis
 | 0 Diagnóstico | feito (ver `docs/fase0.md`) |
 | 1 Núcleo (API, CLI, Chat, Coder, Ollama, Registry/Router) | implementado, 13 testes aprovados |
 | 2 Coding Terminal (workspace, patches, runner, memória) | implementado; 37 testes no total aprovados |
-| 3–6 | não iniciadas |
+| 3 Gerenciamento (AgentManager, ModelManager, StateStore, recursos, Origin/Fetch Metadata) | implementado; 47 testes aprovados |
+| 4–6 | não iniciadas |
 
 ## Uso
 ```

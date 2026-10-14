@@ -18,6 +18,7 @@ class Settings:
     provider_url: str = "http://127.0.0.1:11434"
     request_timeout: float = 120.0
     agents_file: Path = DEFAULT_AGENTS_FILE
+    state_path: Path | None = None  # None = só em memória
     allowed_hosts: tuple[str, ...] = field(default=("127.0.0.1", "localhost", "testserver"))
 
     @classmethod
@@ -29,6 +30,7 @@ class Settings:
             provider=e.get("SWARM_PROVIDER", cls.provider),
             provider_url=e.get("SWARM_PROVIDER_URL", cls.provider_url),
             request_timeout=float(e.get("SWARM_TIMEOUT", cls.request_timeout)),
+            state_path=Path(e["SWARM_STATE"]) if e.get("SWARM_STATE") else Path.home() / ".swarm" / "state.db",
         )
 
 
