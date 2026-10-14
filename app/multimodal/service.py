@@ -2,22 +2,24 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from pathlib import Path
 
-from app.core.models import UnavailableError
+from app.core.models import SwarmError, UnavailableError
 from app.multimodal.assets import AssetStore
 from app.multimodal.documents import DocumentIndex
 from app.multimodal.media import write_wav
 
 TEXT_EXT = {".txt", ".md", ".py", ".rst", ".json", ".yaml", ".yml", ".toml", ".csv"}
+IMAGE_EXT = {".png", ".jpg", ".jpeg"}
 MAX_FILES = 200
 
 
 class MultimodalService:
     def __init__(self, assets: AssetStore, index: DocumentIndex, provider, embed_model: str,
-                 vision=None, speech=None, voice=None) -> None:
+                 vision=None, speech=None, voice=None, ocr=None, clip=None) -> None:
         self.assets, self.index, self.provider, self.embed_model = assets, index, provider, embed_model
-        self.vision, self.speech, self.voice = vision, speech, voice
+        self.vision, self.speech, self.voice, self.ocr, self.clip = vision, speech, voice, ocr, clip
 
     @staticmethod
     def _need(backend, label: str):
@@ -32,6 +34,11 @@ class MultimodalService:
         be = self._need(self.vision, "vision")
         p = self.assets.path(rel, "image")
         return await asyncio.to_thread(be.describe, p, prompt or "Descreva a imagem.")
+
+    async def read_text(self, rel: str) -> str:
+        be = self._need(self.ocr, "ocr")
+        lines = await asyncio.to_thread(be.read, self.assets.path(rel, "image"))
+        return "\n".join(lines) or "(nenhum texto encontrado)"
 
     async def transcribe(self, rel: str) -> str:
         be = self._need(self.speech, "speech")
@@ -60,12 +67,45 @@ class MultimodalService:
             f for f in self.assets.ws.files() if f.suffix.lower() in TEXT_EXT and target in f.parents
         ][:MAX_FILES]
         done = chunks = 0
+        skipped: list[str] = []
         for f in files:
             r = self.assets.ws.rel(f)
-            text = self.assets.ws.read(r)  # limites, binário, symlink: mesmas regras do workspace
+            try:
+                text = self.assets.ws.read(r)  # limites, binário, symlink: mesmas regras do workspace
+            except SwarmError as e:
+                if f == target:
+                    raise  # arquivo pedido diretamente: o erro é a resposta
+                skipped.append(f"{r}: {e}")  # em pasta, um arquivo ruim não bloqueia os outros
+                continue
             chunks += await self.index.index_text(r, text, self._embed, self.embed_model)
             done += 1
-        return {"files": done, "new_chunks": chunks, **self.index.stats()}
+        return {"files": done, "new_chunks": chunks, "skipped": skipped, **self.index.stats()}
 
     async def search(self, query: str, k: int) -> list[dict]:
         return self.index.search(await self._embed(query), k)
+
+    async def index_images(self, rel: str) -> dict:
+        be = self._need(self.clip, "retrieval")
+        target = self.assets.ws.resolve(rel)
+        files = [target] if target.is_file() else [
+            f for f in self.assets.ws.files() if f.suffix.lower() in IMAGE_EXT and target in f.parents][:MAX_FILES]
+        new, done = 0, 0
+        skipped: list[str] = []
+        for f in files:
+            r = self.assets.ws.rel(f)
+            try:
+                p = self.assets.path(r, "image")  # limites e assinatura
+            except SwarmError as e:
+                if f == target:
+                    raise
+                skipped.append(f"{r}: {e}")
+                continue
+            sha = hashlib.sha256(p.read_bytes()).hexdigest()
+            emb = await asyncio.to_thread(be.embed_image, p)
+            new += self.index.index_image(r, sha, emb)
+            done += 1
+        return {"files": done, "new": new, "skipped": skipped, **self.index.stats()}
+
+    async def search_images(self, query: str, k: int) -> list[dict]:
+        be = self._need(self.clip, "retrieval")
+        return self.index.search_images(await asyncio.to_thread(be.embed_text, query), k)

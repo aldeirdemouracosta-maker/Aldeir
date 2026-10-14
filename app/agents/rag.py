@@ -30,7 +30,9 @@ class RagAgent(Agent):
             if not isinstance(path, str):
                 raise ValueError("payload.path é obrigatório")
             r = await self.service.index_path(path)
-            return f"{r['files']} arquivo(s), {r['new_chunks']} trecho(s) novos; índice: {r['documents']} docs / {r['chunks']} trechos"
+            note = f"; {len(r['skipped'])} ignorado(s): {'; '.join(r['skipped'][:3])}" if r["skipped"] else ""
+            return (f"{r['files']} arquivo(s), {r['new_chunks']} trecho(s) novos; "
+                    f"índice: {r['documents']} docs / {r['chunks']} trechos{note}")
         text = payload.get("text")
         if not isinstance(text, str) or not text.strip():
             raise ValueError("payload.text é obrigatório")

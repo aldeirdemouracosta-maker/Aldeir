@@ -68,3 +68,14 @@ def test_coordinator_lease_outlives_job_timeout(tmp_path):
     orch = build_orchestrator(s, ActionRouter(AgentRegistry()))
     assert orch.coordinator.ttl > s.job_timeout
     assert orch.snapshot()["coordination"] == {"capacity": 1, "in_use": 0}
+
+
+def test_job_that_never_gets_ram_leaves_the_queue_with_504(tmp_path):
+    # 'chat' precisa de 64 MB mas só há 10 livres (e 8000 no total): sem o timeout de fila, travaria para sempre
+    from tests.test_stability import mem
+    s = Settings(state_path=tmp_path / "s.db", queue_timeout=0.3, job_timeout=5)
+    c = make_client(create_app(s, provider=P(), memory=mem(avail=10, total=8000)))
+    r = c.post("/run", json={"action": "chat", "payload": {"text": "oi"}})
+    assert r.status_code == 504 and "fila" in r.json()["detail"]
+    snap = c.get("/scheduler").json()
+    assert snap["queued"] == [] and snap["recent"][-1]["status"] == "timeout"

@@ -43,6 +43,8 @@ class DocumentIndex:
               create table if not exists chunks(id integer primary key autoincrement, path text not null,
                   line_start int, line_end int, text text not null, dim int not null, emb blob not null);
               create index if not exists chunks_path on chunks(path);
+              create table if not exists images(path text primary key, sha text not null,
+                  dim int not null, emb blob not null);
             """)
 
     async def index_text(self, path: str, text: str, embed: Embed, model: str) -> int:
@@ -76,11 +78,33 @@ class DocumentIndex:
                            "score": round(cosine(query_emb, list(emb)), 4), "text": text})
         return sorted(scored, key=lambda r: -r["score"])[: max(1, min(k, 20))]
 
+    def index_image(self, path: str, sha: str, emb: list[float]) -> bool:
+        """Retorna False se a imagem já estava indexada com o mesmo conteúdo."""
+        with self._lock:
+            row = self._db.execute("select sha from images where path=?", (path,)).fetchone()
+        if row and row[0] == sha:
+            return False
+        blob = array.array("f", emb).tobytes()
+        with self._lock, self._db:
+            self._db.execute("insert or replace into images values(?,?,?,?)", (path, sha, len(emb), blob))
+        return True
+
+    def search_images(self, query_emb: list[float], k: int = 5) -> list[dict]:
+        with self._lock:
+            rows = self._db.execute("select path, emb from images where dim=?", (len(query_emb),)).fetchall()
+        scored = []
+        for path, blob in rows:
+            emb = array.array("f")
+            emb.frombytes(blob)
+            scored.append({"path": path, "score": round(cosine(query_emb, list(emb)), 4)})
+        return sorted(scored, key=lambda r: -r["score"])[: max(1, min(k, 20))]
+
     def stats(self) -> dict:
         with self._lock:
             d = self._db.execute("select count(*) from docs").fetchone()[0]
             c = self._db.execute("select count(*) from chunks").fetchone()[0]
-        return {"documents": d, "chunks": c}
+            i = self._db.execute("select count(*) from images").fetchone()[0]
+        return {"documents": d, "chunks": c, "images": i}
 
     def close(self) -> None:
         with self._lock:

@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.core.manager import AgentManager, ManagerError, ModelManager, UnknownAgent
-from app.core.models import ProviderError, RouteError, SwarmError, TaskResult, UnavailableError
+from app.core.models import OutputError, ProviderError, RouteError, SwarmError, TaskResult, UnavailableError
 from app.core.resources import ResourceMonitor
 from app.core.orchestrator import JobCancelled, JobTimeout, Orchestrator
 from app.core.scheduler import PRIORITIES, AdmissionError, QueueFull
@@ -117,6 +117,8 @@ def build_router(manager: AgentManager, orch: Orchestrator, models: ModelManager
             raise HTTPException(status_code=409, detail=str(e)) from e
         except (ProviderError, UnavailableError, AdmissionError) as e:
             raise HTTPException(status_code=503, detail=str(e)) from e
+        except OutputError as e:  # modelo/plano fora do formato exigido
+            raise HTTPException(status_code=422, detail=str(e)) from e
         except SwarmError as e:  # caminho/mídia inválidos (workspace, assets)
             raise HTTPException(status_code=400, detail=str(e)) from e
         agent = orch.router.route(body.action)

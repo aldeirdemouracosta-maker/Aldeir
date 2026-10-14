@@ -126,7 +126,7 @@ def test_index_search_reindex_and_dim_mismatch():
     top = idx.search(run(p.embed("m", "gato")), k=2)
     assert top[0]["path"] == "a.md" and top[0]["score"] > top[1]["score"]
     assert run(idx.index_text("a.md", "agora fala de carro\n", emb, "m")) == 1  # mudou: substitui
-    assert idx.stats() == {"documents": 2, "chunks": 2}
+    assert idx.stats() == {"documents": 2, "chunks": 2, "images": 0}
     assert idx.search([1.0, 0.0]) == []      # dimensão incompatível não casa
 
 
@@ -224,3 +224,15 @@ def test_real_backends_report_unavailable_without_weights(tmp_path):
         assert ok is False and why
     with pytest.raises(UnavailableError):
         SmolVLMBackend(str(tmp_path)).describe(tmp_path / "x.png", "p")
+
+
+def test_rag_directory_skips_bad_files_but_reports_them(tmp_path):
+    svc = service(tmp_path)
+    d = svc.assets.root / "docs"
+    d.mkdir()
+    (d / "bom.md").write_text("O gato dorme.\n")
+    (d / "ruim.txt").write_bytes(b"\x00\x01\x02")          # binário disfarçado
+    r = run(svc.index_path("docs"))
+    assert r["files"] == 1 and len(r["skipped"]) == 1 and "ruim.txt" in r["skipped"][0]
+    with pytest.raises(WorkspaceError):
+        run(svc.index_path("docs/ruim.txt"))

@@ -9,6 +9,10 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.agents.chat import ChatAgent
+from app.agents.langid import LangIdAgent
+from app.agents.ocr import OcrAgent
+from app.agents.planner import PlannerAgent, RunContext
+from app.agents.retrieval import RetrievalAgent
 from app.agents.coder import CoderAgent
 from app.agents.rag import RagAgent
 from app.agents.speech import SpeechAgent
@@ -30,7 +34,8 @@ from app.core.router import ActionRouter
 from app.core.state import StateStore
 from app.multimodal.assets import AssetStore
 from app.multimodal.documents import DocumentIndex
-from app.multimodal.executors import KokoroBackend, SmolVLMBackend, WhisperBackend
+from app.multimodal.executors import (ChineseClipBackend, KokoroBackend, PaddleOcrBackend, SmolVLMBackend,
+                                      WhisperBackend)
 from app.multimodal.service import MultimodalService
 from app.providers.local_compatible import LocalCompatibleProvider
 from app.providers.ollama import OllamaProvider
@@ -42,26 +47,32 @@ def build_provider(settings: Settings):
 
 
 def build_service(settings: Settings, provider, vision=None, speech=None, voice=None,
-                  index: DocumentIndex | None = None) -> MultimodalService:
+                  index: DocumentIndex | None = None, ocr=None, clip=None) -> MultimodalService:
     media = settings.media_dir or Path(tempfile.mkdtemp(prefix="swarm-media-"))
     if index is None:
         index = DocumentIndex(media.parent / "index.db" if settings.media_dir else ":memory:")
     return MultimodalService(AssetStore(media), index, provider, settings.embed_model,
-                             vision or SmolVLMBackend(), speech or WhisperBackend(), voice or KokoroBackend())
+                             vision or SmolVLMBackend(), speech or WhisperBackend(), voice or KokoroBackend(),
+                             ocr or PaddleOcrBackend(), clip or ChineseClipBackend())
 
 
-def build_specs(service: MultimodalService) -> dict[str, AgentSpec]:
+def build_specs(service: MultimodalService, registry: AgentRegistry, ctx: RunContext) -> dict[str, AgentSpec]:
     text = lambda cls: AgentSpec(cls.name, cls.actions, cls)
     media = lambda cls: AgentSpec(cls.name, cls.actions, lambda _p, _m: cls(service), text_model=False)
-    return {s.name: s for s in (text(ChatAgent), text(CoderAgent), media(VisionAgent),
-                                media(SpeechAgent), media(VoiceAgent), media(RagAgent))}
+    planner = AgentSpec(PlannerAgent.name, PlannerAgent.actions,
+                        lambda p, m: PlannerAgent(p, m, registry, ctx))
+    plain = AgentSpec(LangIdAgent.name, LangIdAgent.actions, lambda _p, _m: LangIdAgent(), text_model=False)
+    return {s.name: s for s in (text(ChatAgent), text(CoderAgent), media(VisionAgent), media(SpeechAgent),
+                                media(VoiceAgent), media(RagAgent), media(OcrAgent), plain, planner,
+                                media(RetrievalAgent))}
 
 
 def build_manager(settings: Settings, provider, store: StateStore | None = None,
-                  service: MultimodalService | None = None) -> AgentManager:
+                  service: MultimodalService | None = None, ctx: RunContext | None = None) -> AgentManager:
     store = store or StateStore(settings.state_path or ":memory:")
     service = service or build_service(settings, provider)
-    return AgentManager(AgentRegistry(), build_specs(service), provider, store,
+    registry = AgentRegistry()
+    return AgentManager(registry, build_specs(service, registry, ctx or RunContext()), provider, store,
                         load_agent_config(settings.agents_file))
 
 
@@ -76,7 +87,7 @@ def build_orchestrator(settings: Settings, router: ActionRouter,
     coord = ResourceCoordinator(settings.coord_dir, settings.coord_capacity,
                                ttl=settings.job_timeout * 2 + 60) if settings.coord_dir else None
     sched = ResourceScheduler(memory, settings.max_concurrent, settings.max_queue)
-    return Orchestrator(router, sched, settings.job_timeout, coord)
+    return Orchestrator(router, sched, settings.job_timeout, coord, queue_timeout=settings.queue_timeout)
 
 
 def create_app(settings: Settings | None = None, provider=None,
@@ -86,7 +97,8 @@ def create_app(settings: Settings | None = None, provider=None,
     settings = settings or Settings.from_env()
     provider = provider or build_provider(settings)
     service = service or build_service(settings, provider)
-    manager = build_manager(settings, provider, service=service)
+    ctx = RunContext()
+    manager = build_manager(settings, provider, service=service, ctx=ctx)
     @asynccontextmanager
     async def lifespan(_app):
         yield
@@ -98,6 +110,7 @@ def create_app(settings: Settings | None = None, provider=None,
     add_security(app, settings)
     router = ActionRouter(manager.registry)
     orchestrator = build_orchestrator(settings, router, memory)
+    ctx.run_step = orchestrator.run_nested
     app.include_router(build_router(manager, orchestrator, ModelManager(provider),
                                     monitor or ResourceMonitor()))
     app.include_router(build_multimodal_router(service))

@@ -10,7 +10,7 @@ from typing import Any
 from app.core.coordination import ResourceCoordinator
 from app.core.models import SwarmError
 from app.core.router import ActionRouter
-from app.core.scheduler import NORMAL, Job, ResourceScheduler
+from app.core.scheduler import NORMAL, AdmissionError, Job, ResourceScheduler
 
 HEAVY_MB = 200  # a partir daqui o job disputa um slot do ResourceCoordinator
 
@@ -25,9 +25,12 @@ class JobTimeout(SwarmError):
 
 class Orchestrator:
     def __init__(self, router: ActionRouter, scheduler: ResourceScheduler, timeout: float = 120.0,
-                 coordinator: ResourceCoordinator | None = None, history: int = 100) -> None:
+                 coordinator: ResourceCoordinator | None = None, history: int = 100,
+                 queue_timeout: float = 60.0) -> None:
         self.router, self.scheduler, self.timeout, self.coordinator = router, scheduler, timeout, coordinator
+        self.queue_timeout = queue_timeout
         self._ids = itertools.count(1)
+        self._expiry: dict[str, asyncio.TimerHandle] = {}
         self._futures: dict[str, asyncio.Future] = {}
         self._tasks: dict[str, asyncio.Task] = {}
         self._meta: dict[str, dict] = {}
@@ -41,8 +44,10 @@ class Orchestrator:
         fut = asyncio.get_running_loop().create_future()
         self.scheduler.submit(job)
         self._futures[job_id] = fut
-        self._meta[job_id] = {"id": job_id, "agent": agent.name, "action": action, "priority": priority,
+        self._meta[job_id] = {"id": job_id, "agent": agent.name, "model": getattr(agent, "model", ""),
+                              "action": action, "priority": priority,
                               "status": "queued", "queued_at": time.time(), "error": ""}
+        self._expiry[job_id] = asyncio.get_running_loop().call_later(self.queue_timeout, self._expire, job_id)
         self._pump()
         try:
             return await fut, job_id
@@ -50,20 +55,56 @@ class Orchestrator:
             self.cancel(job_id)
             raise
 
+    def _expire(self, job_id: str) -> None:
+        """Job que ficou tempo demais esperando vaga/RAM: sai da fila com erro, em vez de esperar para sempre."""
+        self._expiry.pop(job_id, None)
+        if self.scheduler.cancel_queued(job_id):
+            meta = self._meta.pop(job_id)
+            meta.update(status="timeout", finished_at=time.time(), error="tempo de espera na fila excedido")
+            self._history.append(meta)
+            fut = self._futures.pop(job_id)
+            if not fut.done():
+                fut.set_exception(JobTimeout(f"esperou mais de {self.queue_timeout}s na fila (sem vaga ou RAM)"))
+
     def _pump(self) -> None:
         while (job := self.scheduler.next_runnable()) is not None:
+            if timer := self._expiry.pop(job.id, None):
+                timer.cancel()
             self._meta[job.id].update(status="running", started_at=time.time())
             self._tasks[job.id] = asyncio.create_task(self._execute(job))
 
+    async def _call(self, agent, job_id: str, action: str, payload: dict, mb: int) -> str:
+        """Roda o agente sob timeout e, se pesado, sob um slot do coordenador."""
+        slot = None
+        try:
+            async with asyncio.timeout(self.timeout):
+                if self.coordinator and mb >= HEAVY_MB:
+                    while (slot := self.coordinator.try_acquire(job_id)) is None:
+                        await asyncio.sleep(0.1)
+                return await agent.run(action, payload)
+        finally:
+            if slot:
+                slot.release()
+
+    async def run_nested(self, action: str, payload: dict[str, Any]) -> str:
+        """Passo de um plano: não toma slot de concorrência (o plano já tem um; evita deadlock),
+        mas reserva RAM, respeita timeout e coordenador. Falha rápido se não houver RAM."""
+        agent = self.router.route(action)
+        mb, owner = self.scheduler.memory.estimate(agent.name), f"nested-{next(self._ids)}"
+        if not self.scheduler.memory.try_reserve(owner, mb):
+            raise AdmissionError(f"RAM insuficiente agora para {action} (~{mb} MB)")
+        try:
+            return await self._call(agent, owner, action, payload, mb)
+        except TimeoutError:
+            raise JobTimeout(f"tempo limite de {self.timeout}s excedido em {action}") from None
+        finally:
+            self.scheduler.memory.release(owner)
+
     async def _execute(self, job: Job) -> None:
-        fut, slot = self._futures[job.id], None
+        fut = self._futures[job.id]
         try:
             agent = self.router.route(job.action)
-            async with asyncio.timeout(self.timeout):
-                if self.coordinator and job.mb >= HEAVY_MB:
-                    while (slot := self.coordinator.try_acquire(job.id)) is None:
-                        await asyncio.sleep(0.1)
-                result = await agent.run(job.action, job.payload)
+            result = await self._call(agent, job.id, job.action, job.payload, job.mb)
             self._finish(job, "done", fut, result=result)
         except TimeoutError:
             self._finish(job, "timeout", fut, exc=JobTimeout(f"tempo limite de {self.timeout}s excedido"))
@@ -71,9 +112,6 @@ class Orchestrator:
             self._finish(job, "cancelled", fut, exc=JobCancelled("job cancelado"))
         except Exception as e:  # erro do agente vai para quem chamou
             self._finish(job, "error", fut, exc=e)
-        finally:
-            if slot:
-                slot.release()
 
     def _finish(self, job: Job, status: str, fut: asyncio.Future, result=None, exc=None) -> None:
         meta = self._meta.pop(job.id)
@@ -92,6 +130,8 @@ class Orchestrator:
             task.cancel()
             return True
         if self.scheduler.cancel_queued(job_id):
+            if timer := self._expiry.pop(job_id, None):
+                timer.cancel()
             meta = self._meta.pop(job_id)
             meta.update(status="cancelled", finished_at=time.time())
             self._history.append(meta)

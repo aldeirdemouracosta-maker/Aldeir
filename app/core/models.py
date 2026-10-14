@@ -35,3 +35,7 @@ class ProviderError(SwarmError):
 
 class UnavailableError(SwarmError):
     """Agente ou dependência opcional indisponível (pesos ou pacotes ausentes)."""
+
+
+class OutputError(SwarmError):
+    """Saída de modelo ou plano inválidos (formato), distinta de erro de infraestrutura."""

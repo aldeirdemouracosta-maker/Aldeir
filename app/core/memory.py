@@ -6,7 +6,8 @@ from typing import Callable
 import psutil
 
 # Estimativas aproximadas (MB) por agente; ajustáveis. Chat/Coder usam o Ollama (processo externo).
-DEFAULT_ESTIMATES_MB = {"chat": 64, "coder": 64, "rag": 128, "vision": 1500, "speech": 500, "voice": 600}
+DEFAULT_ESTIMATES_MB = {"chat": 64, "coder": 64, "rag": 128, "vision": 1500, "speech": 500, "voice": 600,
+                        "ocr": 300, "langid": 0, "planner": 64, "retrieval": 900}
 
 
 def _available_mb() -> int:

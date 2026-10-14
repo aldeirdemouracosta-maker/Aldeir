@@ -24,6 +24,7 @@ class Settings:
     max_concurrent: int = 2
     max_queue: int = 16
     job_timeout: float = 120.0
+    queue_timeout: float = 60.0
     headroom_mb: int = 1024
     coord_dir: Path | None = None  # None = sem coordenação entre processos
     coord_capacity: int = 1
@@ -42,6 +43,7 @@ class Settings:
             max_concurrent=int(e.get("SWARM_MAX_CONCURRENT", cls.max_concurrent)),
             max_queue=int(e.get("SWARM_MAX_QUEUE", cls.max_queue)),
             job_timeout=float(e.get("SWARM_JOB_TIMEOUT", cls.job_timeout)),
+            queue_timeout=float(e.get("SWARM_QUEUE_TIMEOUT", cls.queue_timeout)),
             headroom_mb=int(e.get("SWARM_HEADROOM_MB", cls.headroom_mb)),
             coord_dir=Path(e["SWARM_COORD_DIR"]) if e.get("SWARM_COORD_DIR") else None,
             request_timeout=float(e.get("SWARM_TIMEOUT", cls.request_timeout)),

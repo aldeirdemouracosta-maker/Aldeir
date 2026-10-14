@@ -52,9 +52,9 @@ def mk(tmp_path, provider=None):
 
 def test_manager_disable_enable_persist_across_restart(tmp_path):
     m = mk(tmp_path)
-    assert m.registry.names() == ["chat", "coder", "rag", "speech", "vision", "voice"]
+    assert m.registry.names() == ["chat", "coder", "langid", "ocr", "planner", "rag", "retrieval", "speech", "vision", "voice"]
     m.disable("coder")
-    assert m.registry.names() == ["chat", "rag", "speech", "vision", "voice"]
+    assert "coder" not in m.registry.names() and "chat" in m.registry.names()
     m.store.close()
     m2 = mk(tmp_path)                      # "reinício": estado salvo prevalece sobre o YAML
     assert "coder" not in m2.registry.names()

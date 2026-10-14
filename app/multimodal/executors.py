@@ -34,6 +34,18 @@ class VoiceBackend(Protocol):
     def synthesize(self, text: str, voice: str) -> tuple[Sequence[float], int]: ...
 
 
+class OcrBackend(Protocol):
+    def probe(self) -> tuple[bool, str]: ...
+    def read(self, image: Path) -> list[str]: ...
+
+
+class ClipBackend(Protocol):
+    """Embeddings imagem/texto no MESMO espaço vetorial (normalizados)."""
+    def probe(self) -> tuple[bool, str]: ...
+    def embed_image(self, image: Path) -> list[float]: ...
+    def embed_text(self, text: str) -> list[float]: ...
+
+
 class SmolVLMBackend:
     """SmolVLM 256M via transformers. Requer: transformers, torch, PIL e SWARM_VISION_MODEL (pasta local)."""
 
@@ -122,3 +134,73 @@ class KokoroBackend:
     def synthesize(self, text: str, voice: str) -> tuple[Sequence[float], int]:
         samples, rate = self._kokoro().create(text, voice=voice, speed=1.0, lang="en-us")
         return samples.tolist(), int(rate)
+
+
+class PaddleOcrBackend:
+    """PP-OCR via PaddleOCR. Requer paddleocr + SWARM_OCR_DET e SWARM_OCR_REC (pastas locais dos modelos).
+
+    Sem as pastas o PaddleOCR baixaria pesos sozinho; por isso o backend se declara indisponível."""
+
+    def __init__(self, det_dir: str | None = None, rec_dir: str | None = None) -> None:
+        self.det = det_dir or os.environ.get("SWARM_OCR_DET", "")
+        self.rec = rec_dir or os.environ.get("SWARM_OCR_REC", "")
+        self._ocr = None
+
+    def probe(self) -> tuple[bool, str]:
+        if _missing(["paddleocr"]):
+            return False, "dependências ausentes: paddleocr"
+        if not (Path(self.det).is_dir() and Path(self.rec).is_dir()):
+            return False, "pesos ausentes (SWARM_OCR_DET / SWARM_OCR_REC)"
+        return True, "ok"
+
+    def read(self, image: Path) -> list[str]:
+        ok, why = self.probe()
+        if not ok:
+            raise UnavailableError(why)
+        from paddleocr import PaddleOCR
+        if self._ocr is None:
+            self._ocr = PaddleOCR(text_detection_model_dir=self.det, text_recognition_model_dir=self.rec,
+                                  use_doc_orientation_classify=False, use_doc_unwarping=False)
+        lines: list[str] = []
+        for page in self._ocr.predict(str(image)):  # API 3.x: dict com 'rec_texts'
+            lines += [t for t in page["rec_texts"] if t.strip()]
+        return lines
+
+
+class ChineseClipBackend:
+    """Chinese-CLIP ViT-B/16 via transformers. Requer transformers, torch, PIL e SWARM_CLIP_MODEL (pasta local)."""
+
+    def __init__(self, model_dir: str | None = None) -> None:
+        self.model_dir = model_dir or os.environ.get("SWARM_CLIP_MODEL", "")
+        self._m = None
+
+    def probe(self) -> tuple[bool, str]:
+        miss = _missing(["transformers", "torch", "PIL"])
+        if miss:
+            return False, f"dependências ausentes: {', '.join(miss)}"
+        if not self.model_dir or not Path(self.model_dir).is_dir():
+            return False, "pesos ausentes (defina SWARM_CLIP_MODEL)"
+        return True, "ok"
+
+    def _load(self):
+        ok, why = self.probe()
+        if not ok:
+            raise UnavailableError(why)
+        if self._m is None:
+            from transformers import ChineseCLIPModel, ChineseCLIPProcessor
+            self._m = (ChineseCLIPProcessor.from_pretrained(self.model_dir, local_files_only=True),
+                       ChineseCLIPModel.from_pretrained(self.model_dir, local_files_only=True))
+        return self._m
+
+    @staticmethod
+    def _norm(t) -> list[float]:
+        return (t / t.norm(dim=-1, keepdim=True))[0].tolist()
+
+    def embed_image(self, image: Path) -> list[float]:
+        from PIL import Image
+        proc, model = self._load()
+        return self._norm(model.get_image_features(**proc(images=Image.open(image).convert("RGB"), return_tensors="pt")))
+
+    def embed_text(self, text: str) -> list[float]:
+        proc, model = self._load()
+        return self._norm(model.get_text_features(**proc(text=[text], padding=True, return_tensors="pt")))
