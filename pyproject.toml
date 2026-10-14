@@ -30,6 +30,7 @@ swarm = "app.cli.main:app"
 include = ["app*"]
 
 [tool.setuptools.package-data]
+"app" = ["configs/*.yaml", "evals/*.yaml"]
 "app.dashboard" = ["static/*"]
 
 [tool.pytest.ini_options]

@@ -10,7 +10,7 @@ from app.core.tuning import (MARGIN, SuiteError, check_output, evaluate, load_su
 from app.main import build_manager, create_app
 from tests.helpers import client as make_client
 
-EVALS = Path(__file__).resolve().parent.parent / "evals"
+EVALS = Path(__file__).resolve().parent.parent / "app" / "evals"
 
 
 def run(c):

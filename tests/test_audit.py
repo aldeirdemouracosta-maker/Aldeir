@@ -79,3 +79,34 @@ def test_job_that_never_gets_ram_leaves_the_queue_with_504(tmp_path):
     assert r.status_code == 504 and "fila" in r.json()["detail"]
     snap = c.get("/scheduler").json()
     assert snap["queued"] == [] and snap["recent"][-1]["status"] == "timeout"
+
+
+def test_missing_config_is_a_loud_error_not_empty_config(tmp_path):
+    from app.config import ConfigError, load_agent_config
+    import pytest
+    with pytest.raises(ConfigError, match="SWARM_CONFIG_DIR"):
+        load_agent_config(tmp_path / "nao-existe.yaml")
+
+
+def test_config_dir_env_overrides_all_three_paths(tmp_path, monkeypatch):
+    from app.config import Settings
+    monkeypatch.setenv("SWARM_CONFIG_DIR", str(tmp_path))
+    s = Settings.from_env()
+    assert (s.agents_file, s.models_file, s.evals_dir) == (tmp_path / "agents.yaml", tmp_path / "models.yaml", tmp_path / "evals")
+    monkeypatch.delenv("SWARM_CONFIG_DIR")
+    assert Settings.from_env().agents_file.is_file() and Settings.from_env().models_file.is_file()
+    assert any(Settings.from_env().evals_dir.glob("*.yaml"))
+
+
+def test_package_data_globs_cover_every_runtime_data_file():
+    """Se alguém criar um YAML/estático novo fora dos globs, a instalação não editável quebraria."""
+    import tomllib
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent
+    pd = tomllib.loads((root / "pyproject.toml").read_text())["tool"]["setuptools"]["package-data"]
+    covered = set()
+    for pkg, globs in pd.items():
+        for g in globs:
+            covered |= {p for p in (root / pkg.replace(".", "/")).glob(g)}
+    needed = set((root / "app").rglob("*.yaml")) | set((root / "app/dashboard/static").iterdir())
+    assert needed <= covered, sorted(str(p) for p in needed - covered)

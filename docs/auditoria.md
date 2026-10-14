@@ -30,8 +30,8 @@ projeto e uma suíte nova para cada correção. Resultado medido: 156 testes Pyt
 | 4 agentes: OCR, LangID, Planner/Tool, Retrieval | completam os 10; LangID e Planner são reais, OCR e Retrieval dependem de pesos opcionais |
 | Coder `output_mode: code_only` | rejeita Markdown/explicação extra (problema relatado no PDF) |
 | `Orchestrator.run_nested` | passos de plano sem deadlock com 1 slot, reservando RAM |
-| `configs/models.yaml` + `swarm models` | manifesto de referência por agente, instalação de arquivo único com SHA-256, limite de 1 GB, hosts oficiais, retomada |
-| `evals/*.yaml` + `swarm tune` | avaliação e ajuste sem tocar nos pesos |
+| `app/configs/models.yaml` + `swarm models` | manifesto de referência por agente, instalação de arquivo único com SHA-256, limite de 1 GB, hosts oficiais, retomada |
+| `app/evals/*.yaml` + `swarm tune` | avaliação e ajuste sem tocar nos pesos |
 | `POST /feedback` | 👍/👎 por job, sem guardar conteúdo |
 | `scripts/check.py` | testes + arquivos grandes + segredos + pesos/.env versionados antes do push |
 | `.github/workflows/swarm-ci.yml` | testes em Ubuntu e **Windows** |

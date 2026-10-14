@@ -11,7 +11,7 @@ Reconstrução do MICROAGENTS AI (referência v0.5.3). Agentes locais, minimalis
 | Fases 0–6 (núcleo, terminal supervisionado, gerenciamento, multimodal, estabilidade, dashboard) | implementadas |
 | 10 agentes: chat, coder, vision, speech, voice, rag, ocr, langid, planner, retrieval | registrados; disponibilidade real por agente |
 | Auditoria (`docs/auditoria.md`) | feita: código morto removido, 9 falhas corrigidas |
-| Autotreinamento sem tocar pesos (`swarm tune`, `evals/`, `/feedback`) | implementado |
+| Autotreinamento sem tocar pesos (`swarm tune`, `app/evals/`, `/feedback`) | implementado |
 | Testes | 156 Python + 7 JavaScript aprovados (backends reais simulados) |
 | Hardware real (Ollama, modelos, Windows 11, CI) | **não validado** |
 
@@ -26,7 +26,7 @@ swarm run summarize "texto"
 swarm serve         # 127.0.0.1:8000
 python scripts/check.py   # antes de cada push: testes, segredos, arquivos grandes
 ```
-Provedor: `SWARM_PROVIDER=ollama|local_compatible`, `SWARM_PROVIDER_URL=...`. Modelos em `configs/agents.yaml`;
+Provedor: `SWARM_PROVIDER=ollama|local_compatible`, `SWARM_PROVIDER_URL=...`. Modelos em `app/configs/agents.yaml`;
 o projeto nunca baixa modelos sozinho.
 
 ## Segurança (já presente na Fase 1)
@@ -63,7 +63,7 @@ leituras cross-site dos dados são recusadas (403); CSP sem `unsafe-inline`; tex
 Testes JS: `node --test tests/js/lib.test.cjs`. Validação visual feita só em Chromium headless no Linux; Windows/Edge/Firefox não testados.
 
 ## Agentes e modelos de referência
-Fonte: PDF de pesquisa (modelos < 1 GB). Detalhes, tamanhos e licenças em `configs/models.yaml`.
+Fonte: PDF de pesquisa (modelos < 1 GB). Detalhes, tamanhos e licenças em `app/configs/models.yaml`.
 | Agente | Função | Referência | Adaptador |
 |---|---|---|---|
 | chat | conversa, resumo, tradução | Qwen2.5-0.5B-Instruct (GGUF) | pronto (Ollama / llama-server) |
@@ -78,6 +78,6 @@ Fonte: PDF de pesquisa (modelos < 1 GB). Detalhes, tamanhos e licenças em `conf
 | planner | plano de até 5 passos entre as ações | Qwen2.5 (JSON) | pronto; `plan_run` com passos manuais |
 
 ## Autotreinamento (sem alterar pesos)
-`evals/<agente>.yaml` define casos objetivos. `swarm tune <agente>` mede acerto e latência de cada modelo instalado,
+`app/evals/<agente>.yaml` define casos objetivos. `swarm tune <agente>` mede acerto e latência de cada modelo instalado,
 guarda o resultado e recomenda; só `--apply` troca o modelo (com margem mínima de 10 pontos sobre o atual para não trocar por ruído).
 `POST /feedback {job_id, rating: 1|-1}` registra a opinião por agente/modelo (sem guardar texto). Fine-tuning não existe e exige autorização explícita.

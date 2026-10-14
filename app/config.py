@@ -7,7 +7,13 @@ from pathlib import Path
 
 import yaml
 
-DEFAULT_AGENTS_FILE = Path(__file__).resolve().parent.parent / "configs" / "agents.yaml"
+from app.core.models import SwarmError
+
+# Configurações e suítes de avaliação vivem DENTRO do pacote (funcionam em qualquer instalação).
+# SWARM_CONFIG_DIR aponta outra pasta com agents.yaml, models.yaml e evals/.
+PACKAGE_DIR = Path(__file__).resolve().parent
+DEFAULT_CONFIG_DIR = PACKAGE_DIR / "configs"
+DEFAULT_AGENTS_FILE = DEFAULT_CONFIG_DIR / "agents.yaml"
 
 
 @dataclass(frozen=True)
@@ -26,7 +32,8 @@ class Settings:
     job_timeout: float = 120.0
     queue_timeout: float = 60.0
     headroom_mb: int = 1024
-    models_file: Path = DEFAULT_AGENTS_FILE.parent / "models.yaml"
+    models_file: Path = DEFAULT_CONFIG_DIR / "models.yaml"
+    evals_dir: Path = PACKAGE_DIR / "evals"
     models_dir: Path = Path.home() / ".swarm" / "models"
     coord_dir: Path | None = None  # None = sem coordenação entre processos
     coord_capacity: int = 1
@@ -35,7 +42,10 @@ class Settings:
     @classmethod
     def from_env(cls) -> "Settings":
         e = os.environ
+        cfg = Path(e["SWARM_CONFIG_DIR"]) if e.get("SWARM_CONFIG_DIR") else None
         return cls(
+            **({"agents_file": cfg / "agents.yaml", "models_file": cfg / "models.yaml",
+                "evals_dir": cfg / "evals"} if cfg else {}),
             host=e.get("SWARM_HOST", cls.host),
             port=int(e.get("SWARM_PORT", cls.port)),
             provider=e.get("SWARM_PROVIDER", cls.provider),
@@ -54,9 +64,13 @@ class Settings:
         )
 
 
+class ConfigError(SwarmError):
+    pass
+
+
 def load_agent_config(path: Path) -> dict[str, dict]:
-    """Lê configs/agents.yaml. Arquivo ausente significa configuração vazia."""
-    if not path.exists():
-        return {}
+    """Lê agents.yaml. Arquivo ausente é erro: configuração vazia deixaria agentes sem modelo, em silêncio."""
+    if not path.is_file():
+        raise ConfigError(f"configuração ausente: {path} (instale com `pip install -e .` ou defina SWARM_CONFIG_DIR)")
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     return data.get("agents", {})

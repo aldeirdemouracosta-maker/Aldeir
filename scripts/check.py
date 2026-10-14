@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-OWN = ("app/", "tests/", "configs/", "evals/", "docs/", "scripts/", "README.md", "pyproject.toml", ".env.example")
+OWN = ("app/", "tests/", "docs/", "scripts/", "README.md", "pyproject.toml", ".env.example")
 SELF = {"scripts/check.py", "tests/test_check_script.py"}
 MAX_BYTES = 1_000_000
 BLOCKED_EXT = {".keystore", ".jks", ".p12", ".gguf", ".onnx", ".safetensors", ".pt", ".bin", ".db", ".sqlite", ".sqlite3", ".wav", ".pem", ".key"}

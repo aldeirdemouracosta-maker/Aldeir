@@ -129,7 +129,7 @@ def status() -> None:
 @app.command()
 def tune(agent: str, models: str = typer.Option("", help="candidatos separados por vírgula (padrão: todos os instalados)"),
          apply: bool = typer.Option(False, help="aplica a recomendação (troca o modelo do agente)"),
-         evals_dir: str = "evals") -> None:
+         evals_dir: str = typer.Option("", help="pasta das suítes (padrão: as do pacote)")) -> None:
     """Avalia modelos candidatos com a suíte do agente e recomenda o melhor. Não altera pesos."""
     from pathlib import Path
 
@@ -143,7 +143,7 @@ def tune(agent: str, models: str = typer.Option("", help="candidatos separados p
         spec = manager.factories.get(agent)
         if spec is None:
             raise SuiteError(f"agente desconhecido: {agent}")
-        suite = load_suite(agent, Path(evals_dir))
+        suite = load_suite(agent, Path(evals_dir) if evals_dir else settings.evals_dir)
         current = manager.status()
         current = next(s["model"] for s in current if s["name"] == agent)
         if spec.text_model:

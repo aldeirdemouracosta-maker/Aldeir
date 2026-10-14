@@ -3,10 +3,10 @@ name: SWARM LITE AI - testes
 on:
   workflow_dispatch:
   pull_request:
-    paths: ['app/**', 'tests/**', 'evals/**', 'configs/**', 'scripts/**', 'pyproject.toml', '.github/workflows/swarm-ci.yml']
+    paths: ['app/**', 'tests/**', 'scripts/**', 'pyproject.toml', '.github/workflows/swarm-ci.yml']
   push:
     branches: [ main, master ]
-    paths: ['app/**', 'tests/**', 'evals/**', 'configs/**', 'scripts/**', 'pyproject.toml', '.github/workflows/swarm-ci.yml']
+    paths: ['app/**', 'tests/**', 'scripts/**', 'pyproject.toml', '.github/workflows/swarm-ci.yml']
 
 jobs:
   test:
