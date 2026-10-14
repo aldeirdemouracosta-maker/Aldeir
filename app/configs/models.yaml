@@ -1,7 +1,8 @@
 # Manifesto de modelos de referência (fonte: pesquisa "SWARM LITE AI — modelos sub-1 GB").
 # Tamanhos e licenças vêm do PDF; sha256 está vazio de propósito: NENHUM hash foi verificado.
 # O instalador exige sha256 (aqui ou em --sha256, copiado da página oficial do arquivo).
-# status: wired = existe adaptador no código | planned = só referência, adaptador ainda não escrito
+# status: wired = existe adaptador no código | planned = só referência | external = sem adaptador próprio:
+#         use um servidor compatível com OpenAI (ex.: Speaches) que suporte o modelo; compatibilidade NÃO verificada
 models:
   - id: qwen2.5-0.5b-instruct-q5_0
     agents: [chat]
@@ -103,7 +104,7 @@ models:
     capabilities: [speech_transcribe]
     languages: [ja]
     backend: sherpa-onnx
-    status: planned
+    status: external
   - id: sensevoice-small
     agents: [speech, langid]
     provider: funasr
@@ -116,7 +117,7 @@ models:
     capabilities: [speech_transcribe, language_id, emotion, audio_event]
     languages: [zh, yue, en, ja, ko]
     backend: funasr
-    status: planned
+    status: external
     notes: model.pt usa pickle; baixar só da fonte oficial e conferir hash.
   - id: melotts-japanese
     agents: [voice]
@@ -130,7 +131,7 @@ models:
     capabilities: [voice_speak]
     languages: [ja]
     backend: melotts (PyTorch)
-    status: planned
+    status: external
   - id: piper-pt_BR-faber-medium
     agents: [voice]
     provider: piper
@@ -143,8 +144,10 @@ models:
     languages: [pt-BR]
     backend: piper (ONNX)
     minimum_ram_mb: 512
-    status: planned
-    notes: Única voz pt-BR do PDF; os demais modelos de voz/fala são ja/zh.
+    status: external
+    notes: >
+      Única voz pt-BR do PDF; os demais modelos de voz/fala são ja/zh. Atenção à licença: o motor Piper atual
+      (OHF-Voice/piper1-gpl) é GPL-3.0; o repositório original (MIT) foi arquivado em out/2025. Verifique antes de redistribuir.
   - id: bge-small-zh-v1.5
     agents: [rag]
     provider: transformers

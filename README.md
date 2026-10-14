@@ -68,10 +68,10 @@ Fonte: PDF de pesquisa (modelos < 1 GB). Detalhes, tamanhos e licenças em `app/
 |---|---|---|---|
 | chat | conversa, resumo, tradução | Qwen2.5-0.5B-Instruct (GGUF) | pronto (Ollama / llama-server) |
 | coder | código, revisão, `code_only` | Qwen2.5-Coder-0.5B-Instruct | pronto |
-| vision | descrição de imagem | SmolVLM (original) | pronto, não validado |
+| vision | descrição de imagem | SmolVLM 256M | HTTP (llama-server `--mmproj`) pronto; em processo (legado) |
 | ocr | texto em imagens | PP-OCR (PaddleOCR) | pronto, não validado |
-| speech | transcrição | Whisper Tiny; ReazonSpeech / SenseVoice (ref.) | Whisper pronto; outros planejados |
-| voice | síntese WAV | Kokoro; Piper pt-BR / MeloTTS (ref.) | Kokoro pronto; outros planejados |
+| speech | transcrição | Whisper Tiny; ReazonSpeech / SenseVoice (ref.) | HTTP (compatível OpenAI) pronto; em processo (legado); modelos do PDF via servidor, não verificados |
+| voice | síntese WAV | Kokoro; Piper pt-BR / MeloTTS (ref.) | HTTP (compatível OpenAI) pronto; em processo (legado); atenção à licença GPL-3 do Piper atual |
 | rag | busca semântica com referência | nomic-embed-text (Ollama); BGE / Ruri (ref.) | Ollama pronto; outros planejados |
 | langid | idioma do texto | heurística própria, sem modelo | pronto e medido |
 | retrieval | imagens por texto | Chinese-CLIP | pronto, não validado |
@@ -81,3 +81,14 @@ Fonte: PDF de pesquisa (modelos < 1 GB). Detalhes, tamanhos e licenças em `app/
 `app/evals/<agente>.yaml` define casos objetivos. `swarm tune <agente>` mede acerto e latência de cada modelo instalado,
 guarda o resultado e recomenda; só `--apply` troca o modelo (com margem mínima de 10 pontos sobre o atual para não trocar por ruído).
 `POST /feedback {job_id, rating: 1|-1}` registra a opinião por agente/modelo (sem guardar texto). Fine-tuning não existe e exige autorização explícita.
+
+## Servidores e teste de fumaça
+O SWARM só conversa por HTTP com servidores locais. Contratos conferidos contra servidores simulados que seguem a documentação
+(Ollama, llama-server, API de áudio compatível com OpenAI); **nenhum servidor real foi exercitado ainda**. Para verificar no seu computador:
+```
+python scripts/smoke.py                                                   # Ollama padrão
+python scripts/smoke.py --provider local_compatible --url http://127.0.0.1:8080
+python scripts/smoke.py --vision-url http://127.0.0.1:8081 --audio-url http://127.0.0.1:8000 --voices pf_dora
+```
+Não baixa nada. Cada passo sai como OK, AVISO (qualidade), FALHA (contrato quebrado) ou PULADO (modelo ausente); cole a saída para análise.
+Modelos que "pensam" (Qwen3) têm o bloco `<think>…</think>` removido pelo provedor.

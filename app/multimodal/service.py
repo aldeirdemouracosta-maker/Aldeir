@@ -22,35 +22,36 @@ class MultimodalService:
         self.vision, self.speech, self.voice, self.ocr, self.clip = vision, speech, voice, ocr, clip
 
     @staticmethod
-    def _need(backend, label: str):
+    async def _need(backend, label: str):
         if backend is None:
             raise UnavailableError(f"{label} não configurado")
-        ok, why = backend.probe()
+        ok, why = await asyncio.to_thread(backend.probe)  # probe pode ser HTTP: nunca no loop de eventos
         if not ok:
             raise UnavailableError(f"{label} indisponível: {why}")
         return backend
 
     async def describe_image(self, rel: str, prompt: str) -> str:
-        be = self._need(self.vision, "vision")
+        be = await self._need(self.vision, "vision")
         p = self.assets.path(rel, "image")
         return await asyncio.to_thread(be.describe, p, prompt or "Descreva a imagem.")
 
     async def read_text(self, rel: str) -> str:
-        be = self._need(self.ocr, "ocr")
+        be = await self._need(self.ocr, "ocr")
         lines = await asyncio.to_thread(be.read, self.assets.path(rel, "image"))
         return "\n".join(lines) or "(nenhum texto encontrado)"
 
     async def transcribe(self, rel: str) -> str:
-        be = self._need(self.speech, "speech")
+        be = await self._need(self.speech, "speech")
         p = self.assets.path(rel, "audio")
         text, lang = await asyncio.to_thread(be.transcribe, p)
         return f"[{lang}] {text}"
 
     async def list_voices(self) -> list[str]:
-        return await asyncio.to_thread(self._need(self.voice, "voice").voices)
+        be = await self._need(self.voice, "voice")
+        return await asyncio.to_thread(be.voices)
 
     async def speak(self, text: str, voice: str) -> str:
-        be = self._need(self.voice, "voice")
+        be = await self._need(self.voice, "voice")
         if len(text) > 2000:
             raise ValueError("texto acima de 2000 caracteres")
         samples, rate = await asyncio.to_thread(be.synthesize, text, voice)
@@ -85,7 +86,7 @@ class MultimodalService:
         return self.index.search(await self._embed(query), k)
 
     async def index_images(self, rel: str) -> dict:
-        be = self._need(self.clip, "retrieval")
+        be = await self._need(self.clip, "retrieval")
         target = self.assets.ws.resolve(rel)
         files = [target] if target.is_file() else [
             f for f in self.assets.ws.files() if f.suffix.lower() in IMAGE_EXT and target in f.parents][:MAX_FILES]
@@ -107,5 +108,5 @@ class MultimodalService:
         return {"files": done, "new": new, "skipped": skipped, **self.index.stats()}
 
     async def search_images(self, query: str, k: int) -> list[dict]:
-        be = self._need(self.clip, "retrieval")
+        be = await self._need(self.clip, "retrieval")
         return self.index.search_images(await asyncio.to_thread(be.embed_text, query), k)

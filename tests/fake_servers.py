@@ -123,3 +123,93 @@ class Server:
     def __exit__(self, *exc):
         self.httpd.shutdown()
         self.httpd.server_close()
+
+
+# ---------- mídia ----------
+import base64  # noqa: E402
+import io  # noqa: E402
+import wave  # noqa: E402
+from email.parser import BytesParser  # noqa: E402
+from email.policy import default  # noqa: E402
+
+
+def parse_multipart(ctype: str, raw: bytes) -> dict[str, tuple[str | None, bytes]]:
+    """campo -> (nome do arquivo ou None, conteúdo). Falha se o multipart estiver malformado."""
+    msg = BytesParser(policy=default).parsebytes(b"Content-Type: " + ctype.encode() + b"\r\n\r\n" + raw)
+    assert msg.is_multipart(), "corpo não é multipart"
+    return {p.get_param("name", header="content-disposition"): (p.get_filename(), p.get_payload(decode=True))
+            for p in msg.iter_parts()}
+
+
+def wav_bytes(seconds: float = 0.1, rate: int = 8000) -> bytes:
+    import math
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(rate)
+        w.writeframes(b"".join(int(8000 * math.sin(2 * math.pi * 440 * i / rate)).to_bytes(2, "little", signed=True)
+                               for i in range(int(seconds * rate))))
+    return buf.getvalue()
+
+
+class AudioHandler(_Base):
+    """STT/TTS no contrato OpenAI. reject_verbose=True imita servidor sem verbose_json."""
+    reject_verbose = False
+
+    def _body(self):
+        n = int(self.headers.get("Content-Length") or 0)
+        raw = self.rfile.read(n) if n else b""
+        ctype = self.headers.get("Content-Type", "")
+        if ctype.startswith("application/json"):
+            return json.loads(raw)
+        return {"_multipart": parse_multipart(ctype, raw) if ctype.startswith("multipart/form-data") else None}
+
+    def get(self):
+        if self.path == "/v1/models":
+            self._json(200, {"data": [{"id": "whisper-small"}, {"id": "kokoro"}]})
+        else:
+            self._json(404, {})
+
+    def post(self, b):
+        if self.path == "/v1/audio/transcriptions":
+            parts = b["_multipart"]
+            if parts is None or "file" not in parts or not parts["file"][1].startswith(b"RIFF"):
+                return self._json(400, {"error": "file ausente ou inválido"})
+            fmt = parts["response_format"][1].decode()
+            if fmt == "verbose_json" and self.reject_verbose:
+                return self._json(400, {"error": "response_format não suportado"})
+            out = {"text": " olá mundo "}
+            if fmt == "verbose_json":
+                out["language"] = "portuguese"
+            self._json(200, out)
+        elif self.path == "/v1/audio/speech":
+            if b.get("response_format") != "wav" or not b.get("input") or not b.get("voice"):
+                return self._json(400, {"error": "parâmetros inválidos"})
+            raw = wav_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "audio/wav")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+        else:
+            self._json(404, {})
+
+
+class AudioNoVerboseHandler(AudioHandler):
+    reject_verbose = True
+
+
+class VisionHandler(OpenAIHandler):
+    """llama-server com mmproj: valida o data URI recebido e descreve."""
+
+    def post(self, b):
+        if self.path != "/v1/chat/completions":
+            return super().post(b)
+        parts = b["messages"][-1]["content"]
+        img = next((p for p in parts if p["type"] == "image_url"), None)
+        prompt = next(p["text"] for p in parts if p["type"] == "text")
+        if img is None:
+            return self._json(400, {"error": "sem imagem"})
+        head, _, data = img["image_url"]["url"].partition(",")
+        assert head in ("data:image/png;base64", "data:image/jpeg;base64"), head
+        raw = base64.b64decode(data)
+        self._json(200, {"choices": [{"message": {"content": f"<think>x</think>Imagem de {len(raw)} bytes. Pedido: {prompt}"}}]})

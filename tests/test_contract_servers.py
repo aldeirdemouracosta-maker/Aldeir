@@ -103,3 +103,16 @@ def test_smoke_script_passes_against_contract_server(provider, fixture, request)
     for step in ("chat", "summarize", "coder code_only", "rag indexar", "langid", "planner plan_run"):
         assert f"] {step}" in out, (step, out)
     assert "] rag buscar (semântica)" in out and "[OK     ] rag buscar" in out
+
+
+def test_smoke_script_covers_media_servers_end_to_end(ollama):
+    from tests.fake_servers import AudioHandler, VisionHandler
+    with Server(AudioHandler) as audio, Server(VisionHandler) as vision:
+        r = subprocess.run([sys.executable, "scripts/smoke.py", "--url", ollama.url, "--timeout", "30",
+                            "--vision-url", vision.url, "--audio-url", audio.url, "--voices", "pf_dora"],
+                           cwd=ROOT, capture_output=True, text=True, timeout=120)
+        out = r.stdout + r.stderr
+        assert r.returncode == 0, out
+        for step in ("vision (llama-server --mmproj)", "speech (contrato", "voice (gera WAV)"):
+            assert f"[OK     ] {step}" in out, (step, out)
+        assert "0 falha(s)" in out

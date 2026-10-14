@@ -36,6 +36,7 @@ from app.multimodal.assets import AssetStore
 from app.multimodal.documents import DocumentIndex
 from app.multimodal.executors import (ChineseClipBackend, KokoroBackend, PaddleOcrBackend, SmolVLMBackend,
                                       WhisperBackend)
+from app.multimodal.http_backends import LlamaServerVisionBackend, OpenAIAudioBackend
 from app.multimodal.service import MultimodalService
 from app.providers.local_compatible import LocalCompatibleProvider
 from app.providers.ollama import OllamaProvider
@@ -51,8 +52,13 @@ def build_service(settings: Settings, provider, vision=None, speech=None, voice=
     media = settings.media_dir or Path(tempfile.mkdtemp(prefix="swarm-media-"))
     if index is None:
         index = DocumentIndex(media.parent / "index.db" if settings.media_dir else ":memory:")
-    return MultimodalService(AssetStore(media), index, provider, settings.embed_model,
-                             vision or SmolVLMBackend(), speech or WhisperBackend(), voice or KokoroBackend(),
+    if not vision:  # HTTP quando configurado; senão o backend em processo (legado, não validado ao vivo)
+        vision = (LlamaServerVisionBackend(settings.vision_url, settings.vision_name, settings.request_timeout)
+                  if settings.vision_url else SmolVLMBackend())
+    audio = (OpenAIAudioBackend(settings.audio_url, settings.stt_model, settings.tts_model, settings.voice_list,
+                                settings.request_timeout) if settings.audio_url else None)
+    return MultimodalService(AssetStore(media), index, provider, settings.embed_model, vision,
+                             speech or audio or WhisperBackend(), voice or audio or KokoroBackend(),
                              ocr or PaddleOcrBackend(), clip or ChineseClipBackend())
 
 

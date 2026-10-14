@@ -3,6 +3,7 @@
 
     python scripts/smoke.py                                   # Ollama em http://127.0.0.1:11434
     python scripts/smoke.py --provider local_compatible --url http://127.0.0.1:8080
+    python scripts/smoke.py --vision-url http://127.0.0.1:8081 --audio-url http://127.0.0.1:8000 --voices pf_dora
 
 Não baixa nada. Passos sem o modelo necessário aparecem como PULADO. FALHA = contrato/HTTP quebrado;
 AVISO = o modelo respondeu, mas fora do esperado (qualidade). Cole a saída de volta para análise.
@@ -41,10 +42,65 @@ async def run(c: httpx.AsyncClient, action: str, payload: dict, timeout: float =
     return r.status_code, body
 
 
+def tiny_png() -> bytes:
+    import struct
+    import zlib
+
+    def chunk(t: bytes, d: bytes) -> bytes:
+        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
+    raw = b"\x00" + b"\xff\x00\x00" * 16  # 16x1 vermelho
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 16, 1, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+
+def tone_wav() -> bytes:
+    import io
+    import math
+    import wave
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000)
+        w.writeframes(b"".join(int(6000 * math.sin(2 * math.pi * 440 * i / 16000)).to_bytes(2, "little", signed=True)
+                               for i in range(16000)))
+    return buf.getvalue()
+
+
+async def media_steps(c, settings, agents) -> None:
+    """Visão, fala e voz só rodam se o agente estiver disponível (servidor de mídia configurado)."""
+    root = settings.media_dir
+    root.mkdir(parents=True, exist_ok=True)
+    if agents["vision"]["available"]:
+        (root / "teste.png").write_bytes(tiny_png())
+        code, b = await run(c, "image_describe", {"path": "teste.png", "prompt": "Descreva a imagem em uma frase."})
+        report("vision (llama-server --mmproj)", "OK" if code == 200 and b.get("output", "").strip() else "FALHA",
+               (b.get("output") or b.get("detail", ""))[:70])
+    else:
+        report("vision", "PULADO", agents["vision"]["reason"])
+    if agents["speech"]["available"]:
+        (root / "tom.wav").write_bytes(tone_wav())
+        code, b = await run(c, "speech_transcribe", {"path": "tom.wav"})
+        report("speech (contrato; um tom não tem fala)", "OK" if code == 200 else "FALHA", (b.get("output") or b.get("detail", ""))[:70])
+    else:
+        report("speech", "PULADO", agents["speech"]["reason"])
+    if agents["voice"]["available"]:
+        code, b = await run(c, "voice_speak", {"text": "Olá, mundo.", "voice": args_voice(settings)})
+        path = root / b["output"] if code == 200 else None
+        report("voice (gera WAV)", "OK" if path and path.read_bytes()[:4] == b"RIFF" else "FALHA", b.get("output") or b.get("detail", ""))
+    else:
+        report("voice", "PULADO", agents["voice"]["reason"])
+
+
+def args_voice(settings) -> str:
+    return settings.voice_list[0] if settings.voice_list else "default"
+
+
 async def smoke(args) -> int:
     tmp = Path(tempfile.mkdtemp(prefix="swarm-smoke-"))
     settings = Settings(provider=args.provider, provider_url=args.url, state_path=tmp / "s.db",
-                        media_dir=tmp / "media", job_timeout=args.timeout, queue_timeout=args.timeout)
+                        media_dir=tmp / "media", job_timeout=args.timeout, queue_timeout=args.timeout,
+                        vision_url=args.vision_url, vision_name=args.vision_name, audio_url=args.audio_url,
+                        stt_model=args.stt_model, tts_model=args.tts_model,
+                        voice_list=tuple(v for v in args.voices.split(",") if v))
     app = create_app(settings, provider=build_provider(settings))
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1:8000") as c:
         r = await c.get("/management/models")
@@ -97,6 +153,7 @@ async def smoke(args) -> int:
         else:
             report("rag", "PULADO", agents["rag"]["reason"])
 
+        await media_steps(c, settings, agents)
         code, b = await run(c, "lang_detect", {"text": "The cat is on the table and it is not happy"})
         report("langid (sem modelo)", "OK" if code == 200 and b["output"].startswith("en") else "FALHA", b.get("output", ""))
 
@@ -122,6 +179,12 @@ def main() -> int:
     p.add_argument("--provider", default="ollama", choices=["ollama", "local_compatible"])
     p.add_argument("--url", default="http://127.0.0.1:11434")
     p.add_argument("--timeout", type=float, default=180.0, help="segundos por pedido")
+    p.add_argument("--vision-url", default="", help="llama-server com --mmproj (opcional)")
+    p.add_argument("--vision-name", default="", help="nome do modelo no servidor de visão (modo roteador)")
+    p.add_argument("--audio-url", default="", help="servidor compatível com OpenAI para STT/TTS (opcional)")
+    p.add_argument("--stt-model", default="")
+    p.add_argument("--tts-model", default="")
+    p.add_argument("--voices", default="", help="vozes disponíveis, separadas por vírgula")
     return asyncio.run(smoke(p.parse_args()))
 
 

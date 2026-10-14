@@ -38,6 +38,15 @@ projeto e uma suíte nova para cada correção. Resultado medido: 156 testes Pyt
 | `.env.example`, extras opcionais no `pyproject` | documentam variáveis e backends |
 | `swarm status`, `swarm models` | visão rápida pelo terminal |
 
+## Atualização pós-pesquisa de ferramentas existentes
+- `scripts/smoke.py` + testes de contrato com servidores HTTP simulados (Ollama, API OpenAI, áudio, visão): confirmam que os clientes
+  seguem a documentação oficial. **Não substituem** um servidor real.
+- Configurações e suítes de avaliação movidas para dentro do pacote; configuração ausente agora é erro (antes: vazio silencioso).
+- Vision, Speech e Voice por HTTP (`llama-server --mmproj`; servidor de áudio compatível com OpenAI); adaptadores próprios de
+  ReazonSpeech/SenseVoice/MeloTTS/Piper **cancelados** (manifesto: `external`). Backends em processo mantidos como legado até validação ao vivo.
+- `probe()` de rede nunca roda no loop de eventos e tem cache de 5 s.
+- Providers removem `<think>…</think>` (Qwen3); Qwen3-0.6B entrou no manifesto como candidato, sem afirmar que é melhor.
+
 ## Avaliado e deliberadamente NÃO adicionado
 AgentScope / Qwen-Agent (o PDF recomenda só como referência), LightRAG, MNN, fine-tuning (regra do projeto),
 sandbox Docker, autenticação por token (acesso é só loopback), OpenTelemetry/Prometheus, ORM, Redis, WebSocket/streaming,

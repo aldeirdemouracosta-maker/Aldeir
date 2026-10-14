@@ -27,6 +27,12 @@ class Settings:
     state_path: Path | None = None  # None = só em memória
     media_dir: Path | None = None  # None = diretório temporário (não persiste)
     embed_model: str = "nomic-embed-text:latest"
+    vision_url: str = ""       # llama-server com --mmproj; vazio = backend em processo (transformers)
+    vision_name: str = ""
+    audio_url: str = ""        # servidor compatível com OpenAI (STT/TTS); vazio = backends em processo
+    stt_model: str = ""
+    tts_model: str = ""
+    voice_list: tuple[str, ...] = ()
     max_concurrent: int = 2
     max_queue: int = 16
     job_timeout: float = 120.0
@@ -52,6 +58,10 @@ class Settings:
             provider_url=e.get("SWARM_PROVIDER_URL", cls.provider_url),
             media_dir=Path(e["SWARM_MEDIA"]) if e.get("SWARM_MEDIA") else Path.home() / ".swarm" / "media",
             embed_model=e.get("SWARM_EMBED_MODEL", cls.embed_model),
+            vision_url=e.get("SWARM_VISION_URL", ""), vision_name=e.get("SWARM_VISION_NAME", ""),
+            audio_url=e.get("SWARM_AUDIO_URL", ""), stt_model=e.get("SWARM_STT_MODEL", ""),
+            tts_model=e.get("SWARM_TTS_MODEL", ""),
+            voice_list=tuple(v.strip() for v in e.get("SWARM_VOICE_LIST", "").split(",") if v.strip()),
             max_concurrent=int(e.get("SWARM_MAX_CONCURRENT", cls.max_concurrent)),
             max_queue=int(e.get("SWARM_MAX_QUEUE", cls.max_queue)),
             job_timeout=float(e.get("SWARM_JOB_TIMEOUT", cls.job_timeout)),
