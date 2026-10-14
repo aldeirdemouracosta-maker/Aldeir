@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 OWN = ("app/", "tests/", "configs/", "evals/", "docs/", "scripts/", "README.md", "pyproject.toml", ".env.example")
 SELF = {"scripts/check.py", "tests/test_check_script.py"}
 MAX_BYTES = 1_000_000
-BLOCKED_EXT = {".gguf", ".onnx", ".safetensors", ".pt", ".bin", ".db", ".sqlite", ".sqlite3", ".wav", ".pem", ".key"}
+BLOCKED_EXT = {".keystore", ".jks", ".p12", ".gguf", ".onnx", ".safetensors", ".pt", ".bin", ".db", ".sqlite", ".sqlite3", ".wav", ".pem", ".key"}
 TEXT_EXT = {".py", ".md", ".yaml", ".yml", ".toml", ".json", ".txt", ".js", ".html", ".cjs", ".css", ""}
 SECRETS = {
     "chave privada": re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
@@ -53,7 +53,7 @@ def scan(files: list[str]) -> tuple[list[str], list[str]]:
                 errors.append(f"{rel}: .env versionado")
             if ext in TEXT_EXT and rel not in SELF:  # estes arquivos contêm exemplos dos próprios padrões
                 errors += scan_text(rel, p.read_text(encoding="utf-8", errors="replace"))
-        elif ext in {".keystore", ".jks", ".pem", ".key"} or name == ".env":
+        elif ext in {".keystore", ".jks", ".p12", ".pem", ".key"} or name == ".env":
             warnings.append(f"{rel}: material de assinatura/segredo versionado (fora do SWARM; revisar)")
     return errors, warnings
 

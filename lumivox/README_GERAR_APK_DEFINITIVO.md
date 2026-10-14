@@ -21,7 +21,7 @@ Ao rodar o workflow `Gerar APK Lumivox Android`, serão gerados dois arquivos em
 
 ## Observação sobre assinatura
 
-O pacote inclui uma chave de assinatura local de protótipo em `app/release/lumivox-release.keystore` para gerar APK instalável imediatamente. Para publicação oficial futura, substitua por uma chave privada definitiva e guarde-a fora do repositório.
+**Assinatura:** a chave NÃO fica no repositório (a antiga foi exposta e está descartada). O release assinado exige as variáveis `LUMIVOX_KEYSTORE_PATH`, `LUMIVOX_KEYSTORE_PASSWORD`, `LUMIVOX_KEY_ALIAS` e `LUMIVOX_KEY_PASSWORD`; no GitHub Actions elas vêm dos secrets `LUMIVOX_KEYSTORE_BASE64`, `LUMIVOX_KEYSTORE_PASSWORD`, `LUMIVOX_KEY_PASSWORD` e `LUMIVOX_KEY_ALIAS`. Sem elas só o APK debug é gerado. Atenção: APKs assinados com a chave antiga não são atualizados por APKs da chave nova (é preciso desinstalar).
 
 ## Escopo
 

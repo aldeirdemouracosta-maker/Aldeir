@@ -39,3 +39,9 @@ Thumbs.db
 .gradle/
 local.properties
 *.iml
+# Chaves de assinatura: nunca no Git
+*.keystore
+*.jks
+*.p12
+lumivox-signing*/
+LEIA-ME-ASSINATURA*

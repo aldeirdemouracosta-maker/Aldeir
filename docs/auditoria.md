@@ -43,10 +43,15 @@ AgentScope / Qwen-Agent (o PDF recomenda só como referência), LightRAG, MNN, f
 sandbox Docker, autenticação por token (acesso é só loopback), OpenTelemetry/Prometheus, ORM, Redis, WebSocket/streaming,
 framework de frontend, sistema de plugins. Nenhum resolve um problema que o projeto tenha hoje.
 
-## Achados fora do SWARM (não alterei)
-- `lumivox/app/release/lumivox-release.keystore` está versionado e o `lumivox/app/build.gradle` traz a senha padrão em texto.
-  Quem tem o repositório pode assinar APKs como você. Sugestão: gerar um keystore novo, guardá-lo fora do Git (secrets do CI) e
-  tratar o atual como comprometido.
+## Achados fora do SWARM
+- **Chave de assinatura do Lumivox exposta (tratada).** `lumivox-release.keystore` estava versionado, com senha padrão em texto no
+  `build.gradle` (e uma cópia dentro do zip do projeto). Ações: chave antiga e zip removidos da árvore; nova chave RSA 4096 gerada
+  **fora do Git**; `build.gradle`, scripts e workflow agora leem a assinatura só do ambiente/secrets e, sem eles, geram apenas APK debug;
+  `.gitignore` bloqueia `*.keystore/*.jks/*.p12`; `scripts/check.py` bloqueia chave versionada.
+  **Ainda pendente (só você pode fazer):** criar os 4 secrets no GitHub, guardar a chave nova em local seguro e considerar a antiga
+  **comprometida para sempre**, porque ela continua no histórico do Git (não reescrevi histórico). APKs assinados com a chave antiga
+  não são atualizados por APKs da nova: é preciso desinstalar. Se o app estiver na Play Store, a troca depende de "Play App Signing".
+  O build do Gradle/APK **não foi executado** (o ambiente não alcança o Google Maven); rode o workflow manualmente para validar.
 - O workflow do Lumivox usa `actions/checkout@v7`, `setup-java@v5` e `gradle/actions/setup-gradle@v6`; não verifiquei se essas versões existem.
 
 ## Limitações conhecidas

@@ -2,6 +2,9 @@ plugins {
     id 'com.android.application'
 }
 
+// A chave de assinatura NUNCA fica no repositório: vem do ambiente (CI usa secrets; local, exporte as variáveis).
+def lumivoxKeystorePath = System.getenv('LUMIVOX_KEYSTORE_PATH')
+
 android {
     namespace 'br.com.aee.lumivox'
     compileSdk 35
@@ -15,13 +18,13 @@ android {
     }
 
     signingConfigs {
-        release {
-            def envStoreFile = System.getenv('LUMIVOX_KEYSTORE_PATH')
-            def localStoreFile = file('release/lumivox-release.keystore')
-            storeFile envStoreFile ? file(envStoreFile) : localStoreFile
-            storePassword System.getenv('LUMIVOX_KEYSTORE_PASSWORD') ?: 'lumivox2026'
-            keyAlias System.getenv('LUMIVOX_KEY_ALIAS') ?: 'lumivox'
-            keyPassword System.getenv('LUMIVOX_KEY_PASSWORD') ?: 'lumivox2026'
+        if (lumivoxKeystorePath) {
+            release {
+                storeFile file(lumivoxKeystorePath)
+                storePassword System.getenv('LUMIVOX_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('LUMIVOX_KEY_ALIAS') ?: 'lumivox'
+                keyPassword System.getenv('LUMIVOX_KEY_PASSWORD')
+            }
         }
     }
 
@@ -33,7 +36,9 @@ android {
         release {
             minifyEnabled false
             shrinkResources false
-            signingConfig signingConfigs.release
+            if (lumivoxKeystorePath) {
+                signingConfig signingConfigs.release  // sem chave no ambiente, o release sai sem assinatura
+            }
         }
     }
 }
