@@ -1,3 +1,10 @@
+/* Lumivox: complementos para WebViews antigos (Android sem atualização). Não faz parte do pdf.js original. */
+if(typeof Promise.withResolvers!=="function"){Promise.withResolvers=function(){var r,j,p=new Promise(function(a,b){r=a;j=b});return{promise:p,resolve:r,reject:j}}}
+if(typeof Object.groupBy!=="function"){Object.groupBy=function(it,fn){var o=Object.create(null),i=0;for(var v of it){var k=fn(v,i++);(o[k]||(o[k]=[])).push(v)}return o}}
+if(typeof Map.groupBy!=="function"){Map.groupBy=function(it,fn){var m=new Map(),i=0;for(var v of it){var k=fn(v,i++),a=m.get(k);if(!a)m.set(k,a=[]);a.push(v)}return m}}
+if(typeof URL.canParse!=="function"){URL.canParse=function(u,b){try{new URL(u,b);return true}catch(e){return false}}}
+if(typeof Array.fromAsync!=="function"){Array.fromAsync=async function(it){var out=[];for await(var v of it)out.push(v);return out}}
+if(typeof Promise.try!=="function"){Promise.try=function(f){var a=[].slice.call(arguments,1);return new Promise(function(r){r(f.apply(void 0,a))})}}
 /**
  * @licstart The following is the entire license notice for the
  * JavaScript code in this page

@@ -39,6 +39,22 @@ def cdp(method, **params):
             return msg["result"]
 
 
+def reconnect():
+    """Reconecta ao WebView depois de uma queda do processo de renderização."""
+    global ws
+    for _ in range(30):
+        try:
+            found = [p for p in pages() if p.get("url", "").startswith("https://lumivox.local/")]
+            if found:
+                ws = websocket.create_connection(found[0]["webSocketDebuggerUrl"], timeout=30, suppress_origin=True)
+                cdp("Runtime.enable")
+                return True
+        except Exception:
+            pass
+        time.sleep(2)
+    return False
+
+
 def js(expr, timeout=120):
     ws.settimeout(timeout)
     res = cdp("Runtime.evaluate", expression=expr, awaitPromise=True, returnByValue=True)
@@ -71,6 +87,7 @@ for _ in range(30):
         break
     time.sleep(1)
 
+print("WebView/navegador:", js("navigator.userAgent"), flush=True)
 check("título da página", "Lumivox" in js("document.title"), js("document.title"))
 check("ponte nativa LumivoxAndroid disponível",
       js("typeof window.LumivoxAndroid.askAI + '/' + typeof window.LumivoxAndroid.speak") == "function/function")
@@ -133,22 +150,33 @@ def make_pdf():
 
 
 pdf_b64 = base64.b64encode(make_pdf()).decode()
-r = js("""(async () => {
+
+
+def guarded(fn):
+    """Se o WebView cair no meio do teste, registra a queda e reconecta para os próximos."""
+    try:
+        return fn()
+    except Exception as exc:  # conexão perdida, travamento etc.
+        ok = reconnect()
+        return f"ERRO:conexão com o WebView perdida ({type(exc).__name__}); reconectou={ok}"
+
+
+r = guarded(lambda: js("""(async () => {
   const bytes = Uint8Array.from(atob(%r), c => c.charCodeAt(0));
   const out = await extractPdfText(new File([bytes], 't.pdf', {type: 'application/pdf'}), () => {});
   return out.text;
-})().catch(e => 'ERRO:' + e.message)""" % pdf_b64)
+})().catch(e => 'ERRO:' + e.message + ' | ' + (e.stack || '').split('\\n').slice(0, 3).join(' / '))""" % pdf_b64))
 check("Ler PDF: pdf.js extrai o texto no WebView do Android", "Lumivox" in r and "PDF" in r, r)
 
 # --- OCR (tesseract.js + WebAssembly) dentro do WebView ---------------------------------------
-r = js("""(async () => {
+r = guarded(lambda: js("""(async () => {
   const c = document.createElement('canvas'); c.width = 1500; c.height = 360;
   const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
   x.fillStyle = '#000'; x.font = '64px sans-serif';
   x.fillText('Acessibilidade e um direito', 40, 120);
   x.fillText('Lumivox le o texto da foto', 40, 260);
   return await ocrCanvas(c, 'teste');
-})().catch(e => 'ERRO:' + e.message)""", timeout=300)
+})().catch(e => 'ERRO:' + e.message + ' | ' + (e.stack || '').split('\\n').slice(0, 3).join(' / '))""", timeout=300))
 check("OCR offline (WebAssembly) lê texto no WebView do Android",
       "Acessibilidade" in r and "Lumivox" in r, r.replace("\n", " | "))
 
