@@ -126,6 +126,11 @@ async function extractPdfText(file, onProgress){
 
 // ------------------------------------------------- leitura de texto (OCR) offline ---
 let ocrWorkerPromise = null;
+function withTimeout(promise, ms, message){
+  let timer;
+  const limit = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(message)), ms); });
+  return Promise.race([promise, limit]).finally(() => clearTimeout(timer));
+}
 let ocrLogger = null;
 function loadScript(src){
   return new Promise((resolve, reject) => {
@@ -137,15 +142,15 @@ function loadScript(src){
 }
 function getOcrWorker(){
   if (!ocrWorkerPromise) {
-    ocrWorkerPromise = (async () => {
+    ocrWorkerPromise = withTimeout((async () => {
       if (!window.Tesseract) await loadScript('./vendor/tesseract/tesseract.min.js');
       const base = new URL('./vendor/tesseract/', window.location.href).href;
       return window.Tesseract.createWorker('por', 1, {
         workerPath: base + 'worker.min.js', corePath: base, langPath: base + 'lang',
-        cacheMethod: 'none', workerBlobURL: false,
+        cacheMethod: 'none', workerBlobURL: false, gzip: false,
         logger: (m) => { if (ocrLogger) ocrLogger(m); }
       });
-    })().catch((e) => { ocrWorkerPromise = null; throw e; });
+    })(), 120000, 'O leitor de texto demorou demais para iniciar.').catch((e) => { ocrWorkerPromise = null; throw e; });
   }
   return ocrWorkerPromise;
 }
@@ -167,7 +172,7 @@ async function ocrCanvas(canvas, label){
     else if (m.status && m.status.startsWith('loading')) setStatus('PREPARANDO O LEITOR DE TEXTO...');
   };
   const worker = await getOcrWorker();
-  const { data } = await worker.recognize(canvas);
+  const { data } = await withTimeout(worker.recognize(canvas), 240000, 'A leitura do texto demorou demais.');
   return String(data.text || '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 async function ocrPdfPages(file, maxPages, onProgress){

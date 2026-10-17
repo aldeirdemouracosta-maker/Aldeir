@@ -1,4 +1,4 @@
 Leitura de texto (OCR) offline:
 - tesseract.js 7.0.0 (Apache-2.0) - https://www.npmjs.com/package/tesseract.js
 - tesseract.js-core 7.0.0 (Apache-2.0), variantes LSTM - https://www.npmjs.com/package/tesseract.js-core
-- @tesseract.js-data/por 1.0.0 (dados de português, 4.0.0_best_int) - https://www.npmjs.com/package/@tesseract.js-data/por
+- @tesseract.js-data/por 1.0.0 (dados de português, 4.0.0_best_int, descompactado: o Android não entregava arquivos .gz aos assets) - https://www.npmjs.com/package/@tesseract.js-data/por
