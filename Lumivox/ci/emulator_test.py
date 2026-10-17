@@ -63,7 +63,7 @@ check("app abriu e o WebView carregou https://lumivox.local/", target is not Non
       target["url"] if target else "nenhuma página do Lumivox encontrada")
 if not target:
     sys.exit(1)
-ws = websocket.create_connection(target["webSocketDebuggerUrl"], timeout=30)
+ws = websocket.create_connection(target["webSocketDebuggerUrl"], timeout=30, suppress_origin=True)
 cdp("Runtime.enable")
 
 for _ in range(30):
