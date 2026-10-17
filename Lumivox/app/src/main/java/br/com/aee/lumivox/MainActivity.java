@@ -69,6 +69,10 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         prefs = getSharedPreferences("lumivox_ai", MODE_PRIVATE);
+        // Só nos APKs de depuração: permite que o teste automatizado controle o WebView.
+        if ((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+            WebView.setWebContentsDebuggingEnabled(true);
+        }
         webView = new WebView(this);
         setContentView(webView);
 
