@@ -44,6 +44,7 @@
         <button id="addShapeBtn" title="Adicionar forma">▭ Forma</button>
         <button id="addWebImageBtn" title="Buscar imagem na internet">🔎 Imagem web</button>
         <button id="addImageBtn" title="Imagem do computador">🖼 Do PC</button>
+        <button id="imageManagerBtn" title="Ver e gerenciar as imagens de todos os slides">🗂 Imagens</button>
         <span class="divider"></span>
         <button id="undoBtn" class="icon-btn" title="Desfazer (Ctrl+Z)">↶</button>
         <button id="redoBtn" class="icon-btn" title="Refazer (Ctrl+Y)">↷</button>
@@ -207,6 +208,22 @@
     </form>
   </dialog>
 
+  <!-- Gerenciador de imagens -->
+  <dialog id="imageManagerDialog" class="dialog xwide">
+    <form method="dialog" id="imageManagerForm">
+      <h2>🗂 Imagens dos slides</h2>
+      <p id="imSummary" class="muted"></p>
+      <div class="im-actions">
+        <button type="button" class="primary" id="imFillBtn">✨ Preencher as que faltam</button>
+        <button type="button" id="imCreditsBtn">📋 Copiar créditos</button>
+        <span id="imProgress" class="muted small" role="status" aria-live="polite"></span>
+      </div>
+      <div id="imList" class="im-list"></div>
+      <p class="muted small">Dica: termos em inglês costumam trazer mais resultados. Edite o termo de busca de um slide e use <b>Buscar de novo</b>. Respeite a licença de cada imagem; use <b>Copiar créditos</b> para citá-las.</p>
+      <div class="dialog-actions"><button value="cancel" formnovalidate>Fechar</button></div>
+    </form>
+  </dialog>
+
   <!-- Configurações -->
   <dialog id="settingsDialog" class="dialog wide">
     <form method="dialog" id="settingsForm">
@@ -228,6 +245,7 @@
       </fieldset>
       <fieldset data-provider="openai">
         <div class="presets" id="openaiPresets">
+          <button type="button" data-url="https://generativelanguage.googleapis.com/v1beta/openai" data-model="gemini-3.6-flash">Gemini (Google, tem camada grátis)</button>
           <button type="button" data-url="http://localhost:11434/v1" data-model="llama3.1">Ollama</button>
           <button type="button" data-url="http://localhost:1234/v1" data-model="">LM Studio</button>
           <button type="button" data-url="http://localhost:8080/v1" data-model="local">llama.cpp</button>
@@ -240,7 +258,7 @@
           <label>Modelo<input id="setOpenaiModel" placeholder="llama3.1" /></label>
           <label>Chave (se precisar)<input id="setOpenaiKey" type="password" autocomplete="off" /></label>
         </div>
-        <p class="muted small">Grátis e offline: instale o Ollama (ollama.com) e rode <code>ollama pull llama3.1</code>.</p>
+        <p class="muted small"><b>Gemini:</b> crie uma chave em aistudio.google.com/apikey, escolha o botão Gemini e cole a chave acima. A camada gratuita tem limites e o Google pode usar o conteúdo enviado para melhorar seus produtos. Se o nome do modelo mudar, troque-o no campo Modelo.<br><b>Grátis e offline:</b> instale o Ollama (ollama.com) e rode <code>ollama pull llama3.1</code>.</p>
       </fieldset>
       <h4>Fontes de imagens</h4>
       <div class="chips">

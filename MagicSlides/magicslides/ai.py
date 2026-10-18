@@ -81,7 +81,12 @@ Rules:
   (e.g. "solar panels rooftop", "students classroom"). Never abstract words only.
 - notes: 2-4 sentences of speaker notes expanding the slide.
 - Never invent statistics: if unsure, prefer bullets over "stats", or state figures as approximate.
-- Write all visible text (titles, bullets, notes) in the language the user asks for."""
+- Write all visible text (titles, bullets, notes) in the language the user asks for.
+- Write SUBSTANTIVE content, not placeholders. Each slide must teach something specific and different from the
+  other slides: definitions, how it works, concrete examples, comparisons, benefits, limits, applications.
+  Never repeat the same idea or the same words across slides, and never use vague filler like "Exemplo 1".
+- Every bullet carries information (what/why/how, with a concrete detail), not just a noun phrase.
+- Organize the deck as a story: introduction, development in logical order, conclusion."""
 
 
 def build_user_prompt(text: str, slides: int, language: str, tone: str) -> str:
@@ -89,8 +94,15 @@ def build_user_prompt(text: str, slides: int, language: str, tone: str) -> str:
         f"Create a presentation with exactly {slides} slides.\n"
         f"Language for all visible text: {language}.\n"
         f"Tone/style: {tone or 'clear and professional'}.\n\n"
-        "The user's input below may be a short topic, an outline or a long text. "
-        "If it is a text/outline, base the slides on its content and structure.\n"
+        "The user's input below may be a short topic, an outline or a long text.\n"
+        + (
+            "It is only a short topic or a few notes: use your own knowledge to research it and build a complete, "
+            "well-informed presentation about it, with specific and accurate content. Keep the user's wording as the topic, "
+            "but do not just repeat it.\n"
+            if len(text.strip()) < 400 else
+            "It is a text/outline: keep its key points and order, but understand the subject, reorganize it into a clear "
+            "presentation, fill obvious gaps with accurate information and turn long passages into concise slides.\n"
+        ) +
         "<user_input>\n" + text.strip()[:60000] + "\n</user_input>"
     )
 
@@ -234,6 +246,19 @@ def _sentences(text: str) -> list[str]:
     return [p.strip() for p in parts if p.strip()]
 
 
+def _image_query(*parts: str) -> str:
+    """Junta os textos em um termo de busca de imagem, sem repetir palavras
+    (ex.: 'Energia Solar' + 'Energia Solar Direta' -> 'Energia Solar Direta')."""
+    seen: set[str] = set()
+    words: list[str] = []
+    for part in parts:
+        for w in re.findall(r"[\w-]+", part or "", flags=re.UNICODE):
+            if w.lower() not in seen:
+                seen.add(w.lower())
+                words.append(w)
+    return " ".join(words[:8])
+
+
 def generate_offline(text: str, slides: int, language: str = "", tone: str = "") -> dict[str, Any]:
     """Sem IA: estrutura o texto colado. Títulos (# ou linhas curtas sem
     ponto final) viram slides; listas viram tópicos; parágrafos são quebrados
@@ -274,7 +299,7 @@ def generate_offline(text: str, slides: int, language: str = "", tone: str = "")
             layout = cycle[(i + k) % len(cycle)] if chunk else "section"
             t = sec["title"] + (f" ({k + 1})" if len(chunks) > 1 else "")
             out_slides.append({"layout": layout, "title": t, "bullets": chunk,
-                               "image_query": f"{title} {sec['title']}"})
+                               "image_query": _image_query(title, sec["title"])})
     out_slides = out_slides[:max(1, slides - 1)]
     out_slides.append({"layout": "closing", "title": "Obrigado!", "subtitle": title})
     return {"title": title, "subtitle": "", "slides": out_slides}

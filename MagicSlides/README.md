@@ -41,6 +41,7 @@ Aplicativo de desktop para Windows (também roda no Linux e no macOS) que **gera
 | Provedor | O que preencher |
 |---|---|
 | **Claude** (melhor qualidade) | A chave de API de [console.anthropic.com](https://console.anthropic.com). O modelo padrão é `claude-opus-5`; para gastar menos, use `claude-sonnet-5` ou `claude-haiku-4-5`. Também é possível usar a variável de ambiente `ANTHROPIC_API_KEY`. |
+| **Gemini** (Google, tem camada grátis) | Em *IA local ou compatível*, clique em **Gemini**, cole a chave de [aistudio.google.com/apikey](https://aistudio.google.com/apikey) e confira o nome do modelo. A camada gratuita tem limites e o Google pode usar o conteúdo enviado para melhorar seus produtos. |
 | **Ollama** (grátis, offline) | Instale o [Ollama](https://ollama.com), rode `ollama pull llama3.1` e escolha o preset *Ollama*. |
 | **LM Studio / llama.cpp** | Use o preset e informe o nome do modelo carregado. |
 | **OpenAI / Groq / OpenRouter** | Use o preset e informe o modelo e a chave. |
@@ -76,6 +77,12 @@ python MagicSlides.py --browser        # abre no navegador
 ```
 
 O GitHub Actions (`.github/workflows/magicslides-windows.yml`) roda os testes, compila o `.exe` no Windows, faz um teste de fumaça, gera o instalador e o `.zip` portátil, e anexa tudo a cada *Release* publicada.
+
+## Gerenciar as imagens
+
+No editor, o botão **🗂 Imagens** lista todos os slides e mostra quais têm foto. Ali você pode **preencher de uma vez as que faltam**, editar o termo de busca de um slide e **buscar de novo**, enviar uma imagem do computador, remover uma imagem e **copiar os créditos** de todas.
+
+> **Importante:** só uma IA entende o tema e escreve o conteúdo. O modo **Sem IA** apenas reorganiza o texto que você digitar; use Gemini, Claude ou Ollama para a apresentação ser contextualizada.
 
 ## Limitações conhecidas
 

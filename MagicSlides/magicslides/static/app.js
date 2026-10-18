@@ -578,6 +578,7 @@ function insertImage(src, meta = {}) {
   }
   imageTarget = null;
   render();
+  if ($('imageManagerDialog').open) renderImageManager();
   setStatus('Imagem inserida');
 }
 async function insertLocalFile(file) {
@@ -702,7 +703,7 @@ function providerText() {
   if (settings.provider === 'openai') {
     return { cls: '', html: `Usando <b>${escapeHtml(settings.openai_model)}</b> em ${escapeHtml(settings.openai_base_url)}. <a data-open-settings>Alterar</a>` };
   }
-  return { cls: 'warn', html: '<b>Modo offline (sem IA):</b> cole um texto ou tópicos e ele vira slides; um tema curto gera um rascunho para você completar. Para a IA escrever o conteúdo, <a data-open-settings>configure Claude ou Ollama</a>.' };
+  return { cls: 'warn', html: '<b>Modo offline (sem IA):</b> cole um texto ou tópicos e ele vira slides; um tema curto gera um rascunho para você completar. Para a IA <b>entender o tema e escrever o conteúdo</b>, <a data-open-settings>configure Gemini (tem camada grátis), Claude ou Ollama</a>.' };
 }
 function openGenerateDialog() {
   const p = providerText();
@@ -752,6 +753,7 @@ async function pollJob(job) {
   slideIndex = 0; selectedId = null;
   render();
   toast(`Apresentação criada com ${data.slides.length} slides — ${st.provider}`);
+  if (settings.provider === 'offline') toast('Gerado SEM IA: o app só organizou o que você digitou, sem escrever conteúdo novo. Para o texto ser contextualizado e enriquecido, configure Gemini, Claude ou Ollama em ⚙ Configurações.', 'warn', 12000);
   (st.warnings || []).slice(0, 3).forEach((w) => toast(w, 'warn', 8000));
 }
 function showProgress(msg, p) {
@@ -818,6 +820,188 @@ async function pickImage(item, btn) {
     btn.disabled = false;
     btn.style.opacity = 1;
   }
+}
+
+
+/* ------------------------------------------- gerenciador de imagens ---- */
+const imQueries = {};   // id do elemento -> termo digitado no gerenciador
+let imBusy = false;
+
+function slideTitleOf(slide, i) {
+  const t = slide.elements.find((e) => e.type === 'text' && e.role === 'title');
+  return ((t && t.text) || '').trim() || `Slide ${i + 1}`;
+}
+const isImageSlot = (e) => e.type === 'image' || (e.type === 'shape' && e.placeholderQuery !== undefined);
+const slotHasImage = (e) => !!e && e.type === 'image' && !!e.src;
+function slotQuery(e, slide, si) {
+  if (!e) return slideTitleOf(slide, si);
+  return (imQueries[e.id] ?? (e.query || e.placeholderQuery || '')).trim();
+}
+function imageRows() {
+  const rows = [];
+  data.slides.forEach((slide, si) => {
+    const slots = slide.elements.filter(isImageSlot);
+    if (!slots.length) rows.push({ si, slide, el: null });
+    slots.forEach((el) => rows.push({ si, slide, el }));
+  });
+  return rows;
+}
+function goToSlot(si, elId) {
+  slideIndex = si;
+  selectedId = elId || null;
+  render();
+}
+/** Coloca a imagem no espaço (imagem vazia ou bloco de cor) e devolve o elemento resultante. */
+function fillSlot(slide, el, src, meta = {}) {
+  if (el.type === 'image') {
+    Object.assign(el, { src, alt: meta.alt || el.alt || '', credit: meta.credit || '', page: meta.page || '', source: meta.source || '' });
+    if (meta.query) el.query = meta.query;
+    return el;
+  }
+  const img = { id: uid('image'), type: 'image', x: el.x, y: el.y, w: el.w, h: el.h, src, alt: meta.alt || '', credit: meta.credit || '',
+                page: meta.page || '', source: meta.source || '', fit: 'cover', query: meta.query || el.placeholderQuery || '' };
+  slide.elements.splice(slide.elements.indexOf(el), 1, img);
+  return img;
+}
+function openImageManager() {
+  renderImageManager();
+  if (!$('imageManagerDialog').open) $('imageManagerDialog').showModal();
+}
+function renderImageManager() {
+  const rows = imageRows();
+  const slots = rows.filter((r) => r.el);
+  const filled = slots.filter((r) => slotHasImage(r.el)).length;
+  $('imSummary').textContent = slots.length
+    ? `${filled} de ${slots.length} espaços de imagem preenchidos${filled < slots.length ? ' — use “Preencher as que faltam” ou escolha uma por uma.' : '.'}`
+    : 'Nenhum slide tem espaço para imagem ainda. Use “Adicionar imagem” em um slide.';
+  $('imFillBtn').disabled = imBusy || filled >= slots.length;
+  const list = $('imList');
+  list.replaceChildren();
+  rows.forEach(({ si, slide, el }) => {
+    const row = document.createElement('div');
+    row.className = 'im-row';
+    let thumb;
+    if (slotHasImage(el)) {
+      thumb = document.createElement('img');
+      thumb.src = el.src; thumb.alt = el.alt || ''; thumb.className = 'im-thumb';
+    } else {
+      thumb = document.createElement('div');
+      thumb.className = 'im-thumb';
+      thumb.textContent = el ? 'sem imagem' : 'este slide não tem espaço para imagem';
+    }
+    const body = document.createElement('div');
+    body.className = 'im-body';
+    const head = document.createElement('div');
+    head.className = 'im-head';
+    head.textContent = `Slide ${si + 1} — ${slideTitleOf(slide, si)}`;
+    const sub = document.createElement('div');
+    sub.className = 'im-sub' + (el && !slotHasImage(el) ? ' warn' : '');
+    sub.textContent = slotHasImage(el) ? (el.credit || 'Imagem do computador (sem crédito)') : (el ? 'Sem imagem. Busque de novo ou envie uma do computador.' : '');
+    const btns = document.createElement('div');
+    btns.className = 'im-btns';
+    const mk = (label, fn, cls = '') => { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; if (cls) b.className = cls; b.onclick = fn; b.disabled = imBusy; return b; };
+    body.append(head, sub);
+    if (el) {
+      const q = document.createElement('div');
+      q.className = 'im-query';
+      const input = document.createElement('input');
+      input.value = slotQuery(el, slide, si);
+      input.placeholder = 'O que buscar (ex.: solar panels rooftop)';
+      input.setAttribute('aria-label', `Termo de busca do slide ${si + 1}`);
+      input.oninput = () => { imQueries[el.id] = input.value; };
+      input.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); imageManagerSearch(si, el); } };
+      q.append(input, mk('🔎 Buscar de novo', () => imageManagerSearch(si, el), 'primary'));
+      body.append(q);
+    }
+    btns.append(mk(el ? '🖼 Enviar do PC' : '＋ Adicionar imagem', () => imageManagerUpload(si, el)));
+    if (!el) btns.append(mk('🔎 Buscar na internet', () => imageManagerSearch(si, null)));
+    if (slotHasImage(el)) btns.append(mk('🗑 Remover imagem', () => imageManagerRemove(si, el)));
+    body.append(btns);
+    row.append(thumb, body);
+    list.append(row);
+  });
+}
+function imageManagerSearch(si, el) {
+  goToSlot(si, el && el.id);
+  if (el) {
+    const q = (imQueries[el.id] ?? '').trim();
+    if (q) { if (el.type === 'image') el.query = q; else el.placeholderQuery = q; }
+  }
+  openImageDialog(el ? el.id : null);
+  if (!el) { $('imgQuery').value = slideTitleOf(data.slides[si], si); searchImages(); }
+}
+function imageManagerUpload(si, el) {
+  goToSlot(si, el && el.id);
+  imageTarget = el ? el.id : null;
+  $('imageInput').click();
+}
+function imageManagerRemove(si, el) {
+  commit();
+  Object.assign(el, { src: '', credit: '', page: '', source: '' });
+  if (!el.query) el.query = el.alt || '';
+  render();
+  renderImageManager();
+}
+async function fillMissingImages() {
+  const todo = imageRows().filter((r) => r.el && !slotHasImage(r.el));
+  if (!todo.length || imBusy) return;
+  imBusy = true;
+  commit();
+  renderImageManager();
+  const usedUrls = new Set();
+  const failed = [];
+  let done = 0;
+  const progress = () => { $('imProgress').textContent = `Buscando imagens… ${done}/${todo.length}`; };
+  progress();
+  const trySearch = async (q) => {
+    const res = await api('/api/images/search', { query: q, source: 'auto' });
+    const items = (res.results || []).filter((i) => i.url && !usedUrls.has(i.url));
+    const wide = items.filter((i) => i.width >= i.height && i.height > 0);
+    return [...wide, ...items.filter((i) => !wide.includes(i))];
+  };
+  const handle = async (row) => {
+    const { si, slide, el } = row;
+    const q0 = slotQuery(el, slide, si);
+    const words = q0.split(/\s+/).filter(Boolean);
+    const attempts = [...new Set([q0, words.slice(0, 3).join(' '), words.slice(-2).join(' '), slideTitleOf(slide, si)].filter(Boolean))];
+    try {
+      for (const q of attempts) {
+        const found = await trySearch(q);
+        for (const cand of found.slice(0, 3)) {
+          if (usedUrls.has(cand.url)) continue;
+          usedUrls.add(cand.url);
+          try {
+            const res = await api('/api/images/fetch', { item: cand });
+            fillSlot(slide, row.el, res.src, { alt: cand.title, credit: res.credit, page: cand.page, source: cand.source, query: q });
+            done++; progress();
+            return;
+          } catch (_) { /* tenta a próxima */ }
+        }
+      }
+      failed.push(si + 1);
+    } catch (e) {
+      failed.push(si + 1);
+    }
+    done++; progress();
+  };
+  const queue = todo.slice();
+  await Promise.all(Array.from({ length: 3 }, async () => { while (queue.length) await handle(queue.shift()); }));
+  imBusy = false;
+  $('imProgress').textContent = '';
+  render();
+  renderImageManager();
+  if (failed.length) toast(`Sem resultado para os slides: ${[...new Set(failed)].sort((x, y) => x - y).join(', ')}. Edite o termo (em inglês) e busque de novo.`, 'warn', 9000);
+  else toast('Todas as imagens foram preenchidas.');
+}
+async function copyImageCredits() {
+  const lines = [];
+  data.slides.forEach((slide, si) => slide.elements.forEach((e) => {
+    if (e.type === 'image' && e.credit) lines.push(`Slide ${si + 1}: ${e.credit}`);
+  }));
+  if (!lines.length) return toast('Ainda não há imagens com crédito.', 'warn');
+  const text = lines.join('\n');
+  try { await navigator.clipboard.writeText(text); toast(`${lines.length} crédito(s) copiado(s).`); }
+  catch (_) { window.prompt('Copie os créditos:', text); }
 }
 
 /* ------------------------------------------------------ configurações ---- */
@@ -954,6 +1138,9 @@ function bindUi() {
   $('addTextBtn').onclick = addText;
   $('addShapeBtn').onclick = addShape;
   $('addWebImageBtn').onclick = () => openImageDialog(null);
+  $('imageManagerBtn').onclick = openImageManager;
+  $('imFillBtn').onclick = fillMissingImages;
+  $('imCreditsBtn').onclick = copyImageCredits;
   $('addImageBtn').onclick = () => { imageTarget = null; $('imageInput').click(); };
   $('imageInput').onchange = (e) => { if (e.target.files[0]) insertLocalFile(e.target.files[0]); e.target.value = ''; };
   $('imgFromPcBtn').onclick = () => { $('imageDialog').close(); $('imageInput').click(); };

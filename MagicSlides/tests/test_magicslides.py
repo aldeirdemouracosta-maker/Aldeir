@@ -215,6 +215,22 @@ def test_old_plaintext_config_still_loads():
     assert config.load()["anthropic_api_key"] == "sk-antigo"
 
 
+def test_offline_image_query_has_no_repeated_words():
+    text = "Energia Solar\nEnergia Solar Direta\n- Painel solar\n- Uso em casas\nEnergia Solar Indireta\n- Água quente\n- Calor"
+    outline, _ = ai.generate_outline(text, 6, "pt", "", {"provider": "offline"})
+    queries = [s.get("image_query", "") for s in outline["slides"] if s["layout"].startswith("image")]
+    assert queries and all(len(q.split()) == len({w.lower() for w in q.split()}) for q in queries), queries
+    assert any("Direta" in q or "Indireta" in q for q in queries), queries
+
+
+def test_prompt_asks_for_substantive_content_and_adapts_to_input_size():
+    short = ai.build_user_prompt("Energia solar", 8, "Português do Brasil", "")
+    long_ = ai.build_user_prompt("Energia solar. " * 60, 8, "Português do Brasil", "")
+    assert "only a short topic" in short and "text/outline" not in short
+    assert "text/outline" in long_ and "only a short topic" not in long_
+    assert "SUBSTANTIVE" in ai.SYSTEM_PROMPT and "Never repeat the same idea" in ai.SYSTEM_PROMPT
+
+
 def test_anthropic_effort_only_for_models_that_support_it(monkeypatch):
     anthropic = pytest.importorskip("anthropic")
     seen = []
