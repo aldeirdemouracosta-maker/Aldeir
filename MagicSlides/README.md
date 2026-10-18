@@ -78,9 +78,27 @@ python MagicSlides.py --browser        # abre no navegador
 
 O GitHub Actions (`.github/workflows/magicslides-windows.yml`) roda os testes, compila o `.exe` no Windows, faz um teste de fumaça, gera o instalador e o `.zip` portátil, e anexa tudo a cada *Release* publicada.
 
+## Texto e imagens ao criar
+
+Na janela **✨ Criar apresentação** você escolhe:
+
+- **Detalhe do texto:** *Resumido* (frases curtas), *Equilibrado* ou *Detalhado* (cada tópico explica a ideia, com exemplo ou dado concreto, e as notas do apresentador ficam mais completas).
+- **Tamanho do texto:** Pequeno, Médio, Grande ou Muito grande. Depois, no editor, **A−** e **A＋** diminuem ou aumentam o texto de todos os slides.
+- **Imagens:** *Fotos da internet*, *Geradas por IA* ou *Sem imagens*.
+
+### Imagens geradas por IA (⚙ Configurações)
+
+| Provedor | O que precisa |
+|---|---|
+| **Gemini (Google)** | Chave de [aistudio.google.com/apikey](https://aistudio.google.com/apikey). O nome do modelo vem como `gemini-3.1-flash-image-preview` e pode ser trocado. Nem todo plano gratuito inclui geração de imagens. |
+| **API compatível com a da OpenAI** | Endereço e chave (OpenAI: `gpt-image-1` ou `dall-e-3`) ou um programa local que ofereça `POST /images/generations`. |
+| **Pollinations** | Nada: serviço comunitário gratuito e sem chave, com qualidade e disponibilidade variáveis. |
+
+As imagens geradas entram no slide de créditos como *"Imagem gerada por IA (provedor, modelo)"*. Cada imagem pode ser cobrada pelo provedor. O Claude não gera imagens.
+
 ## Gerenciar as imagens
 
-No editor, o botão **🗂 Imagens** lista todos os slides e mostra quais têm foto. Ali você pode **preencher de uma vez as que faltam**, editar o termo de busca de um slide e **buscar de novo**, enviar uma imagem do computador, remover uma imagem e **copiar os créditos** de todas.
+No editor, o botão **🗂 Imagens** lista todos os slides e mostra quais têm foto. Ali você pode **preencher de uma vez as que faltam**, editar o termo de busca de um slide e **buscar de novo**, **gerar uma imagem por IA** (por slide ou todas as que faltam), enviar uma imagem do computador, remover uma imagem e **copiar os créditos** de todas.
 
 > **Importante:** só uma IA entende o tema e escreve o conteúdo. O modo **Sem IA** apenas reorganiza o texto que você digitar; use Gemini, Claude ou Ollama para a apresentação ser contextualizada.
 

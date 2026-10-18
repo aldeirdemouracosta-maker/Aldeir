@@ -174,3 +174,6 @@ h4{margin:16px 0 8px;font-size:13px;color:#c9cbd6;text-transform:uppercase;lette
 .im-query input{flex:1;min-width:0;margin:0}
 .im-btns{display:flex;flex-wrap:wrap;gap:6px}
 @media (max-width:640px){.im-row{grid-template-columns:1fr}.im-thumb{width:100%}}
+
+.grid4 .span2{grid-column:span 2}
+.im-actions .chip select{margin:0 0 0 4px;padding:4px 6px}

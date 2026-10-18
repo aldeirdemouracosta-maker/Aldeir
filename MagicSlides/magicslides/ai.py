@@ -76,10 +76,11 @@ Layouts available:
 Rules:
 - The first slide must use "title"; the last should use "closing".
 - Vary layouts; use photos (image-right, image-left, image-full) on roughly half of the slides.
-- Bullets: max ~12 words each. No markdown, no numbering, no emojis.
+- Bullets: no markdown, no numbering, no emojis. Their length follows the DETAIL level in the user message
+  (default: max ~12 words each).
 - image_query: 2-5 concrete, visual keywords IN ENGLISH for a stock-photo search
   (e.g. "solar panels rooftop", "students classroom"). Never abstract words only.
-- notes: 2-4 sentences of speaker notes expanding the slide.
+- notes: speaker notes expanding the slide (length follows the DETAIL level; default 2-4 sentences).
 - Never invent statistics: if unsure, prefer bullets over "stats", or state figures as approximate.
 - Write all visible text (titles, bullets, notes) in the language the user asks for.
 - Write SUBSTANTIVE content, not placeholders. Each slide must teach something specific and different from the
@@ -89,11 +90,22 @@ Rules:
 - Organize the deck as a story: introduction, development in logical order, conclusion."""
 
 
-def build_user_prompt(text: str, slides: int, language: str, tone: str) -> str:
+DETAIL_GUIDE = {
+    "concise": ("DETAIL level: CONCISE. 3-4 bullets per slide, each at most ~10 words. Speaker notes: 1-2 sentences."),
+    "balanced": ("DETAIL level: BALANCED. 3-5 bullets per slide, each about 10-16 words. Speaker notes: 2-4 sentences."),
+    "detailed": ("DETAIL level: DETAILED. Explain each idea properly: 3-5 bullets per slide, each a complete explanatory "
+                 "sentence of about 16-30 words that says what it is, why it matters and gives a concrete detail or example. "
+                 "On slides with a photo use 2-3 bullets; use more text on text-only slides. "
+                 "Speaker notes: 4-6 sentences that teach the topic to the presenter."),
+}
+
+
+def build_user_prompt(text: str, slides: int, language: str, tone: str, detail: str = "balanced") -> str:
     return (
         f"Create a presentation with exactly {slides} slides.\n"
         f"Language for all visible text: {language}.\n"
-        f"Tone/style: {tone or 'clear and professional'}.\n\n"
+        f"Tone/style: {tone or 'clear and professional'}.\n"
+        f"{DETAIL_GUIDE.get(detail, DETAIL_GUIDE['balanced'])}\n\n"
         "The user's input below may be a short topic, an outline or a long text.\n"
         + (
             "It is only a short topic or a few notes: use your own knowledge to research it and build a complete, "
@@ -114,7 +126,8 @@ _NO_EFFORT_PREFIXES = ("claude-haiku-4", "claude-sonnet-4-5", "claude-3")
 _FALLBACK_MODELS = ("claude-opus-5", "claude-opus-5-5", "claude-fable-5-1")
 
 
-def generate_anthropic(text: str, slides: int, language: str, tone: str, cfg: dict[str, Any]) -> dict[str, Any]:
+def generate_anthropic(text: str, slides: int, language: str, tone: str, cfg: dict[str, Any],
+                       detail: str = "balanced") -> dict[str, Any]:
     try:
         import anthropic
     except ImportError as exc:
@@ -127,7 +140,7 @@ def generate_anthropic(text: str, slides: int, language: str, tone: str, cfg: di
         model=model,
         max_tokens=32000,
         system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": build_user_prompt(text, slides, language, tone)}],
+        messages=[{"role": "user", "content": build_user_prompt(text, slides, language, tone, detail)}],
         output_config={"format": {"type": "json_schema", "schema": OUTLINE_SCHEMA}},
     )
     if not model.startswith(_NO_EFFORT_PREFIXES):
@@ -168,7 +181,8 @@ def generate_anthropic(text: str, slides: int, language: str, tone: str, cfg: di
 
 # ------------------------------------------------------- OpenAI compatível ---
 
-def generate_openai_compatible(text: str, slides: int, language: str, tone: str, cfg: dict[str, Any]) -> dict[str, Any]:
+def generate_openai_compatible(text: str, slides: int, language: str, tone: str, cfg: dict[str, Any],
+                               detail: str = "balanced") -> dict[str, Any]:
     base = (cfg.get("openai_base_url") or "").rstrip("/")
     if not base.startswith(("http://", "https://")):
         raise AIError("URL do servidor de IA inválida (ex.: http://localhost:11434/v1).")
@@ -180,7 +194,7 @@ def generate_openai_compatible(text: str, slides: int, language: str, tone: str,
         "temperature": 0.6,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": build_user_prompt(text, slides, language, tone)},
+            {"role": "user", "content": build_user_prompt(text, slides, language, tone, detail)},
         ],
         "response_format": {"type": "json_object"},
     }
@@ -332,7 +346,8 @@ def _skeleton(topic: str, slides: int) -> dict[str, Any]:
 
 # ------------------------------------------------------------------ entrada ---
 
-def generate_outline(text: str, slides: int, language: str, tone: str, cfg: dict[str, Any]) -> tuple[dict[str, Any], str]:
+def generate_outline(text: str, slides: int, language: str, tone: str, cfg: dict[str, Any],
+                     detail: str = "balanced") -> tuple[dict[str, Any], str]:
     """Devolve (roteiro normalizado, nome do provedor usado)."""
     text = (text or "").strip()
     if not text:
@@ -340,10 +355,10 @@ def generate_outline(text: str, slides: int, language: str, tone: str, cfg: dict
     slides = max(3, min(40, int(slides or 8)))
     provider = cfg.get("provider", "offline")
     if provider == "anthropic":
-        raw = generate_anthropic(text, slides, language, tone, cfg)
+        raw = generate_anthropic(text, slides, language, tone, cfg, detail)
         used = f"Claude ({cfg.get('anthropic_model')})"
     elif provider == "openai":
-        raw = generate_openai_compatible(text, slides, language, tone, cfg)
+        raw = generate_openai_compatible(text, slides, language, tone, cfg, detail)
         used = f"{cfg.get('openai_model')} @ {cfg.get('openai_base_url')}"
     else:
         raw = generate_offline(text, slides, language, tone)

@@ -15,15 +15,18 @@ import threading
 from pathlib import Path
 from typing import Any
 
-SECRET_KEYS = ("anthropic_api_key", "openai_api_key", "pexels_api_key", "unsplash_access_key", "pixabay_api_key")
+SECRET_KEYS = ("anthropic_api_key", "openai_api_key", "pexels_api_key", "unsplash_access_key", "pixabay_api_key",
+               "imagegen_api_key")
 ENV_FALLBACK = {
     "anthropic_api_key": "ANTHROPIC_API_KEY",
     "openai_api_key": "OPENAI_API_KEY",
     "pexels_api_key": "PEXELS_API_KEY",
     "unsplash_access_key": "UNSPLASH_ACCESS_KEY",
     "pixabay_api_key": "PIXABAY_API_KEY",
+    "imagegen_api_key": "IMAGEGEN_API_KEY",
 }
 PROVIDERS = ("offline", "anthropic", "openai")
+IMAGEGEN_PROVIDERS = ("gemini", "openai", "pollinations")
 IMAGE_SOURCES = ("openverse", "wikimedia", "pexels", "unsplash", "pixabay")
 
 DEFAULTS: dict[str, Any] = {
@@ -41,6 +44,11 @@ DEFAULTS: dict[str, Any] = {
     "pexels_api_key": "",
     "unsplash_access_key": "",
     "pixabay_api_key": "",
+    # Imagens geradas por IA (alternativa às fotos da internet)
+    "imagegen_provider": "gemini",
+    "imagegen_model": "gemini-3.1-flash-image-preview",
+    "imagegen_base_url": "https://api.openai.com/v1",
+    "imagegen_api_key": "",
     "language": "Português do Brasil",
     "author": "",
 }
@@ -132,6 +140,8 @@ def effective(data: dict[str, Any] | None = None) -> dict[str, Any]:
 def _clean(data: dict[str, Any]) -> dict[str, Any]:
     if data.get("provider") not in PROVIDERS:
         data["provider"] = "offline"
+    if data.get("imagegen_provider") not in IMAGEGEN_PROVIDERS:
+        data["imagegen_provider"] = DEFAULTS["imagegen_provider"]
     sources = data.get("image_sources")
     if not isinstance(sources, list):
         sources = list(DEFAULTS["image_sources"])

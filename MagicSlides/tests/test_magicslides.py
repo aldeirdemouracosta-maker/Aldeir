@@ -10,7 +10,7 @@ import zipfile
 import pytest
 from PIL import Image
 
-from magicslides import ai, config, images, layouts, server
+from magicslides import ai, config, imagegen, images, layouts, server
 from magicslides.core import default_presentation, normalize_presentation, validate_presentation
 from magicslides.html_export import build_html
 from magicslides.pptx_export import build_pptx
@@ -472,3 +472,123 @@ def test_desktop_api_exposes_only_methods():
     assert public, "deveria expor save_file"
     for name, attr in public.items():
         assert inspect.ismethod(attr), f"atributo público não-método: {name}"
+
+
+
+# ------------------------------------------- imagens geradas por IA / texto ---
+
+def _ig_png(color=(200, 40, 40), size=(64, 36)):
+    buf = io.BytesIO()
+    Image.new("RGB", size, color).save(buf, "PNG")
+    return buf.getvalue()
+
+
+class _FakeResp:
+    def __init__(self, payload: bytes):
+        self._p = payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def read(self, n=-1):
+        return self._p if n < 0 else self._p[:n]
+
+
+def test_imagegen_gemini_parses_inline_data(monkeypatch):
+    seen = {}
+
+    def fake_urlopen(req, timeout=0):
+        seen["url"], seen["key"] = req.full_url, req.headers.get("X-goog-api-key")
+        body = {"candidates": [{"content": {"parts": [{"text": "ok"}, {"inlineData": {
+            "mimeType": "image/png", "data": base64.b64encode(_ig_png()).decode()}}]}}]}
+        return _FakeResp(json.dumps(body).encode())
+
+    monkeypatch.setattr(imagegen.urllib.request, "urlopen", fake_urlopen)
+    cfg = {"imagegen_provider": "gemini", "imagegen_api_key": "k", "imagegen_model": "gemini-x-image"}
+    src, w, h = imagegen.generate("painéis solares", cfg)
+    assert src.startswith("data:image/") and (w, h) == (64, 36)
+    assert "gemini-x-image:generateContent" in seen["url"] and seen["key"] == "k"
+
+
+def test_imagegen_gemini_requires_key_and_reports_no_image(monkeypatch):
+    with pytest.raises(images.ImageError, match="chave"):
+        imagegen.generate("x", {"imagegen_provider": "gemini"})
+    monkeypatch.setattr(imagegen.urllib.request, "urlopen",
+                        lambda req, timeout=0: _FakeResp(b'{"candidates": [{"content": {"parts": [{"text": "so texto"}]}}]}'))
+    with pytest.raises(images.ImageError, match="não devolveu imagem"):
+        imagegen.generate("x", {"imagegen_provider": "gemini", "imagegen_api_key": "k"})
+
+
+def test_imagegen_openai_compatible_b64_and_size(monkeypatch):
+    seen = {}
+
+    def fake_urlopen(req, timeout=0):
+        seen["url"], seen["body"] = req.full_url, json.loads(req.data)
+        return _FakeResp(json.dumps({"data": [{"b64_json": base64.b64encode(_ig_png((10, 90, 200))).decode()}]}).encode())
+
+    monkeypatch.setattr(imagegen.urllib.request, "urlopen", fake_urlopen)
+    cfg = {"imagegen_provider": "openai", "imagegen_base_url": "https://api.example.com/v1/", "imagegen_model": "gpt-image-1",
+           "imagegen_api_key": "k"}
+    src, _, _ = imagegen.generate("cidade à noite", cfg)
+    assert src.startswith("data:image/")
+    assert seen["url"] == "https://api.example.com/v1/images/generations"
+    assert seen["body"]["model"] == "gpt-image-1" and seen["body"]["size"] == "1536x1024"
+
+
+def test_imagegen_pollinations_needs_no_key(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(imagegen.urllib.request, "urlopen",
+                        lambda req, timeout=0: (seen.setdefault("url", req.full_url), _FakeResp(_ig_png()))[1])
+    src, _, _ = imagegen.generate("solar panels", {"imagegen_provider": "pollinations"})
+    assert src.startswith("data:image/") and seen["url"].startswith("https://image.pollinations.ai/prompt/")
+
+
+def test_fill_images_in_ai_mode_credits_once_and_placeholders_on_failure(monkeypatch):
+    calls = []
+
+    def fake_generate(prompt, cfg):
+        calls.append(prompt)
+        if "falha" in prompt:
+            raise images.ImageError("Gemini: limite de uso atingido.")
+        return _data_url(), 64, 40
+
+    monkeypatch.setattr(imagegen, "generate", fake_generate)
+    outline, _ = ai.generate_outline("Energia solar", 4, "pt", "", {"provider": "offline"})
+    pres = layouts.build_presentation(outline, None)
+    for s in pres["slides"]:
+        for e in s["elements"]:
+            if e["type"] == "image" and s["name"] == "Por que isso importa":
+                e["query"] = "falha total"
+    credits, warnings = images.fill_presentation_images(pres, {"imagegen_provider": "gemini"}, mode="ai")
+    assert calls and all("No text" in c for c in calls)
+    filled = [e for s in pres["slides"] for e in s["elements"] if e["type"] == "image" and e["src"]]
+    assert filled and all(e["source"] == "ai" and "gerada por IA" in e["credit"] for e in filled)
+    assert len(credits) == 1 and "gerada por IA" in credits[0]
+
+
+def test_text_scale_changes_font_sizes_and_detail_changes_prompt():
+    outline, _ = ai.generate_outline("Energia solar\n- um\n- dois", 5, "pt", "", {"provider": "offline"})
+    sizes = {k: max(e["fontSize"] for s in layouts.build_presentation(outline, None, text_scale=k)["slides"]
+                    for e in s["elements"] if e["type"] == "text") for k in ("small", "normal", "xlarge")}
+    assert sizes["small"] < sizes["normal"] < sizes["xlarge"]
+    assert layouts.parse_text_scale("large") > 1 > layouts.parse_text_scale("small")
+    assert layouts.parse_text_scale("lixo") == 1.0 and layouts.parse_text_scale(99) == 1.8
+    detailed = ai.build_user_prompt("Tema", 6, "pt", "", "detailed")
+    concise = ai.build_user_prompt("Tema", 6, "pt", "", "concise")
+    assert "DETAILED" in detailed and "CONCISE" in concise and detailed != concise
+    assert "DETAIL level: BALANCED" in ai.build_user_prompt("Tema", 6, "pt", "", "inexistente")
+
+
+def test_generate_endpoint_and_settings_hide_imagegen_key(live_server, monkeypatch):
+    monkeypatch.setattr(imagegen, "generate", lambda prompt, cfg: (_data_url(), 64, 40))
+    config.save({"imagegen_provider": "pollinations", "imagegen_api_key": "segredo-img"})
+    token = server.TOKEN
+    req = urllib.request.Request(live_server + "/api/images/generate", data=json.dumps({"prompt": "um farol", "title": "Costa"}).encode(),
+                                 headers={"X-MagicSlides-Token": token, "Content-Type": "application/json"}, method="POST")
+    out = json.load(urllib.request.urlopen(req))
+    assert out["ok"] and out["src"].startswith("data:image/") and "gerada por IA" in out["credit"]
+    view = config.public_view()
+    assert "imagegen_api_key" not in view and view["has_imagegen_api_key"] is True

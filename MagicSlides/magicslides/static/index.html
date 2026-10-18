@@ -46,6 +46,9 @@
         <button id="addImageBtn" title="Imagem do computador">🖼 Do PC</button>
         <button id="imageManagerBtn" title="Ver e gerenciar as imagens de todos os slides">🗂 Imagens</button>
         <span class="divider"></span>
+        <button id="textSmallerBtn" class="icon-btn" title="Diminuir o texto de todos os slides" aria-label="Diminuir o texto de todos os slides">A−</button>
+        <button id="textBiggerBtn" class="icon-btn" title="Aumentar o texto de todos os slides" aria-label="Aumentar o texto de todos os slides">A＋</button>
+        <span class="divider"></span>
         <button id="undoBtn" class="icon-btn" title="Desfazer (Ctrl+Z)">↶</button>
         <button id="redoBtn" class="icon-btn" title="Refazer (Ctrl+Y)">↷</button>
         <span class="divider"></span>
@@ -167,7 +170,23 @@
           <option value="inspirador e envolvente">Inspirador</option><option value="descontraído e divertido">Descontraído</option>
           <option value="técnico e detalhado">Técnico</option><option value="persuasivo, pitch de vendas">Vendas / pitch</option>
         </select></label>
-        <label>&nbsp;<span class="chips"><label class="chip"><input id="genImages" type="checkbox" checked /> Imagens da internet</label></span></label>
+        <label>Detalhe do texto<select id="genDetail">
+          <option value="concise">Resumido (frases curtas)</option>
+          <option value="balanced">Equilibrado</option>
+          <option value="detailed" selected>Detalhado (explica cada ideia)</option>
+        </select></label>
+      </div>
+      <div class="grid4">
+        <label>Tamanho do texto<select id="genTextSize">
+          <option value="small">Pequeno</option><option value="normal" selected>Médio</option>
+          <option value="large">Grande</option><option value="xlarge">Muito grande</option>
+        </select></label>
+        <label>Imagens<select id="genImageMode">
+          <option value="web">Fotos da internet</option>
+          <option value="ai">Geradas por IA</option>
+          <option value="none">Sem imagens</option>
+        </select></label>
+        <label class="span2">&nbsp;<span id="genImageNote" class="muted small"></span></label>
       </div>
       <label class="chip inline"><input id="genCredits" type="checkbox" checked /> Adicionar slide com créditos das imagens</label>
       <h4>Tema</h4>
@@ -215,6 +234,7 @@
       <p id="imSummary" class="muted"></p>
       <div class="im-actions">
         <button type="button" class="primary" id="imFillBtn">✨ Preencher as que faltam</button>
+        <label class="chip">com <select id="imFillMode"><option value="web">fotos da internet</option><option value="ai">imagens geradas por IA</option></select></label>
         <button type="button" id="imCreditsBtn">📋 Copiar créditos</button>
         <span id="imProgress" class="muted small" role="status" aria-live="polite"></span>
       </div>
@@ -271,6 +291,21 @@
         <label>Unsplash (Access Key)<input id="setUnsplash" type="password" autocomplete="off" placeholder="unsplash.com/developers" /></label>
         <label>Pixabay<input id="setPixabay" type="password" autocomplete="off" placeholder="pixabay.com/api/docs" /></label>
       </div>
+      <h4>Imagens geradas por IA</h4>
+      <p class="muted small">Usadas quando você escolhe “Geradas por IA” ao criar a apresentação ou no gerenciador de imagens. Cada imagem gerada pode ser cobrada pelo provedor.</p>
+      <div class="grid2">
+        <label>Provedor<select id="setImgenProvider">
+          <option value="gemini">Gemini (Google) — chave de API</option>
+          <option value="openai">API compatível com a da OpenAI (OpenAI, servidor local)</option>
+          <option value="pollinations">Pollinations — grátis, sem chave</option>
+        </select></label>
+        <label>Modelo<input id="setImgenModel" placeholder="gemini-3.1-flash-image-preview" /></label>
+      </div>
+      <div class="grid2">
+        <label id="setImgenUrlRow">Endereço do servidor<input id="setImgenUrl" placeholder="https://api.openai.com/v1" /></label>
+        <label id="setImgenKeyRow">Chave de API<input id="setImgenKey" type="password" autocomplete="off" /></label>
+      </div>
+      <p class="muted small" id="setImgenHelp"></p>
       <h4>Geral</h4>
       <div class="grid2">
         <label>Idioma padrão<select id="setLanguage">

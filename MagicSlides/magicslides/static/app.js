@@ -712,19 +712,37 @@ function openGenerateDialog() {
   line.innerHTML = p.html;
   line.querySelectorAll('[data-open-settings]').forEach((a) => (a.onclick = () => { $('generateDialog').close(); openSettings(true); }));
   $('genLanguage').value = settings.language || 'Português do Brasil';
+  updateImageNote();
   const grid = $('genThemeGrid');
   grid.replaceChildren();
   themes.forEach((t) => grid.appendChild(themeCard(t, genTheme === t.id, () => { genTheme = t.id; openGenerateDialog(); })));
   if (!$('generateDialog').open) $('generateDialog').showModal();
   $('genPrompt').focus();
 }
+function imagegenReady() {
+  const p = settings.imagegen_provider || 'gemini';
+  return p === 'pollinations' || !!settings.has_imagegen_api_key || (p === 'openai' && /^http:\/\/(localhost|127\.0\.0\.1)/.test(settings.imagegen_base_url || ''));
+}
+function updateImageNote() {
+  const mode = $('genImageMode').value;
+  const label = (settings.imagegen_labels || {})[settings.imagegen_provider || 'gemini'] || 'IA';
+  $('genImageNote').textContent = mode === 'ai'
+    ? (imagegenReady() ? `Imagens criadas por: ${label}. Pode demorar mais.` : 'Falta configurar a chave em ⚙ Configurações > Imagens geradas por IA.')
+    : mode === 'web' ? 'Busca fotos no Openverse/Wikimedia (e Pexels, Unsplash, Pixabay se houver chave).' : 'Os slides saem sem fotos.';
+}
 async function submitGenerate() {
   const prompt = $('genPrompt').value.trim();
   if (!prompt) { toast('Descreva o tema ou cole um texto.', 'warn'); return; }
   const req = {
     prompt, slides: Number($('genSlides').value) || 8, language: $('genLanguage').value, tone: $('genTone').value,
-    theme: genTheme, images: $('genImages').checked, credits: $('genCredits').checked,
+    theme: genTheme, credits: $('genCredits').checked,
+    detail: $('genDetail').value, text_scale: $('genTextSize').value, image_mode: $('genImageMode').value,
+    images: $('genImageMode').value !== 'none',
   };
+  if (req.image_mode === 'ai' && !imagegenReady()) {
+    toast('Para gerar imagens por IA, configure o provedor e a chave em ⚙ Configurações > Imagens geradas por IA.', 'warn', 9000);
+    $('generateDialog').close(); openSettings(); return;
+  }
   $('generateDialog').close();
   showProgress('Iniciando…', 0.03);
   try {
@@ -863,6 +881,15 @@ function fillSlot(slide, el, src, meta = {}) {
   slide.elements.splice(slide.elements.indexOf(el), 1, img);
   return img;
 }
+function scaleAllText(factor) {
+  commit();
+  let n = 0;
+  data.slides.forEach((s) => s.elements.forEach((e) => {
+    if (e.type === 'text') { e.fontSize = clamp(Math.round((e.fontSize || 20) * factor * 2) / 2, 8, 160); n++; }
+  }));
+  render();
+  setStatus(`Texto ${factor > 1 ? 'aumentado' : 'diminuído'} em ${n} caixas`);
+}
 function openImageManager() {
   renderImageManager();
   if (!$('imageManagerDialog').open) $('imageManagerDialog').showModal();
@@ -913,6 +940,7 @@ function renderImageManager() {
       q.append(input, mk('🔎 Buscar de novo', () => imageManagerSearch(si, el), 'primary'));
       body.append(q);
     }
+    if (el) btns.append(mk('🎨 Gerar com IA', () => imageManagerGenerate(si, el)));
     btns.append(mk(el ? '🖼 Enviar do PC' : '＋ Adicionar imagem', () => imageManagerUpload(si, el)));
     if (!el) btns.append(mk('🔎 Buscar na internet', () => imageManagerSearch(si, null)));
     if (slotHasImage(el)) btns.append(mk('🗑 Remover imagem', () => imageManagerRemove(si, el)));
@@ -942,7 +970,24 @@ function imageManagerRemove(si, el) {
   render();
   renderImageManager();
 }
+async function imageManagerGenerate(si, el) {
+  if (!imagegenReady()) { toast('Configure o provedor e a chave em ⚙ Configurações > Imagens geradas por IA.', 'warn', 8000); return; }
+  const slide = data.slides[si];
+  const q = slotQuery(el, slide, si) || slideTitleOf(slide, si);
+  imBusy = true; renderImageManager();
+  $('imProgress').textContent = `Gerando imagem por IA para o slide ${si + 1}… (pode levar alguns segundos)`;
+  try {
+    const res = await api('/api/images/generate', { prompt: q, title: slideTitleOf(slide, si) });
+    commit();
+    fillSlot(slide, el, res.src, { alt: q, credit: res.credit, source: 'ai', query: q });
+    render();
+    toast(`Imagem do slide ${si + 1} gerada por IA.`);
+  } catch (e) { toast(e.message, 'error', 9000); }
+  imBusy = false; $('imProgress').textContent = '';
+  renderImageManager();
+}
 async function fillMissingImages() {
+  if ($('imFillMode').value === 'ai') return fillMissingWithAI();
   const todo = imageRows().filter((r) => r.el && !slotHasImage(r.el));
   if (!todo.length || imBusy) return;
   imBusy = true;
@@ -993,6 +1038,34 @@ async function fillMissingImages() {
   if (failed.length) toast(`Sem resultado para os slides: ${[...new Set(failed)].sort((x, y) => x - y).join(', ')}. Edite o termo (em inglês) e busque de novo.`, 'warn', 9000);
   else toast('Todas as imagens foram preenchidas.');
 }
+async function fillMissingWithAI() {
+  if (!imagegenReady()) { toast('Configure o provedor e a chave em ⚙ Configurações > Imagens geradas por IA.', 'warn', 8000); return; }
+  const todo = imageRows().filter((r) => r.el && !slotHasImage(r.el));
+  if (!todo.length || imBusy) return;
+  imBusy = true;
+  commit();
+  renderImageManager();
+  let done = 0; const failed = []; const errors = new Set();
+  const progress = () => { $('imProgress').textContent = `Gerando imagens por IA… ${done}/${todo.length}`; };
+  progress();
+  const queue = todo.slice();
+  const worker = async () => {
+    while (queue.length) {
+      const { si, slide, el } = queue.shift();
+      const q = slotQuery(el, slide, si) || slideTitleOf(slide, si);
+      try {
+        const res = await api('/api/images/generate', { prompt: q, title: slideTitleOf(slide, si) });
+        fillSlot(slide, el, res.src, { alt: q, credit: res.credit, source: 'ai', query: q });
+      } catch (e) { failed.push(si + 1); errors.add(e.message); }
+      done++; progress();
+    }
+  };
+  await Promise.all(Array.from({ length: 2 }, worker));
+  imBusy = false; $('imProgress').textContent = '';
+  render(); renderImageManager();
+  if (failed.length) toast(`Não consegui gerar para os slides ${[...new Set(failed)].sort((x, y) => x - y).join(', ')}: ${[...errors][0]}`, 'warn', 12000);
+  else toast('Todas as imagens foram geradas por IA.');
+}
 async function copyImageCredits() {
   const lines = [];
   data.slides.forEach((slide, si) => slide.elements.forEach((e) => {
@@ -1019,12 +1092,31 @@ function openSettings(focusProvider = false) {
   $('setPexels').value = ''; $('setPexels').placeholder = mask(s.has_pexels_api_key, s.pexels_api_key_from_env) || 'pexels.com/api';
   $('setUnsplash').value = ''; $('setUnsplash').placeholder = mask(s.has_unsplash_access_key, s.unsplash_access_key_from_env) || 'unsplash.com/developers';
   $('setPixabay').value = ''; $('setPixabay').placeholder = mask(s.has_pixabay_api_key, s.pixabay_api_key_from_env) || 'pixabay.com/api/docs';
+  $('setImgenProvider').value = s.imagegen_provider || 'gemini';
+  $('setImgenModel').value = s.imagegen_model || '';
+  $('setImgenUrl').value = s.imagegen_base_url || '';
+  $('setImgenKey').value = ''; $('setImgenKey').placeholder = mask(s.has_imagegen_api_key, s.imagegen_api_key_from_env);
+  toggleImagegenFields();
   $('setLanguage').value = s.language || 'Português do Brasil';
   $('setAuthor').value = s.author || '';
   $('configPath').textContent = `Arquivo de configuração: ${s.config_path || ''}`;
   toggleProviderFields();
   $('settingsDialog').showModal();
   if (focusProvider) document.querySelector('input[name=provider]:checked')?.focus();
+}
+const IMGEN_DEFAULT_MODEL = { gemini: 'gemini-3.1-flash-image-preview', openai: 'gpt-image-1', pollinations: '' };
+const IMGEN_HELP = {
+  gemini: 'Crie a chave em aistudio.google.com/apikey. Nem todo plano gratuito inclui geração de imagens; o nome do modelo pode mudar — troque-o aqui se aparecer “modelo não encontrado”.',
+  openai: 'Funciona com a OpenAI (gpt-image-1, dall-e-3) e com programas locais que oferecem POST /images/generations.',
+  pollinations: 'Serviço comunitário gratuito e sem chave. A qualidade e a disponibilidade variam, e os pedidos passam pelos servidores deles.',
+};
+function toggleImagegenFields(changed) {
+  const p = $('setImgenProvider').value;
+  if (changed) $('setImgenModel').value = IMGEN_DEFAULT_MODEL[p];
+  $('setImgenUrlRow').hidden = p !== 'openai';
+  $('setImgenKeyRow').hidden = p === 'pollinations';
+  $('setImgenModel').closest('label').hidden = p === 'pollinations';
+  $('setImgenHelp').textContent = IMGEN_HELP[p];
 }
 function toggleProviderFields() {
   const p = document.querySelector('input[name=provider]:checked')?.value;
@@ -1038,6 +1130,8 @@ async function saveSettings() {
     openai_base_url: $('setOpenaiUrl').value.trim(), openai_model: $('setOpenaiModel').value.trim(), openai_api_key: $('setOpenaiKey').value,
     image_sources: [...document.querySelectorAll('input[name=imgsrc]:checked')].map((c) => c.value),
     pexels_api_key: $('setPexels').value, unsplash_access_key: $('setUnsplash').value, pixabay_api_key: $('setPixabay').value,
+    imagegen_provider: $('setImgenProvider').value, imagegen_model: $('setImgenModel').value.trim(),
+    imagegen_base_url: $('setImgenUrl').value.trim(), imagegen_api_key: $('setImgenKey').value,
     language: $('setLanguage').value, author: $('setAuthor').value.trim(),
   };
   try {
@@ -1139,6 +1233,10 @@ function bindUi() {
   $('addShapeBtn').onclick = addShape;
   $('addWebImageBtn').onclick = () => openImageDialog(null);
   $('imageManagerBtn').onclick = openImageManager;
+  $('textSmallerBtn').onclick = () => scaleAllText(1 / 1.1);
+  $('textBiggerBtn').onclick = () => scaleAllText(1.1);
+  $('setImgenProvider').onchange = () => toggleImagegenFields(true);
+  $('genImageMode').onchange = updateImageNote;
   $('imFillBtn').onclick = fillMissingImages;
   $('imCreditsBtn').onclick = copyImageCredits;
   $('addImageBtn').onclick = () => { imageTarget = null; $('imageInput').click(); };

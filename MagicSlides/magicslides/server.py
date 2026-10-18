@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from . import APP_NAME, __version__, ai, config, images
+from . import APP_NAME, __version__, ai, config, imagegen, images
 from .core import default_presentation, normalize_presentation, validate_presentation
 from .html_export import build_html
 from .layouts import build_credits_slide, build_presentation
@@ -58,32 +58,38 @@ def run_generation(job_id: str, req: dict[str, Any]) -> None:
         cfg = config.effective()
         provider_label = {"anthropic": "Claude", "openai": "o modelo de IA", "offline": "o modo offline"}.get(cfg["provider"], "IA")
         _update_job(job_id, message=f"Escrevendo o roteiro com {provider_label}…", progress=0.1)
+        detail = req.get("detail") if req.get("detail") in ai.DETAIL_GUIDE else "balanced"
         outline, used = ai.generate_outline(
             req.get("prompt", ""), int(req.get("slides") or 8),
             req.get("language") or cfg.get("language") or "Português do Brasil",
-            req.get("tone") or "", cfg,
+            req.get("tone") or "", cfg, detail,
         )
+        # Fotos da internet ("web"), imagens geradas por IA ("ai") ou nenhuma ("none").
+        image_mode = req.get("image_mode") if req.get("image_mode") in ("web", "ai", "none") else (
+            "none" if req.get("images") is False else "web")
         _update_job(job_id, message="Montando os layouts…", progress=0.45)
-        if not req.get("images", True):
+        if image_mode == "none":
             for spec in outline["slides"]:
                 spec["image_query"] = ""
                 if spec["layout"] in ("image-right", "image-left"):
                     spec["layout"] = "bullets"
                 elif spec["layout"] == "image-full":
                     spec["layout"] = "section"
-        pres = build_presentation(outline, req.get("theme"), author=cfg.get("author", ""))
+        pres = build_presentation(outline, req.get("theme"), author=cfg.get("author", ""),
+                                  text_scale=req.get("text_scale", "normal"))
         warnings: list[str] = []
-        if req.get("images", True):
+        if image_mode != "none":
             total = sum(1 for s in pres["slides"] for e in s["elements"] if e.get("type") == "image")
             done = {"n": 0}
 
             def progress(msg: str) -> None:
                 done["n"] += 1
-                _update_job(job_id, message=f"Buscando imagens na internet ({done['n']}/{total})…",
+                _update_job(job_id, message=f"{'Gerando imagens por IA' if image_mode == 'ai' else 'Buscando imagens na internet'} ({done['n']}/{total})…",
                             progress=0.5 + 0.45 * done["n"] / max(1, total))
 
-            _update_job(job_id, message=f"Buscando imagens na internet (0/{total})…", progress=0.5)
-            credits, warnings = images.fill_presentation_images(pres, cfg, progress)
+            what = "Gerando imagens por IA" if image_mode == "ai" else "Buscando imagens na internet"
+            _update_job(job_id, message=f"{what} (0/{total})…", progress=0.5)
+            credits, warnings = images.fill_presentation_images(pres, cfg, progress, mode=image_mode)
             if credits and req.get("credits", True):
                 pres["slides"].append(build_credits_slide(credits, pres["theme"]))
         errors = validate_presentation(pres)
@@ -200,6 +206,7 @@ class Handler(SimpleHTTPRequestHandler):
     def _settings_view(self) -> dict[str, Any]:
         view = config.public_view()
         view["image_source_labels"] = images.SOURCE_LABELS
+        view["imagegen_labels"] = imagegen.PROVIDER_LABELS
         return view
 
     # ---- POST
@@ -243,6 +250,11 @@ class Handler(SimpleHTTPRequestHandler):
             results, warnings = images.search(str(payload.get("query", "")), config.effective(),
                                               str(payload.get("source") or "auto"))
             return self._json(200, {"ok": True, "results": results, "warnings": warnings})
+        if path == "/api/images/generate":
+            cfg = config.effective()
+            prompt = imagegen.build_prompt(str(payload.get("prompt", "")), str(payload.get("title", "")))
+            src, w, h = imagegen.generate(prompt, cfg)
+            return self._json(200, {"ok": True, "src": src, "width": w, "height": h, "credit": imagegen.credit_for(cfg)})
         if path == "/api/images/fetch":
             item = payload.get("item") or {}
             src, w, h = images.download_data_url(str(item.get("url", "")))
