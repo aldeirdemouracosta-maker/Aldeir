@@ -82,9 +82,14 @@ O GitHub Actions (`.github/workflows/magicslides-windows.yml`) roda os testes, c
 
 Na janela **✨ Criar apresentação** você escolhe:
 
-- **Detalhe do texto:** *Resumido* (frases curtas), *Equilibrado* ou *Detalhado* (cada tópico explica a ideia, com exemplo ou dado concreto, e as notas do apresentador ficam mais completas).
-- **Tamanho do texto:** Pequeno, Médio, Grande ou Muito grande. Depois, no editor, **A−** e **A＋** diminuem ou aumentam o texto de todos os slides.
+- **Quantidade de texto:** *Básica* (explicação curta, tópicos de até ~10 palavras), *Média* ou *Extensa* (explicação completa, com detalhe ou exemplo em cada tópico; as notas do apresentador também ficam mais completas).
+- **Tamanho da letra:** Pequeno, Médio, Grande ou Muito grande.
 - **Imagens:** *Fotos da internet*, *Geradas por IA* ou *Sem imagens*.
+
+### Mudar depois, em todos os slides
+
+- **📝 Quantidade de texto** (barra do editor): a IA **reescreve** o texto de todos os slides (ou só do atual) como *Básica*, *Média* ou *Extensa*, mantendo o assunto. Dá para desfazer com Ctrl+Z. Sem IA só é possível reduzir (Básica).
+- **A−** e **A＋**: diminuem ou aumentam a letra de todos os slides.
 
 ### Imagens geradas por IA (⚙ Configurações)
 

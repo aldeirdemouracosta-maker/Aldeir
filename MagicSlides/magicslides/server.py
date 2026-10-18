@@ -21,6 +21,7 @@ from urllib.parse import urlparse
 from . import APP_NAME, __version__, ai, config, imagegen, images
 from .core import default_presentation, normalize_presentation, validate_presentation
 from .html_export import build_html
+from . import layouts
 from .layouts import build_credits_slide, build_presentation
 from .pptx_export import build_pptx
 from .themes import list_themes
@@ -58,7 +59,7 @@ def run_generation(job_id: str, req: dict[str, Any]) -> None:
         cfg = config.effective()
         provider_label = {"anthropic": "Claude", "openai": "o modelo de IA", "offline": "o modo offline"}.get(cfg["provider"], "IA")
         _update_job(job_id, message=f"Escrevendo o roteiro com {provider_label}…", progress=0.1)
-        detail = req.get("detail") if req.get("detail") in ai.DETAIL_GUIDE else "balanced"
+        detail = ai.normalize_level(req.get("text_level") or req.get("detail"))
         outline, used = ai.generate_outline(
             req.get("prompt", ""), int(req.get("slides") or 8),
             req.get("language") or cfg.get("language") or "Português do Brasil",
@@ -250,6 +251,8 @@ class Handler(SimpleHTTPRequestHandler):
             results, warnings = images.search(str(payload.get("query", "")), config.effective(),
                                               str(payload.get("source") or "auto"))
             return self._json(200, {"ok": True, "results": results, "warnings": warnings})
+        if path == "/api/rewrite":
+            return self._json(200, self._rewrite(payload))
         if path == "/api/images/generate":
             cfg = config.effective()
             prompt = imagegen.build_prompt(str(payload.get("prompt", "")), str(payload.get("title", "")))
@@ -285,6 +288,33 @@ class Handler(SimpleHTTPRequestHandler):
                               "application/vnd.openxmlformats-officedocument.presentationml.presentation",
                               _safe_filename(title, "pptx"))
         return self._error(404, "Endpoint não encontrado")
+
+    def _rewrite(self, payload: Any) -> dict[str, Any]:
+        """Reescreve o texto dos slides na quantidade pedida (básica, média ou extensa)."""
+        if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
+            raise ai.AIError("Pedido inválido.")
+        level = ai.normalize_level(payload.get("level"))
+        cfg = config.effective()
+        boxes: dict[str, dict[str, Any]] = {}
+        for raw in payload["items"][:150]:
+            try:
+                item = {"id": str(raw["id"])[:80], "text": str(raw["text"])[:4000], "bullets": bool(raw.get("bullets")),
+                        "w": float(raw["w"]), "h": float(raw["h"]), "fs": float(raw.get("fontSize") or 20),
+                        "title": str(raw.get("slide_title", ""))[:120]}
+            except (KeyError, TypeError, ValueError):
+                continue
+            if item["text"].strip() and item["w"] > 0 and item["h"] > 0:
+                boxes[item["id"]] = item
+        asks = [{"id": b["id"], "kind": "bullets" if b["bullets"] else "paragraph", "slide_title": b["title"], "text": b["text"],
+                 "max_chars": layouts.capacity_chars(b["w"], b["h"], b["bullets"])} for b in boxes.values()]
+        new, used = ai.rewrite_texts(asks, level, str(payload.get("language") or cfg.get("language") or ""), cfg)
+        out = []
+        for id_, text in new.items():
+            b = boxes.get(id_)
+            if b:
+                fitted, fs = layouts.fit_rewritten(text, b["w"], b["h"], b["bullets"], b["fs"], level)
+                out.append({"id": id_, "text": fitted, "fontSize": fs})
+        return {"ok": True, "items": out, "provider": used, "level": level}
 
     def log_message(self, fmt, *args):
         if "/api/jobs/" in (self.path or ""):

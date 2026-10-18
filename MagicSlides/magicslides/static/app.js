@@ -736,7 +736,7 @@ async function submitGenerate() {
   const req = {
     prompt, slides: Number($('genSlides').value) || 8, language: $('genLanguage').value, tone: $('genTone').value,
     theme: genTheme, credits: $('genCredits').checked,
-    detail: $('genDetail').value, text_scale: $('genTextSize').value, image_mode: $('genImageMode').value,
+    text_level: $('genDetail').value, text_scale: $('genTextSize').value, image_mode: $('genImageMode').value,
     images: $('genImageMode').value !== 'none',
   };
   if (req.image_mode === 'ai' && !imagegenReady()) {
@@ -880,6 +880,53 @@ function fillSlot(slide, el, src, meta = {}) {
                 page: meta.page || '', source: meta.source || '', fit: 'cover', query: meta.query || el.placeholderQuery || '' };
   slide.elements.splice(slide.elements.indexOf(el), 1, img);
   return img;
+}
+/* ------------------------------------- quantidade de texto (com IA) ---- */
+const LEVEL_LABEL = { basic: 'básica', medium: 'média', extensive: 'extensa' };
+function openTextAmount() {
+  const off = settings.provider === 'offline';
+  const note = $('textAmountNote');
+  note.className = `provider-line ${off ? 'warn' : ''}`;
+  note.textContent = off
+    ? 'Sem IA só é possível reduzir o texto (Básica). Para Média ou Extensa, configure Gemini, Claude ou Ollama em ⚙ Configurações.'
+    : `Usando ${settings.provider === 'anthropic' ? 'Claude' : settings.openai_model || 'a IA configurada'} para reescrever.`;
+  $('textAmountDialog').showModal();
+}
+function collectRewriteItems(scope) {
+  const indexes = scope === 'current' ? [slideIndex] : data.slides.map((_, i) => i);
+  const items = [];
+  indexes.forEach((si) => {
+    const slide = data.slides[si];
+    if (!slide || slide.layout === 'credits') return;
+    const title = slideTitleOf(slide, si);
+    slide.elements.forEach((e) => {
+      if (e.type === 'text' && e.role === 'body' && (e.text || '').trim()) {
+        items.push({ id: e.id, text: e.text, bullets: !!e.bullets, w: e.w, h: e.h, fontSize: e.fontSize, slide_title: title });
+      }
+    });
+  });
+  return items;
+}
+async function applyTextAmount() {
+  const level = document.querySelector('input[name=textLevel]:checked')?.value;
+  if (!level) return toast('Escolha a quantidade de texto.', 'warn');
+  const items = collectRewriteItems($('textAmountScope').value);
+  if (!items.length) return toast('Não há texto de conteúdo para reescrever.', 'warn');
+  $('textAmountDialog').close();
+  showProgress(`Reescrevendo o texto (${LEVEL_LABEL[level]})…`, 0.25);
+  try {
+    const res = await api('/api/rewrite', { items, level, language: settings.language });
+    const byId = new Map(res.items.map((r) => [r.id, r]));
+    commit();
+    let n = 0;
+    data.slides.forEach((s) => s.elements.forEach((e) => {
+      const r = byId.get(e.id);
+      if (r && e.type === 'text') { e.text = r.text; e.fontSize = r.fontSize; n++; }
+    }));
+    render();
+    toast(`Texto ${LEVEL_LABEL[level]} aplicado em ${n} caixas — ${res.provider}. Para voltar: Ctrl+Z.`, '', 8000);
+  } catch (e) { toast(e.message, 'error', 12000); }
+  hideProgress();
 }
 function scaleAllText(factor) {
   commit();
@@ -1233,6 +1280,8 @@ function bindUi() {
   $('addShapeBtn').onclick = addShape;
   $('addWebImageBtn').onclick = () => openImageDialog(null);
   $('imageManagerBtn').onclick = openImageManager;
+  $('textAmountBtn').onclick = openTextAmount;
+  $('textAmountApply').onclick = applyTextAmount;
   $('textSmallerBtn').onclick = () => scaleAllText(1 / 1.1);
   $('textBiggerBtn').onclick = () => scaleAllText(1.1);
   $('setImgenProvider').onchange = () => toggleImagegenFields(true);

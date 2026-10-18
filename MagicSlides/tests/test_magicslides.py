@@ -576,10 +576,11 @@ def test_text_scale_changes_font_sizes_and_detail_changes_prompt():
     assert sizes["small"] < sizes["normal"] < sizes["xlarge"]
     assert layouts.parse_text_scale("large") > 1 > layouts.parse_text_scale("small")
     assert layouts.parse_text_scale("lixo") == 1.0 and layouts.parse_text_scale(99) == 1.8
-    detailed = ai.build_user_prompt("Tema", 6, "pt", "", "detailed")
-    concise = ai.build_user_prompt("Tema", 6, "pt", "", "concise")
-    assert "DETAILED" in detailed and "CONCISE" in concise and detailed != concise
-    assert "DETAIL level: BALANCED" in ai.build_user_prompt("Tema", 6, "pt", "", "inexistente")
+    extensive = ai.build_user_prompt("Tema", 6, "pt", "", "extensive")
+    basic = ai.build_user_prompt("Tema", 6, "pt", "", "basic")
+    assert "EXTENSIVE" in extensive and "BASIC" in basic and extensive != basic
+    assert "TEXT AMOUNT: MEDIUM" in ai.build_user_prompt("Tema", 6, "pt", "", "inexistente")
+    assert "EXTENSIVE" in ai.build_user_prompt("Tema", 6, "pt", "", "detailed")   # nome antigo ainda vale
 
 
 def test_generate_endpoint_and_settings_hide_imagegen_key(live_server, monkeypatch):
@@ -592,3 +593,63 @@ def test_generate_endpoint_and_settings_hide_imagegen_key(live_server, monkeypat
     assert out["ok"] and out["src"].startswith("data:image/") and "gerada por IA" in out["credit"]
     view = config.public_view()
     assert "imagegen_api_key" not in view and view["has_imagegen_api_key"] is True
+
+
+
+# ------------------------------------------- reescrever a quantidade de texto ---
+
+def _items():
+    return [
+        {"id": "a", "kind": "bullets", "slide_title": "Energia solar", "max_chars": 400,
+         "text": "Converte luz do sol em eletricidade\nFunciona mesmo em dias nublados\nO painel dura mais de vinte anos\nExige pouca manutenção"},
+        {"id": "b", "kind": "paragraph", "slide_title": "Custos", "max_chars": 300,
+         "text": "O investimento inicial é alto. Depois a conta de luz cai bastante. O retorno costuma vir em poucos anos."},
+    ]
+
+
+def test_rewrite_offline_only_shortens():
+    out, used = ai.rewrite_texts(_items(), "basic", "pt", {"provider": "offline"})
+    assert len(out["a"].split("\n")) == 3 and out["b"] == "O investimento inicial é alto."
+    same, _ = ai.rewrite_texts(_items(), "medium", "pt", {"provider": "offline"})
+    assert same["a"] == _items()[0]["text"]
+    with pytest.raises(ai.AIError, match="ampliar"):
+        ai.rewrite_texts(_items(), "extensive", "pt", {"provider": "offline"})
+
+
+def test_rewrite_with_ai_sends_level_and_maps_ids(monkeypatch):
+    seen = {}
+
+    def fake(system, user, cfg):
+        seen["system"], seen["user"] = system, user
+        return {"items": [{"id": "a", "text": "Explicação longa e completa sobre o painel solar."}, {"id": "zzz", "text": "ignorado?"}]}
+
+    monkeypatch.setattr(ai, "_openai_json", fake)
+    out, used = ai.rewrite_texts(_items(), "extensive", "Português do Brasil", {"provider": "openai", "openai_model": "m", "openai_base_url": "http://x/v1"})
+    assert "EXTENSIVE" in seen["user"] and "max_chars" in seen["user"] and "same ids" in seen["system"]
+    assert out["a"].startswith("Explicação longa") and "b" not in out and used.startswith("m @")
+    monkeypatch.setattr(ai, "_openai_json", lambda *a: {"items": []})
+    with pytest.raises(ai.AIError):
+        ai.rewrite_texts(_items(), "basic", "pt", {"provider": "openai", "openai_model": "m", "openai_base_url": "http://x/v1"})
+
+
+def test_fit_rewritten_trims_overflow_and_scales_font_by_level():
+    long_text = "\n".join(f"Tópico {i} com uma explicação bem longa para encher a caixa de texto do slide" for i in range(12))
+    text, fs = layouts.fit_rewritten(long_text, 44, 20, True, 24, "extensive")
+    assert layouts.text_height(text, 44, 13, True) <= 20 and 0 < len(text.split("\n")) < 12 and fs <= 24
+    _, fs_basic = layouts.fit_rewritten("Curto", 44, 20, True, 20, "basic")
+    _, fs_ext = layouts.fit_rewritten("Curto", 44, 20, True, 20, "extensive")
+    assert fs_basic > fs_ext == 20
+    assert layouts.capacity_chars(44, 30, True) > layouts.capacity_chars(20, 10, True)
+
+
+def test_rewrite_endpoint(live_server, monkeypatch):
+    config.save({"provider": "openai", "openai_model": "m", "openai_base_url": "http://x/v1"})
+    monkeypatch.setattr(ai, "_openai_json", lambda system, user, cfg: {"items": [{"id": "t1", "text": "Novo texto\nSegundo tópico"}]})
+    body = {"level": "medium", "language": "Português do Brasil", "items": [
+        {"id": "t1", "text": "Antigo", "bullets": True, "w": 44, "h": 30, "fontSize": 22, "slide_title": "X"},
+        {"id": "ruim"}]}
+    req = urllib.request.Request(live_server + "/api/rewrite", data=json.dumps(body).encode(), method="POST",
+                                 headers={"X-MagicSlides-Token": server.TOKEN, "Content-Type": "application/json"})
+    out = json.load(urllib.request.urlopen(req))
+    assert out["ok"] and out["level"] == "medium" and out["items"][0]["id"] == "t1"
+    assert out["items"][0]["text"].startswith("Novo texto") and out["items"][0]["fontSize"] > 0

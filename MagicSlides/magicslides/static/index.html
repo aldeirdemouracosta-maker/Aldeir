@@ -46,8 +46,9 @@
         <button id="addImageBtn" title="Imagem do computador">🖼 Do PC</button>
         <button id="imageManagerBtn" title="Ver e gerenciar as imagens de todos os slides">🗂 Imagens</button>
         <span class="divider"></span>
-        <button id="textSmallerBtn" class="icon-btn" title="Diminuir o texto de todos os slides" aria-label="Diminuir o texto de todos os slides">A−</button>
-        <button id="textBiggerBtn" class="icon-btn" title="Aumentar o texto de todos os slides" aria-label="Aumentar o texto de todos os slides">A＋</button>
+        <button id="textAmountBtn" title="Deixar o texto de todos os slides básico, médio ou extenso (com IA)">📝 Quantidade de texto</button>
+        <button id="textSmallerBtn" class="icon-btn" title="Diminuir a letra de todos os slides" aria-label="Diminuir a letra de todos os slides">A−</button>
+        <button id="textBiggerBtn" class="icon-btn" title="Aumentar a letra de todos os slides" aria-label="Aumentar a letra de todos os slides">A＋</button>
         <span class="divider"></span>
         <button id="undoBtn" class="icon-btn" title="Desfazer (Ctrl+Z)">↶</button>
         <button id="redoBtn" class="icon-btn" title="Refazer (Ctrl+Y)">↷</button>
@@ -170,14 +171,14 @@
           <option value="inspirador e envolvente">Inspirador</option><option value="descontraído e divertido">Descontraído</option>
           <option value="técnico e detalhado">Técnico</option><option value="persuasivo, pitch de vendas">Vendas / pitch</option>
         </select></label>
-        <label>Detalhe do texto<select id="genDetail">
-          <option value="concise">Resumido (frases curtas)</option>
-          <option value="balanced">Equilibrado</option>
-          <option value="detailed" selected>Detalhado (explica cada ideia)</option>
+        <label>Quantidade de texto<select id="genDetail">
+          <option value="basic">Básica — explicação curta</option>
+          <option value="medium" selected>Média</option>
+          <option value="extensive">Extensa — explicação completa</option>
         </select></label>
       </div>
       <div class="grid4">
-        <label>Tamanho do texto<select id="genTextSize">
+        <label>Tamanho da letra<select id="genTextSize">
           <option value="small">Pequeno</option><option value="normal" selected>Médio</option>
           <option value="large">Grande</option><option value="xlarge">Muito grande</option>
         </select></label>
@@ -223,6 +224,27 @@
       <div class="dialog-actions">
         <button type="button" id="imgFromPcBtn">🖼 Enviar do computador</button>
         <button value="cancel" formnovalidate>Fechar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Quantidade de texto -->
+  <dialog id="textAmountDialog" class="dialog">
+    <form method="dialog" id="textAmountForm">
+      <h2>📝 Quantidade de texto</h2>
+      <p class="muted">A IA reescreve o texto dos slides no nível escolhido, mantendo o assunto. Dá para desfazer com Ctrl+Z.</p>
+      <div class="provider-options">
+        <label class="option"><input type="radio" name="textLevel" value="basic" /> <span><b>Básica</b><small>Explicação curta: poucos tópicos de até ~10 palavras.</small></span></label>
+        <label class="option"><input type="radio" name="textLevel" value="medium" checked /> <span><b>Média</b><small>Tópicos de 10 a 16 palavras.</small></span></label>
+        <label class="option"><input type="radio" name="textLevel" value="extensive" /> <span><b>Extensa</b><small>Explicação completa, com detalhe ou exemplo em cada tópico.</small></span></label>
+      </div>
+      <label>Aplicar em
+        <select id="textAmountScope"><option value="all">Todos os slides</option><option value="current">Só o slide atual</option></select>
+      </label>
+      <p id="textAmountNote" class="provider-line"></p>
+      <div class="dialog-actions">
+        <button value="cancel" formnovalidate>Cancelar</button>
+        <button type="button" class="magic" id="textAmountApply">✨ Aplicar</button>
       </div>
     </form>
   </dialog>

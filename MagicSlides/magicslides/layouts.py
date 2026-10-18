@@ -133,6 +133,32 @@ def fit_font(text: str, w: float, h: float, max_fs: float, min_fs: float = 11, b
     return int(max(min_fs, fs))
 
 
+def capacity_chars(w: float, h: float, bullets: bool = False, fs: float = 14) -> int:
+    """Quantos caracteres cabem numa caixa w x h em letra legível (14 pt), com folga."""
+    usable = w * PT_PER_UNIT - (fs * 1.1 if bullets else 0)
+    chars_per_line = max(4.0, usable / (fs * _char_w(False)))
+    lines = max(1, int(h * PT_PER_UNIT / (fs * 1.2)))
+    return max(20, int(lines * chars_per_line * 0.85))
+
+
+def fit_rewritten(text: str, w: float, h: float, bullets: bool, base_fs: float, level: str) -> tuple[str, int]:
+    """Encaixa um texto reescrito na caixa: corta o excesso (últimos tópicos, depois palavras)
+    e escolhe a fonte. Quantidade básica pode crescer um pouco; a extensa nunca aumenta a letra."""
+    min_legible = 13
+    lines = [ln.strip() for ln in str(text).split("\n") if ln.strip()] or [""]
+    while len(lines) > 1 and text_height("\n".join(lines), w, min_legible, bullets) > h:
+        lines.pop()
+    out = "\n".join(lines)
+    if text_height(out, w, min_legible, bullets) > h:
+        words = out.split()
+        while len(words) > 3 and text_height(" ".join(words), w, min_legible, bullets) > h:
+            words.pop()
+        out = " ".join(words).rstrip(",;:") + "…"
+    factor = {"basic": 1.3, "medium": 1.1}.get(level, 1.0)
+    cap = max(min_legible, min(48.0, float(base_fs or 20) * factor))
+    return out, fit_font(out, w, h, cap, 10, bullets)
+
+
 # --------------------------------------------------------------- elementos ---
 
 def _text(theme, role, x, y, w, h, text, max_fs, *, bold=False, align="left", heading=False,
