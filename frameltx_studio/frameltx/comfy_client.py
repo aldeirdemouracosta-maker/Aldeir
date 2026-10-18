@@ -50,6 +50,8 @@ class ComfyProgress:
 ProgressCallback = Callable[[ComfyProgress], None]
 
 OOM_MARKERS = ("out of memory", "outofmemory", "cuda error: out of memory", "allocation on device")
+# Mensagens do safetensors/torch quando o arquivo de modelo está truncado ou corrompido.
+CORRUPT_MODEL_MARKERS = ("deserializing header", "header too small", "incomplete metadata", "invalid load key")
 
 
 def _friendly_execution_error(data: dict[str, Any]) -> ComfyError:
@@ -57,6 +59,11 @@ def _friendly_execution_error(data: dict[str, Any]) -> ComfyError:
     msg = str(data.get("exception_message", "")).strip()
     if any(m in msg.lower() for m in OOM_MARKERS) or "OutOfMemory" in str(data.get("exception_type")):
         return ComfyOOMError(f"VRAM insuficiente no nó {node}.")
+    if any(m in msg.lower() for m in CORRUPT_MODEL_MARKERS):
+        return ComfyError(
+            f"O arquivo de modelo usado pelo nó '{node}' está incompleto ou corrompido. "
+            "Baixe o modelo novamente (o download pode ter sido interrompido)."
+        )
     return ComfyError(f"Erro no nó '{node}': {msg.splitlines()[0] if msg else 'erro desconhecido'}")
 
 

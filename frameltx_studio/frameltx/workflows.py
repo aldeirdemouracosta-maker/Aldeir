@@ -139,6 +139,23 @@ def missing_node_types(workflow: Workflow, object_info: dict[str, Any]) -> list[
     return sorted({n["class_type"] for n in workflow.values()} - object_info.keys())
 
 
+def input_problems(workflow: Workflow, object_info: dict[str, Any]) -> list[str]:
+    """Campos obrigatórios ausentes ou desconhecidos — sinal de que o pacote de nós mudou."""
+    problems = []
+    for node_id, node in workflow.items():
+        spec = object_info.get(node["class_type"], {}).get("input")
+        if spec is None:
+            continue  # nó ausente já é reportado por missing_node_types
+        required, optional = spec.get("required", {}), spec.get("optional", {})
+        given = node.get("inputs", {})
+        label = f"{node['class_type']} (nó {node_id})"
+        problems += [f"{label}: falta o campo `{k}`" for k in required if k not in given]
+        problems += [
+            f"{label}: campo desconhecido `{k}`" for k in given if k not in required and k not in optional
+        ]
+    return problems
+
+
 def describe_validation(workflows_dir: Path, object_info: dict[str, Any] | None) -> str:
     """Relatório em Markdown sobre todos os workflows (usado na aba Sistema)."""
     lines = []
@@ -152,8 +169,11 @@ def describe_validation(workflows_dir: Path, object_info: dict[str, Any] | None)
             lines.append(f"- 🔘 **{name}** (`{filename}`): {len(wf)} nós — ComfyUI offline, não validado")
             continue
         missing = missing_node_types(wf, object_info)
+        fields = input_problems(wf, object_info)
         if missing:
             lines.append(f"- ⚠️ **{name}**: nós ausentes no ComfyUI: `{', '.join(missing)}`")
-        else:
+        if fields:
+            lines.append(f"- ⚠️ **{name}**: o pacote de nós mudou — " + "; ".join(fields[:5]))
+        if not missing and not fields:
             lines.append(f"- ✅ **{name}** (`{filename}`): todos os {len(wf)} nós disponíveis")
     return "\n".join(lines)

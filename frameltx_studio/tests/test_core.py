@@ -74,3 +74,9 @@ def test_preview_decoding():
     img = ComfyClient._decode_preview(struct.pack(">II", 1, 1) + buf.getvalue())
     assert img is not None and img.size == (8, 8)
     assert ComfyClient._decode_preview(b"\x00") is None
+
+
+def test_corrupt_model_message():
+    err = _friendly_execution_error({"node_type": "VAELoader",
+                                     "exception_message": "Error while deserializing header: header too small"})
+    assert "incompleto ou corrompido" in str(err)

@@ -2,7 +2,8 @@ import pytest
 
 from frameltx.config import APP_DIR
 from frameltx.workflows import (
-    WORKFLOW_FILES, WorkflowError, build_workflow, find_placeholders, load_template, missing_node_types,
+    WORKFLOW_FILES, WorkflowError, build_workflow, find_placeholders, input_problems, load_template,
+    missing_node_types,
 )
 
 WF_DIR = APP_DIR / "workflows"
@@ -56,3 +57,11 @@ def test_non_api_format_rejected(tmp_path):
     (tmp_path / "bad.json").write_text('{"nodes": [], "links": []}')
     with pytest.raises(WorkflowError, match="formato API"):
         load_template(tmp_path, "bad")
+
+
+def test_input_problems_detects_renamed_fields():
+    wf = {"1": {"class_type": "CFGGuider", "inputs": {"model": ["2", 0], "cfgg": 1.0}}}
+    info = {"CFGGuider": {"input": {"required": {"model": ["MODEL"], "cfg": ["FLOAT"]}, "optional": {}}}}
+    problems = input_problems(wf, info)
+    assert any("falta o campo `cfg`" in p for p in problems)
+    assert any("desconhecido `cfgg`" in p for p in problems)
