@@ -228,6 +228,8 @@ class Handler(SimpleHTTPRequestHandler):
             payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
         except Exception:
             return self._error(400, "JSON inválido")
+        if not isinstance(payload, dict):
+            return self._error(400, "JSON inválido: envie um objeto.")
         path = urlparse(self.path).path
         try:
             return self._route_post(path, payload)

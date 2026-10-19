@@ -132,7 +132,9 @@ def build_user_prompt(text: str, slides: int, language: str, tone: str, detail: 
 
 # ----------------------------------------------------------------- Claude ---
 
-# Haiku 4.5 e Sonnet 4.5 (e anteriores) recusam o parâmetro `effort`.
+# Modelos conhecidos que recusam o parâmetro `effort`. A lista evita uma
+# chamada extra; modelos desconhecidos que também recusem são tratados pelo
+# retry em `_anthropic_json` (erro 400 citando effort/output_config).
 _NO_EFFORT_PREFIXES = ("claude-haiku-4", "claude-sonnet-4-5", "claude-3")
 _FALLBACK_MODELS = ("claude-opus-5", "claude-opus-5-5", "claude-fable-5-1")
 
@@ -140,6 +142,16 @@ _FALLBACK_MODELS = ("claude-opus-5", "claude-opus-5-5", "claude-fable-5-1")
 def generate_anthropic(text: str, slides: int, language: str, tone: str, cfg: dict[str, Any],
                        detail: str = "medium") -> dict[str, Any]:
     return _anthropic_json(SYSTEM_PROMPT, build_user_prompt(text, slides, language, tone, detail), OUTLINE_SCHEMA, cfg)
+
+
+def _anthropic_stream(client: Any, kwargs: dict[str, Any], use_fallbacks: bool) -> Any:
+    if use_fallbacks:
+        # Se o modelo recusar por política, a API refaz o pedido no modelo
+        # de fallback recomendado, dentro da mesma chamada.
+        with client.beta.messages.stream(betas=["server-side-fallback-2026-07-01"], fallbacks="default", **kwargs) as stream:
+            return stream.get_final_message()
+    with client.messages.stream(**kwargs) as stream:
+        return stream.get_final_message()
 
 
 def _anthropic_json(system: str, user: str, schema: dict[str, Any], cfg: dict[str, Any],
@@ -164,14 +176,15 @@ def _anthropic_json(system: str, user: str, schema: dict[str, Any], cfg: dict[st
     use_fallbacks = model in _FALLBACK_MODELS
     try:
         client = anthropic.Anthropic(api_key=key) if key else anthropic.Anthropic()
-        if use_fallbacks:
-            # Se o modelo recusar por política, a API refaz o pedido no modelo
-            # de fallback recomendado, dentro da mesma chamada.
-            with client.beta.messages.stream(betas=["server-side-fallback-2026-07-01"], fallbacks="default", **kwargs) as stream:
-                message = stream.get_final_message()
-        else:
-            with client.messages.stream(**kwargs) as stream:
-                message = stream.get_final_message()
+        try:
+            message = _anthropic_stream(client, kwargs, use_fallbacks)
+        except anthropic.BadRequestError as exc:
+            # Modelo novo/desconhecido que não aceita `effort`: refaz sem ele.
+            reason = str(exc).lower()
+            if "effort" not in kwargs["output_config"] or not ("effort" in reason or "output_config" in reason):
+                raise
+            kwargs["output_config"].pop("effort", None)
+            message = _anthropic_stream(client, kwargs, use_fallbacks)
     except anthropic.AuthenticationError as exc:
         raise AIError("Chave da Anthropic inválida. Confira em Configurações.") from exc
     except anthropic.PermissionDeniedError as exc:

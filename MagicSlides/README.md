@@ -63,7 +63,7 @@ magicslides/
   core.py                      formato canônico presentation.json + validação/migração
   static/                      editor (HTML/CSS/JS puro, sem build)
 packaging/                     PyInstaller (.spec), Inno Setup (.iss), gerador de ícone
-tests/                         pytest (25 testes: layouts, IA simulada, imagens, exportação, servidor)
+tests/                         pytest (47 testes: layouts, IA simulada, imagens, exportação, servidor)
 ```
 
 O princípio do projeto original continua valendo: **`presentation.json` é a fonte da verdade**. Gerador, editor e exportadores leem e escrevem o mesmo formato.

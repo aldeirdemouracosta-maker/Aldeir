@@ -88,7 +88,11 @@ def _protect(value: str) -> str:
         return value
     try:
         return _DPAPI_PREFIX + base64.b64encode(_dpapi(value.encode("utf-8"), True)).decode("ascii")
-    except Exception:
+    except Exception as exc:
+        # Não dá para falhar o salvamento inteiro, mas o usuário precisa saber
+        # que a chave ficou em texto puro.
+        sys.stderr.write(f"[MagicSlides] Aviso: o DPAPI do Windows falhou ({exc}); "
+                         "a chave de API será gravada sem criptografia.\n")
         return value
 
 
@@ -98,6 +102,8 @@ def _unprotect(value: Any) -> Any:
     try:
         return _dpapi(base64.b64decode(value[len(_DPAPI_PREFIX):]), False).decode("utf-8")
     except Exception:
+        sys.stderr.write("[MagicSlides] Aviso: uma chave salva não pôde ser descriptografada "
+                         "(outro usuário/PC?). Informe a chave de novo em Configurações.\n")
         return ""  # outro usuário/PC: pede a chave de novo em vez de quebrar
 
 

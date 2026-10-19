@@ -209,6 +209,17 @@ def test_api_keys_are_encrypted_on_disk_on_windows():
     assert config.load()["anthropic_api_key"] == "sk-ant-segredo123"
 
 
+@pytest.mark.skipif(not sys.platform.startswith("win"), reason="DPAPI só existe no Windows")
+def test_dpapi_failure_keeps_key_and_warns(monkeypatch, capsys):
+    def broken(data, protect):
+        raise OSError("sem DPAPI")
+
+    monkeypatch.setattr(config, "_dpapi", broken)
+    config.save({"anthropic_api_key": "sk-sem-cofre"})
+    assert config.load()["anthropic_api_key"] == "sk-sem-cofre"
+    assert "sem criptografia" in capsys.readouterr().err
+
+
 def test_old_plaintext_config_still_loads():
     config.config_path().parent.mkdir(parents=True, exist_ok=True)
     config.config_path().write_text(json.dumps({"anthropic_api_key": "sk-antigo"}), encoding="utf-8")
@@ -269,6 +280,52 @@ def test_anthropic_effort_only_for_models_that_support_it(monkeypatch):
                                                   "anthropic_api_key": "k", "anthropic_effort": "medium"})
     assert "effort" not in seen[0]["output_config"]
     assert seen[1]["output_config"]["effort"] == "medium"
+
+
+def test_anthropic_retries_without_effort_when_model_rejects_it(monkeypatch):
+    anthropic = pytest.importorskip("anthropic")
+    httpx = pytest.importorskip("httpx2", reason="SDK anthropic usa httpx2")
+    calls = []
+
+    class Block:
+        type = "text"
+        text = json.dumps({"title": "IA", "subtitle": "", "slides": [{"layout": "title", "title": "IA"}]})
+
+    class Msg:
+        stop_reason = "end_turn"
+        content = [Block()]
+
+    class Stream:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get_final_message(self):
+            return Msg()
+
+    class FakeMessages:
+        def stream(self, **kw):
+            calls.append(dict(kw, output_config=dict(kw["output_config"])))
+            if "effort" in kw["output_config"]:
+                response = httpx.Response(400, request=httpx.Request("POST", "https://api.anthropic.com/v1/messages"))
+                raise anthropic.BadRequestError("unsupported parameter: output_config.effort",
+                                                response=response, body=None)
+            return Stream()
+
+    class FakeClient:
+        def __init__(self, api_key=None):
+            self.beta = type("B", (), {"messages": FakeMessages()})()
+            self.messages = FakeMessages()
+
+    monkeypatch.setattr(anthropic, "Anthropic", FakeClient)
+    cfg = {"provider": "anthropic", "anthropic_api_key": "k", "anthropic_model": "claude-sonnet-4-0",
+           "anthropic_effort": "medium"}
+    outline, _ = ai.generate_outline("tema", 4, "pt", "", cfg)
+    assert outline["title"] == "IA"
+    assert len(calls) == 2
+    assert "effort" in calls[0]["output_config"] and "effort" not in calls[1]["output_config"]
 
 
 # ---------------------------------------------------------------- imagens ---
@@ -389,6 +446,20 @@ def test_html_export_rejects_malformed_colors():
     assert 'onx=1' not in html
 
 
+def test_html_export_sanitizes_align_and_font_and_ignores_nan():
+    pres = _rich_presentation()
+    text = next(e for s in pres["slides"] for e in s["elements"] if e["type"] == "text")
+    text["align"] = "left;background:url(https://evil.example/x)"
+    text["font"] = "Arial';background:url(https://evil.example/x)"
+    shape = next(e for s in pres["slides"] for e in s["elements"] if e["type"] == "shape")
+    shape["opacity"] = float("nan")
+    html = build_html(pres).decode()
+    assert "url(" not in html and "https://" not in html
+    assert "text-align:left;justify-content:" in html
+    assert "font-family:'Arialbackgroundurlhttpsevil.examplex'" in html
+    assert "opacity:1.000" in html and "opacity:nan" not in html
+
+
 # ----------------------------------------------------------------- servidor ---
 
 @pytest.fixture()
@@ -418,6 +489,12 @@ def test_server_requires_token_and_injects_it(live_server):
     with pytest.raises(urllib.error.HTTPError) as err:
         _req(live_server + "/api/settings", token=True, headers={"Host": "evil.example"})
     assert err.value.code == 403
+
+
+def test_server_rejects_non_object_json(live_server):
+    with pytest.raises(urllib.error.HTTPError) as err:
+        _req(live_server + "/api/settings", [1, 2, 3])
+    assert err.value.code == 400
 
 
 def test_server_blocks_path_traversal(live_server):
