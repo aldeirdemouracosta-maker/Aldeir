@@ -288,15 +288,51 @@ def ping_unsplash_download(item: dict[str, Any], cfg: dict[str, Any]) -> None:
 
 # ------------------------------------------------------- preencher slides ---
 
+def _fill_with_ai(presentation: dict[str, Any], cfg: dict[str, Any], todo: list,
+                  progress: Callable[[str], None] | None) -> tuple[list[str], list[str]]:
+    """Gera, por IA, a imagem de cada espaço vazio (em paralelo, poucos de cada vez)."""
+    from . import imagegen
+    warnings: list[str] = []
+
+    def work(pair):
+        slide, el = pair
+        title = next((e.get("text", "") for e in slide.get("elements", [])
+                      if e.get("type") == "text" and e.get("role") == "title"), "")
+        try:
+            return el, imagegen.generate(imagegen.build_prompt(el["query"], title), cfg), None
+        except ImageError as exc:
+            return el, None, str(exc)
+
+    credit = imagegen.credit_for(cfg)
+    done = 0
+    # No seu computador uma imagem por vez (várias juntas travam a placa de vídeo).
+    workers = 1 if cfg.get("imagegen_provider") == "automatic1111" else 3
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for el, result, err in pool.map(work, todo):
+            if err and err not in warnings:
+                warnings.append(err)
+            if result:
+                el["src"], el["credit"], el["source"] = result[0], credit, "ai"
+                done += 1
+                if progress:
+                    progress(f"Imagem por IA: {el['query']}")
+    return ([credit] if done else []), warnings
+
+
 def fill_presentation_images(presentation: dict[str, Any], cfg: dict[str, Any],
-                             progress: Callable[[str], None] | None = None) -> tuple[list[str], list[str]]:
-    """Busca e baixa, em paralelo, uma imagem para cada elemento de imagem
-    vazio. Elementos sem imagem viram um bloco de cor do tema.
-    Devolve (créditos, avisos)."""
+                             progress: Callable[[str], None] | None = None,
+                             mode: str = "web") -> tuple[list[str], list[str]]:
+    """Preenche cada elemento de imagem vazio, buscando fotos na internet
+    (mode="web") ou gerando por IA (mode="ai"). Elementos sem imagem viram
+    um bloco de cor do tema. Devolve (créditos, avisos)."""
     todo = [(slide, el) for slide in presentation.get("slides", []) for el in slide.get("elements", [])
             if el.get("type") == "image" and not el.get("src") and el.get("query")]
     if not todo:
         return [], []
+    if mode == "ai":
+        credits, warnings = _fill_with_ai(presentation, cfg, todo, progress)
+        _placeholders_for_empty(presentation)
+        return credits, warnings
     used: set[str] = set()
     warnings: list[str] = []
 
@@ -342,6 +378,13 @@ def fill_presentation_images(presentation: dict[str, Any], cfg: dict[str, Any],
             ping_unsplash_download(chosen, cfg)
         if progress:
             progress(f"Imagem: {el['query']}")
+    _placeholders_for_empty(presentation)
+    return credits, warnings
+
+
+def _placeholders_for_empty(presentation: dict[str, Any]) -> None:
+    """Espaços de imagem que ficaram vazios viram um bloco de cor do tema
+    (o editor oferece 'Colocar imagem aqui')."""
     theme = presentation.get("theme", {})
     for slide in presentation.get("slides", []):
         for i, el in enumerate(slide.get("elements", [])):
@@ -352,4 +395,3 @@ def fill_presentation_images(presentation: dict[str, Any], cfg: dict[str, Any],
                     "fill": theme.get("surface", "#DDDDDD"), "stroke": None, "opacity": 1, "radius": 0,
                     "placeholderQuery": el.get("query", ""),
                 }
-    return credits, warnings

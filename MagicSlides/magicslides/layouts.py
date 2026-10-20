@@ -13,6 +13,7 @@ O roteiro é o que a IA (ou o modo offline) devolve:
 from __future__ import annotations
 
 import math
+from contextvars import ContextVar
 from typing import Any
 
 from . import __version__
@@ -27,6 +28,20 @@ IMAGE_LAYOUTS = {"image-right", "image-left", "image-full"}
 PT_PER_UNIT = 960.0 / CANVAS_W  # 9.6pt por unidade do canvas
 MAX_SLIDES = 40
 
+# Fator aplicado ao tamanho máximo (e mínimo) de todo texto gerado. 1.0 = padrão.
+TEXT_SCALES = {"small": 0.82, "normal": 1.0, "large": 1.22, "xlarge": 1.45}
+_TEXT_SCALE: ContextVar[float] = ContextVar("magicslides_text_scale", default=1.0)
+
+
+def parse_text_scale(value: Any) -> float:
+    """Aceita 'small'/'normal'/'large'/'xlarge' ou um número (0.6 a 1.8)."""
+    if isinstance(value, str) and value in TEXT_SCALES:
+        return TEXT_SCALES[value]
+    try:
+        return max(0.6, min(1.8, float(value)))
+    except (TypeError, ValueError):
+        return 1.0
+
 
 # ---------------------------------------------------------------- roteiro ---
 
@@ -37,7 +52,7 @@ def _s(value: Any, limit: int = 400) -> str:
     return text[:limit]
 
 
-def _list(value: Any, limit: int = 6, size: int = 220) -> list[str]:
+def _list(value: Any, limit: int = 6, size: int = 280) -> list[str]:
     if isinstance(value, str):
         value = [v for v in value.split("\n")]
     if not isinstance(value, list):
@@ -118,11 +133,38 @@ def fit_font(text: str, w: float, h: float, max_fs: float, min_fs: float = 11, b
     return int(max(min_fs, fs))
 
 
+def capacity_chars(w: float, h: float, bullets: bool = False, fs: float = 14) -> int:
+    """Quantos caracteres cabem numa caixa w x h em letra legível (14 pt), com folga."""
+    usable = w * PT_PER_UNIT - (fs * 1.1 if bullets else 0)
+    chars_per_line = max(4.0, usable / (fs * _char_w(False)))
+    lines = max(1, int(h * PT_PER_UNIT / (fs * 1.2)))
+    return max(20, int(lines * chars_per_line * 0.85))
+
+
+def fit_rewritten(text: str, w: float, h: float, bullets: bool, base_fs: float, level: str) -> tuple[str, int]:
+    """Encaixa um texto reescrito na caixa: corta o excesso (últimos tópicos, depois palavras)
+    e escolhe a fonte. Quantidade básica pode crescer um pouco; a extensa nunca aumenta a letra."""
+    min_legible = 13
+    lines = [ln.strip() for ln in str(text).split("\n") if ln.strip()] or [""]
+    while len(lines) > 1 and text_height("\n".join(lines), w, min_legible, bullets) > h:
+        lines.pop()
+    out = "\n".join(lines)
+    if text_height(out, w, min_legible, bullets) > h:
+        words = out.split()
+        while len(words) > 3 and text_height(" ".join(words), w, min_legible, bullets) > h:
+            words.pop()
+        out = " ".join(words).rstrip(",;:") + "…"
+    factor = {"basic": 1.3, "medium": 1.1}.get(level, 1.0)
+    cap = max(min_legible, min(48.0, float(base_fs or 20) * factor))
+    return out, fit_font(out, w, h, cap, 10, bullets)
+
+
 # --------------------------------------------------------------- elementos ---
 
 def _text(theme, role, x, y, w, h, text, max_fs, *, bold=False, align="left", heading=False,
           bullets=False, italic=False, min_fs=11, valign="top") -> dict[str, Any]:
-    fs = fit_font(text, w, h, max_fs, min_fs, bullets, bold)
+    scale = _TEXT_SCALE.get()
+    fs = fit_font(text, w, h, max_fs * scale, max(7, min_fs * min(1.0, scale)), bullets, bold)
     return {
         "id": uid("text"), "type": "text", "role": role,
         "x": round(x, 3), "y": round(y, 3), "w": round(w, 3), "h": round(h, 3),
@@ -301,14 +343,20 @@ def build_credits_slide(credits: list[str], theme: dict[str, Any]) -> dict[str, 
             "bgRole": None, "notes": "", "elements": els}
 
 
-def build_presentation(outline: dict[str, Any], theme_id: str | None, author: str = "") -> dict[str, Any]:
+def build_presentation(outline: dict[str, Any], theme_id: str | None, author: str = "",
+                       text_scale: Any = 1.0) -> dict[str, Any]:
     theme = get_theme(theme_id)
     topic = outline.get("title", "")
+    token = _TEXT_SCALE.set(parse_text_scale(text_scale))
+    try:
+        slides = [build_slide(spec, theme, topic) for spec in outline["slides"]]
+    finally:
+        _TEXT_SCALE.reset(token)
     return {
         "schema": SCHEMA,
         "version": __version__,
         "meta": {"title": outline.get("title") or "Apresentação", "author": author},
         "canvas": {"ratio": "16:9", "width": CANVAS_W, "height": CANVAS_H},
         "theme": theme,
-        "slides": [build_slide(spec, theme, topic) for spec in outline["slides"]],
+        "slides": slides,
     }

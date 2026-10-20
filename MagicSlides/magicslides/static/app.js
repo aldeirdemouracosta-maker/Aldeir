@@ -578,6 +578,7 @@ function insertImage(src, meta = {}) {
   }
   imageTarget = null;
   render();
+  if ($('imageManagerDialog').open) renderImageManager();
   setStatus('Imagem inserida');
 }
 async function insertLocalFile(file) {
@@ -702,7 +703,7 @@ function providerText() {
   if (settings.provider === 'openai') {
     return { cls: '', html: `Usando <b>${escapeHtml(settings.openai_model)}</b> em ${escapeHtml(settings.openai_base_url)}. <a data-open-settings>Alterar</a>` };
   }
-  return { cls: 'warn', html: '<b>Modo offline (sem IA):</b> cole um texto ou tópicos e ele vira slides; um tema curto gera um rascunho para você completar. Para a IA escrever o conteúdo, <a data-open-settings>configure Claude ou Ollama</a>.' };
+  return { cls: 'warn', html: '<b>Modo offline (sem IA):</b> cole um texto ou tópicos e ele vira slides; um tema curto gera um rascunho para você completar. Para a IA <b>entender o tema e escrever o conteúdo</b>, <a data-open-settings>configure Gemini (tem camada grátis), Claude ou Ollama</a>.' };
 }
 function openGenerateDialog() {
   const p = providerText();
@@ -711,19 +712,37 @@ function openGenerateDialog() {
   line.innerHTML = p.html;
   line.querySelectorAll('[data-open-settings]').forEach((a) => (a.onclick = () => { $('generateDialog').close(); openSettings(true); }));
   $('genLanguage').value = settings.language || 'Português do Brasil';
+  updateImageNote();
   const grid = $('genThemeGrid');
   grid.replaceChildren();
   themes.forEach((t) => grid.appendChild(themeCard(t, genTheme === t.id, () => { genTheme = t.id; openGenerateDialog(); })));
   if (!$('generateDialog').open) $('generateDialog').showModal();
   $('genPrompt').focus();
 }
+function imagegenReady() {
+  const p = settings.imagegen_provider || 'gemini';
+  return p === 'pollinations' || p === 'automatic1111' || !!settings.has_imagegen_api_key || (p === 'openai' && /^http:\/\/(localhost|127\.0\.0\.1)/.test(settings.imagegen_base_url || ''));
+}
+function updateImageNote() {
+  const mode = $('genImageMode').value;
+  const label = (settings.imagegen_labels || {})[settings.imagegen_provider || 'gemini'] || 'IA';
+  $('genImageNote').textContent = mode === 'ai'
+    ? (imagegenReady() ? `Imagens criadas por: ${label}. Pode demorar mais.` : 'Falta configurar a chave em ⚙ Configurações > Imagens geradas por IA.')
+    : mode === 'web' ? 'Busca fotos no Openverse/Wikimedia (e Pexels, Unsplash, Pixabay se houver chave).' : 'Os slides saem sem fotos.';
+}
 async function submitGenerate() {
   const prompt = $('genPrompt').value.trim();
   if (!prompt) { toast('Descreva o tema ou cole um texto.', 'warn'); return; }
   const req = {
     prompt, slides: Number($('genSlides').value) || 8, language: $('genLanguage').value, tone: $('genTone').value,
-    theme: genTheme, images: $('genImages').checked, credits: $('genCredits').checked,
+    theme: genTheme, credits: $('genCredits').checked,
+    text_level: $('genDetail').value, text_scale: $('genTextSize').value, image_mode: $('genImageMode').value,
+    images: $('genImageMode').value !== 'none',
   };
+  if (req.image_mode === 'ai' && !imagegenReady()) {
+    toast('Para gerar imagens por IA, configure o provedor e a chave em ⚙ Configurações > Imagens geradas por IA.', 'warn', 9000);
+    $('generateDialog').close(); openSettings(); return;
+  }
   $('generateDialog').close();
   showProgress('Iniciando…', 0.03);
   try {
@@ -752,6 +771,7 @@ async function pollJob(job) {
   slideIndex = 0; selectedId = null;
   render();
   toast(`Apresentação criada com ${data.slides.length} slides — ${st.provider}`);
+  if (settings.provider === 'offline') toast('Gerado SEM IA: o app só organizou o que você digitou, sem escrever conteúdo novo. Para o texto ser contextualizado e enriquecido, configure Gemini, Claude ou Ollama em ⚙ Configurações.', 'warn', 12000);
   (st.warnings || []).slice(0, 3).forEach((w) => toast(w, 'warn', 8000));
 }
 function showProgress(msg, p) {
@@ -820,6 +840,290 @@ async function pickImage(item, btn) {
   }
 }
 
+
+/* ------------------------------------------- gerenciador de imagens ---- */
+const imQueries = {};   // id do elemento -> termo digitado no gerenciador
+let imBusy = false;
+
+function slideTitleOf(slide, i) {
+  const t = slide.elements.find((e) => e.type === 'text' && e.role === 'title');
+  return ((t && t.text) || '').trim() || `Slide ${i + 1}`;
+}
+const isImageSlot = (e) => e.type === 'image' || (e.type === 'shape' && e.placeholderQuery !== undefined);
+const slotHasImage = (e) => !!e && e.type === 'image' && !!e.src;
+function slotQuery(e, slide, si) {
+  if (!e) return slideTitleOf(slide, si);
+  return (imQueries[e.id] ?? (e.query || e.placeholderQuery || '')).trim();
+}
+function imageRows() {
+  const rows = [];
+  data.slides.forEach((slide, si) => {
+    const slots = slide.elements.filter(isImageSlot);
+    if (!slots.length) rows.push({ si, slide, el: null });
+    slots.forEach((el) => rows.push({ si, slide, el }));
+  });
+  return rows;
+}
+function goToSlot(si, elId) {
+  slideIndex = si;
+  selectedId = elId || null;
+  render();
+}
+/** Coloca a imagem no espaço (imagem vazia ou bloco de cor) e devolve o elemento resultante. */
+function fillSlot(slide, el, src, meta = {}) {
+  if (el.type === 'image') {
+    Object.assign(el, { src, alt: meta.alt || el.alt || '', credit: meta.credit || '', page: meta.page || '', source: meta.source || '' });
+    if (meta.query) el.query = meta.query;
+    return el;
+  }
+  const img = { id: uid('image'), type: 'image', x: el.x, y: el.y, w: el.w, h: el.h, src, alt: meta.alt || '', credit: meta.credit || '',
+                page: meta.page || '', source: meta.source || '', fit: 'cover', query: meta.query || el.placeholderQuery || '' };
+  slide.elements.splice(slide.elements.indexOf(el), 1, img);
+  return img;
+}
+/* ------------------------------------- quantidade de texto (com IA) ---- */
+const LEVEL_LABEL = { basic: 'básica', medium: 'média', extensive: 'extensa' };
+function openTextAmount() {
+  const off = settings.provider === 'offline';
+  const note = $('textAmountNote');
+  note.className = `provider-line ${off ? 'warn' : ''}`;
+  note.textContent = off
+    ? 'Sem IA só é possível reduzir o texto (Básica). Para Média ou Extensa, configure Gemini, Claude ou Ollama em ⚙ Configurações.'
+    : `Usando ${settings.provider === 'anthropic' ? 'Claude' : settings.openai_model || 'a IA configurada'} para reescrever.`;
+  $('textAmountDialog').showModal();
+}
+function collectRewriteItems(scope) {
+  const indexes = scope === 'current' ? [slideIndex] : data.slides.map((_, i) => i);
+  const items = [];
+  indexes.forEach((si) => {
+    const slide = data.slides[si];
+    if (!slide || slide.layout === 'credits') return;
+    const title = slideTitleOf(slide, si);
+    slide.elements.forEach((e) => {
+      if (e.type === 'text' && e.role === 'body' && (e.text || '').trim()) {
+        items.push({ id: e.id, text: e.text, bullets: !!e.bullets, w: e.w, h: e.h, fontSize: e.fontSize, slide_title: title });
+      }
+    });
+  });
+  return items;
+}
+async function applyTextAmount() {
+  const level = document.querySelector('input[name=textLevel]:checked')?.value;
+  if (!level) return toast('Escolha a quantidade de texto.', 'warn');
+  const items = collectRewriteItems($('textAmountScope').value);
+  if (!items.length) return toast('Não há texto de conteúdo para reescrever.', 'warn');
+  $('textAmountDialog').close();
+  showProgress(`Reescrevendo o texto (${LEVEL_LABEL[level]})…`, 0.25);
+  try {
+    const res = await api('/api/rewrite', { items, level, language: settings.language });
+    const byId = new Map(res.items.map((r) => [r.id, r]));
+    commit();
+    let n = 0;
+    data.slides.forEach((s) => s.elements.forEach((e) => {
+      const r = byId.get(e.id);
+      if (r && e.type === 'text') { e.text = r.text; e.fontSize = r.fontSize; n++; }
+    }));
+    render();
+    toast(`Texto ${LEVEL_LABEL[level]} aplicado em ${n} caixas — ${res.provider}. Para voltar: Ctrl+Z.`, '', 8000);
+  } catch (e) { toast(e.message, 'error', 12000); }
+  hideProgress();
+}
+function scaleAllText(factor) {
+  commit();
+  let n = 0;
+  data.slides.forEach((s) => s.elements.forEach((e) => {
+    if (e.type === 'text') { e.fontSize = clamp(Math.round((e.fontSize || 20) * factor * 2) / 2, 8, 160); n++; }
+  }));
+  render();
+  setStatus(`Texto ${factor > 1 ? 'aumentado' : 'diminuído'} em ${n} caixas`);
+}
+function openImageManager() {
+  renderImageManager();
+  if (!$('imageManagerDialog').open) $('imageManagerDialog').showModal();
+}
+function renderImageManager() {
+  const rows = imageRows();
+  const slots = rows.filter((r) => r.el);
+  const filled = slots.filter((r) => slotHasImage(r.el)).length;
+  $('imSummary').textContent = slots.length
+    ? `${filled} de ${slots.length} espaços de imagem preenchidos${filled < slots.length ? ' — use “Preencher as que faltam” ou escolha uma por uma.' : '.'}`
+    : 'Nenhum slide tem espaço para imagem ainda. Use “Adicionar imagem” em um slide.';
+  $('imFillBtn').disabled = imBusy || filled >= slots.length;
+  const list = $('imList');
+  list.replaceChildren();
+  rows.forEach(({ si, slide, el }) => {
+    const row = document.createElement('div');
+    row.className = 'im-row';
+    let thumb;
+    if (slotHasImage(el)) {
+      thumb = document.createElement('img');
+      thumb.src = el.src; thumb.alt = el.alt || ''; thumb.className = 'im-thumb';
+    } else {
+      thumb = document.createElement('div');
+      thumb.className = 'im-thumb';
+      thumb.textContent = el ? 'sem imagem' : 'este slide não tem espaço para imagem';
+    }
+    const body = document.createElement('div');
+    body.className = 'im-body';
+    const head = document.createElement('div');
+    head.className = 'im-head';
+    head.textContent = `Slide ${si + 1} — ${slideTitleOf(slide, si)}`;
+    const sub = document.createElement('div');
+    sub.className = 'im-sub' + (el && !slotHasImage(el) ? ' warn' : '');
+    sub.textContent = slotHasImage(el) ? (el.credit || 'Imagem do computador (sem crédito)') : (el ? 'Sem imagem. Busque de novo ou envie uma do computador.' : '');
+    const btns = document.createElement('div');
+    btns.className = 'im-btns';
+    const mk = (label, fn, cls = '') => { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; if (cls) b.className = cls; b.onclick = fn; b.disabled = imBusy; return b; };
+    body.append(head, sub);
+    if (el) {
+      const q = document.createElement('div');
+      q.className = 'im-query';
+      const input = document.createElement('input');
+      input.value = slotQuery(el, slide, si);
+      input.placeholder = 'O que buscar (ex.: solar panels rooftop)';
+      input.setAttribute('aria-label', `Termo de busca do slide ${si + 1}`);
+      input.oninput = () => { imQueries[el.id] = input.value; };
+      input.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); imageManagerSearch(si, el); } };
+      q.append(input, mk('🔎 Buscar de novo', () => imageManagerSearch(si, el), 'primary'));
+      body.append(q);
+    }
+    if (el) btns.append(mk('🎨 Gerar com IA', () => imageManagerGenerate(si, el)));
+    btns.append(mk(el ? '🖼 Enviar do PC' : '＋ Adicionar imagem', () => imageManagerUpload(si, el)));
+    if (!el) btns.append(mk('🔎 Buscar na internet', () => imageManagerSearch(si, null)));
+    if (slotHasImage(el)) btns.append(mk('🗑 Remover imagem', () => imageManagerRemove(si, el)));
+    body.append(btns);
+    row.append(thumb, body);
+    list.append(row);
+  });
+}
+function imageManagerSearch(si, el) {
+  goToSlot(si, el && el.id);
+  if (el) {
+    const q = (imQueries[el.id] ?? '').trim();
+    if (q) { if (el.type === 'image') el.query = q; else el.placeholderQuery = q; }
+  }
+  openImageDialog(el ? el.id : null);
+  if (!el) { $('imgQuery').value = slideTitleOf(data.slides[si], si); searchImages(); }
+}
+function imageManagerUpload(si, el) {
+  goToSlot(si, el && el.id);
+  imageTarget = el ? el.id : null;
+  $('imageInput').click();
+}
+function imageManagerRemove(si, el) {
+  commit();
+  Object.assign(el, { src: '', credit: '', page: '', source: '' });
+  if (!el.query) el.query = el.alt || '';
+  render();
+  renderImageManager();
+}
+async function imageManagerGenerate(si, el) {
+  if (!imagegenReady()) { toast('Configure o provedor e a chave em ⚙ Configurações > Imagens geradas por IA.', 'warn', 8000); return; }
+  const slide = data.slides[si];
+  const q = slotQuery(el, slide, si) || slideTitleOf(slide, si);
+  imBusy = true; renderImageManager();
+  $('imProgress').textContent = `Gerando imagem por IA para o slide ${si + 1}… (pode levar alguns segundos)`;
+  try {
+    const res = await api('/api/images/generate', { prompt: q, title: slideTitleOf(slide, si) });
+    commit();
+    fillSlot(slide, el, res.src, { alt: q, credit: res.credit, source: 'ai', query: q });
+    render();
+    toast(`Imagem do slide ${si + 1} gerada por IA.`);
+  } catch (e) { toast(e.message, 'error', 9000); }
+  imBusy = false; $('imProgress').textContent = '';
+  renderImageManager();
+}
+async function fillMissingImages() {
+  if ($('imFillMode').value === 'ai') return fillMissingWithAI();
+  const todo = imageRows().filter((r) => r.el && !slotHasImage(r.el));
+  if (!todo.length || imBusy) return;
+  imBusy = true;
+  commit();
+  renderImageManager();
+  const usedUrls = new Set();
+  const failed = [];
+  let done = 0;
+  const progress = () => { $('imProgress').textContent = `Buscando imagens… ${done}/${todo.length}`; };
+  progress();
+  const trySearch = async (q) => {
+    const res = await api('/api/images/search', { query: q, source: 'auto' });
+    const items = (res.results || []).filter((i) => i.url && !usedUrls.has(i.url));
+    const wide = items.filter((i) => i.width >= i.height && i.height > 0);
+    return [...wide, ...items.filter((i) => !wide.includes(i))];
+  };
+  const handle = async (row) => {
+    const { si, slide, el } = row;
+    const q0 = slotQuery(el, slide, si);
+    const words = q0.split(/\s+/).filter(Boolean);
+    const attempts = [...new Set([q0, words.slice(0, 3).join(' '), words.slice(-2).join(' '), slideTitleOf(slide, si)].filter(Boolean))];
+    try {
+      for (const q of attempts) {
+        const found = await trySearch(q);
+        for (const cand of found.slice(0, 3)) {
+          if (usedUrls.has(cand.url)) continue;
+          usedUrls.add(cand.url);
+          try {
+            const res = await api('/api/images/fetch', { item: cand });
+            fillSlot(slide, row.el, res.src, { alt: cand.title, credit: res.credit, page: cand.page, source: cand.source, query: q });
+            done++; progress();
+            return;
+          } catch (_) { /* tenta a próxima */ }
+        }
+      }
+      failed.push(si + 1);
+    } catch (e) {
+      failed.push(si + 1);
+    }
+    done++; progress();
+  };
+  const queue = todo.slice();
+  await Promise.all(Array.from({ length: 3 }, async () => { while (queue.length) await handle(queue.shift()); }));
+  imBusy = false;
+  $('imProgress').textContent = '';
+  render();
+  renderImageManager();
+  if (failed.length) toast(`Sem resultado para os slides: ${[...new Set(failed)].sort((x, y) => x - y).join(', ')}. Edite o termo (em inglês) e busque de novo.`, 'warn', 9000);
+  else toast('Todas as imagens foram preenchidas.');
+}
+async function fillMissingWithAI() {
+  if (!imagegenReady()) { toast('Configure o provedor e a chave em ⚙ Configurações > Imagens geradas por IA.', 'warn', 8000); return; }
+  const todo = imageRows().filter((r) => r.el && !slotHasImage(r.el));
+  if (!todo.length || imBusy) return;
+  imBusy = true;
+  commit();
+  renderImageManager();
+  let done = 0; const failed = []; const errors = new Set();
+  const progress = () => { $('imProgress').textContent = `Gerando imagens por IA… ${done}/${todo.length}`; };
+  progress();
+  const queue = todo.slice();
+  const worker = async () => {
+    while (queue.length) {
+      const { si, slide, el } = queue.shift();
+      const q = slotQuery(el, slide, si) || slideTitleOf(slide, si);
+      try {
+        const res = await api('/api/images/generate', { prompt: q, title: slideTitleOf(slide, si) });
+        fillSlot(slide, el, res.src, { alt: q, credit: res.credit, source: 'ai', query: q });
+      } catch (e) { failed.push(si + 1); errors.add(e.message); }
+      done++; progress();
+    }
+  };
+  await Promise.all(Array.from({ length: settings.imagegen_provider === 'automatic1111' ? 1 : 2 }, worker));
+  imBusy = false; $('imProgress').textContent = '';
+  render(); renderImageManager();
+  if (failed.length) toast(`Não consegui gerar para os slides ${[...new Set(failed)].sort((x, y) => x - y).join(', ')}: ${[...errors][0]}`, 'warn', 12000);
+  else toast('Todas as imagens foram geradas por IA.');
+}
+async function copyImageCredits() {
+  const lines = [];
+  data.slides.forEach((slide, si) => slide.elements.forEach((e) => {
+    if (e.type === 'image' && e.credit) lines.push(`Slide ${si + 1}: ${e.credit}`);
+  }));
+  if (!lines.length) return toast('Ainda não há imagens com crédito.', 'warn');
+  const text = lines.join('\n');
+  try { await navigator.clipboard.writeText(text); toast(`${lines.length} crédito(s) copiado(s).`); }
+  catch (_) { window.prompt('Copie os créditos:', text); }
+}
+
 /* ------------------------------------------------------ configurações ---- */
 function openSettings(focusProvider = false) {
   const s = settings;
@@ -835,12 +1139,39 @@ function openSettings(focusProvider = false) {
   $('setPexels').value = ''; $('setPexels').placeholder = mask(s.has_pexels_api_key, s.pexels_api_key_from_env) || 'pexels.com/api';
   $('setUnsplash').value = ''; $('setUnsplash').placeholder = mask(s.has_unsplash_access_key, s.unsplash_access_key_from_env) || 'unsplash.com/developers';
   $('setPixabay').value = ''; $('setPixabay').placeholder = mask(s.has_pixabay_api_key, s.pixabay_api_key_from_env) || 'pixabay.com/api/docs';
+  $('setImgenProvider').value = s.imagegen_provider || 'gemini';
+  $('setImgenModel').value = s.imagegen_model || '';
+  $('setImgenUrl').value = s.imagegen_base_url || '';
+  $('setImgenSteps').value = s.imagegen_steps || 20;
+  $('setImgenWidth').value = s.imagegen_width || 768;
+  $('setImgenKey').value = ''; $('setImgenKey').placeholder = mask(s.has_imagegen_api_key, s.imagegen_api_key_from_env);
+  toggleImagegenFields();
   $('setLanguage').value = s.language || 'Português do Brasil';
   $('setAuthor').value = s.author || '';
   $('configPath').textContent = `Arquivo de configuração: ${s.config_path || ''}`;
   toggleProviderFields();
   $('settingsDialog').showModal();
   if (focusProvider) document.querySelector('input[name=provider]:checked')?.focus();
+}
+const IMGEN_DEFAULT_MODEL = { gemini: 'gemini-3.1-flash-image-preview', openai: 'gpt-image-1', pollinations: '', automatic1111: '' };
+const IMGEN_DEFAULT_URL = { openai: 'https://api.openai.com/v1', automatic1111: 'http://127.0.0.1:7860' };
+const IMGEN_HELP = {
+  gemini: 'Crie a chave em aistudio.google.com/apikey. Nem todo plano gratuito inclui geração de imagens; o nome do modelo pode mudar — troque-o aqui se aparecer “modelo não encontrado”.',
+  openai: 'Funciona com a OpenAI (gpt-image-1, dall-e-3) e com programas locais que oferecem POST /images/generations.',
+  pollinations: 'Serviço comunitário gratuito e sem chave. A qualidade e a disponibilidade variam, e os pedidos passam pelos servidores deles.',
+  automatic1111: 'Tudo no seu computador, sem enviar nada para fora. Abra o Stable Diffusion WebUI (AUTOMATIC1111, Forge ou SD.Next) com a opção --api. Modelo: nome do checkpoint (opcional; vazio usa o que estiver carregado). Passos: 20 para modelos comuns, 1 a 4 para modelos Turbo. Sem placa de vídeo, cada imagem pode levar vários minutos; o app gera uma por vez.',
+};
+function toggleImagegenFields(changed) {
+  const p = $('setImgenProvider').value;
+  if (changed) {
+    $('setImgenModel').value = IMGEN_DEFAULT_MODEL[p];
+    if (IMGEN_DEFAULT_URL[p]) $('setImgenUrl').value = IMGEN_DEFAULT_URL[p];
+  }
+  $('setImgenUrlRow').hidden = p !== 'openai' && p !== 'automatic1111';
+  $('setImgenKeyRow').hidden = p === 'pollinations' || p === 'automatic1111';
+  $('setImgenModel').closest('label').hidden = p === 'pollinations';
+  $('setImgenLocalRow').hidden = p !== 'automatic1111';
+  $('setImgenHelp').textContent = IMGEN_HELP[p];
 }
 function toggleProviderFields() {
   const p = document.querySelector('input[name=provider]:checked')?.value;
@@ -854,6 +1185,9 @@ async function saveSettings() {
     openai_base_url: $('setOpenaiUrl').value.trim(), openai_model: $('setOpenaiModel').value.trim(), openai_api_key: $('setOpenaiKey').value,
     image_sources: [...document.querySelectorAll('input[name=imgsrc]:checked')].map((c) => c.value),
     pexels_api_key: $('setPexels').value, unsplash_access_key: $('setUnsplash').value, pixabay_api_key: $('setPixabay').value,
+    imagegen_provider: $('setImgenProvider').value, imagegen_model: $('setImgenModel').value.trim(),
+    imagegen_base_url: $('setImgenUrl').value.trim(), imagegen_api_key: $('setImgenKey').value,
+    imagegen_steps: Number($('setImgenSteps').value) || 20, imagegen_width: Number($('setImgenWidth').value) || 768,
     language: $('setLanguage').value, author: $('setAuthor').value.trim(),
   };
   try {
@@ -954,6 +1288,15 @@ function bindUi() {
   $('addTextBtn').onclick = addText;
   $('addShapeBtn').onclick = addShape;
   $('addWebImageBtn').onclick = () => openImageDialog(null);
+  $('imageManagerBtn').onclick = openImageManager;
+  $('textAmountBtn').onclick = openTextAmount;
+  $('textAmountApply').onclick = applyTextAmount;
+  $('textSmallerBtn').onclick = () => scaleAllText(1 / 1.1);
+  $('textBiggerBtn').onclick = () => scaleAllText(1.1);
+  $('setImgenProvider').onchange = () => toggleImagegenFields(true);
+  $('genImageMode').onchange = updateImageNote;
+  $('imFillBtn').onclick = fillMissingImages;
+  $('imCreditsBtn').onclick = copyImageCredits;
   $('addImageBtn').onclick = () => { imageTarget = null; $('imageInput').click(); };
   $('imageInput').onchange = (e) => { if (e.target.files[0]) insertLocalFile(e.target.files[0]); e.target.value = ''; };
   $('imgFromPcBtn').onclick = () => { $('imageDialog').close(); $('imageInput').click(); };

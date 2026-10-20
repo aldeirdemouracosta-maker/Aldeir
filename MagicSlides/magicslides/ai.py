@@ -76,31 +76,86 @@ Layouts available:
 Rules:
 - The first slide must use "title"; the last should use "closing".
 - Vary layouts; use photos (image-right, image-left, image-full) on roughly half of the slides.
-- Bullets: max ~12 words each. No markdown, no numbering, no emojis.
+- Bullets: no markdown, no numbering, no emojis. Their length follows the TEXT AMOUNT in the user message
+  (default: max ~12 words each).
 - image_query: 2-5 concrete, visual keywords IN ENGLISH for a stock-photo search
   (e.g. "solar panels rooftop", "students classroom"). Never abstract words only.
-- notes: 2-4 sentences of speaker notes expanding the slide.
+- notes: speaker notes expanding the slide (length follows the TEXT AMOUNT; default 2-4 sentences).
 - Never invent statistics: if unsure, prefer bullets over "stats", or state figures as approximate.
-- Write all visible text (titles, bullets, notes) in the language the user asks for."""
+- Write all visible text (titles, bullets, notes) in the language the user asks for.
+- Write SUBSTANTIVE content, not placeholders. Each slide must teach something specific and different from the
+  other slides: definitions, how it works, concrete examples, comparisons, benefits, limits, applications.
+  Never repeat the same idea or the same words across slides, and never use vague filler like "Exemplo 1".
+- Every bullet carries information (what/why/how, with a concrete detail), not just a noun phrase.
+- Organize the deck as a story: introduction, development in logical order, conclusion."""
 
 
-def build_user_prompt(text: str, slides: int, language: str, tone: str) -> str:
+# Quantidade de texto nos slides: básica, média ou extensa.
+LEVELS = ("basic", "medium", "extensive")
+LEVEL_ALIASES = {"concise": "basic", "balanced": "medium", "detailed": "extensive"}   # nomes antigos
+
+
+def normalize_level(value: Any, default: str = "medium") -> str:
+    value = LEVEL_ALIASES.get(str(value), str(value))
+    return value if value in LEVELS else default
+
+
+DETAIL_GUIDE = {
+    "basic": ("TEXT AMOUNT: BASIC (short explanation). 3-4 bullets per slide, each at most ~10 words, straight to the point. "
+              "Speaker notes: 1-2 sentences."),
+    "medium": ("TEXT AMOUNT: MEDIUM. 3-5 bullets per slide, each about 10-16 words. Speaker notes: 2-4 sentences."),
+    "extensive": ("TEXT AMOUNT: EXTENSIVE (full explanation). Explain each idea properly: 3-5 bullets per slide, each a complete "
+                  "explanatory sentence of about 16-30 words that says what it is, why it matters and gives a concrete detail or "
+                  "example. On slides with a photo use 2-3 bullets; use more text on text-only slides. "
+                  "Speaker notes: 4-6 sentences that teach the topic to the presenter."),
+}
+
+
+def build_user_prompt(text: str, slides: int, language: str, tone: str, detail: str = "medium") -> str:
     return (
         f"Create a presentation with exactly {slides} slides.\n"
         f"Language for all visible text: {language}.\n"
-        f"Tone/style: {tone or 'clear and professional'}.\n\n"
-        "The user's input below may be a short topic, an outline or a long text. "
-        "If it is a text/outline, base the slides on its content and structure.\n"
+        f"Tone/style: {tone or 'clear and professional'}.\n"
+        f"{DETAIL_GUIDE[normalize_level(detail)]}\n\n"
+        "The user's input below may be a short topic, an outline or a long text.\n"
+        + (
+            "It is only a short topic or a few notes: use your own knowledge to research it and build a complete, "
+            "well-informed presentation about it, with specific and accurate content. Keep the user's wording as the topic, "
+            "but do not just repeat it.\n"
+            if len(text.strip()) < 400 else
+            "It is a text/outline: keep its key points and order, but understand the subject, reorganize it into a clear "
+            "presentation, fill obvious gaps with accurate information and turn long passages into concise slides.\n"
+        ) +
         "<user_input>\n" + text.strip()[:60000] + "\n</user_input>"
     )
 
 
 # ----------------------------------------------------------------- Claude ---
 
+# Modelos conhecidos que recusam o parâmetro `effort`. A lista evita uma
+# chamada extra; modelos desconhecidos que também recusem são tratados pelo
+# retry em `_anthropic_json` (erro 400 citando effort/output_config).
+_NO_EFFORT_PREFIXES = ("claude-haiku-4", "claude-sonnet-4-5", "claude-3")
 _FALLBACK_MODELS = ("claude-opus-5", "claude-opus-5-5", "claude-fable-5-1")
 
 
-def generate_anthropic(text: str, slides: int, language: str, tone: str, cfg: dict[str, Any]) -> dict[str, Any]:
+def generate_anthropic(text: str, slides: int, language: str, tone: str, cfg: dict[str, Any],
+                       detail: str = "medium") -> dict[str, Any]:
+    return _anthropic_json(SYSTEM_PROMPT, build_user_prompt(text, slides, language, tone, detail), OUTLINE_SCHEMA, cfg)
+
+
+def _anthropic_stream(client: Any, kwargs: dict[str, Any], use_fallbacks: bool) -> Any:
+    if use_fallbacks:
+        # Se o modelo recusar por política, a API refaz o pedido no modelo
+        # de fallback recomendado, dentro da mesma chamada.
+        with client.beta.messages.stream(betas=["server-side-fallback-2026-07-01"], fallbacks="default", **kwargs) as stream:
+            return stream.get_final_message()
+    with client.messages.stream(**kwargs) as stream:
+        return stream.get_final_message()
+
+
+def _anthropic_json(system: str, user: str, schema: dict[str, Any], cfg: dict[str, Any],
+                    max_tokens: int = 32000) -> dict[str, Any]:
     try:
         import anthropic
     except ImportError as exc:
@@ -111,22 +166,25 @@ def generate_anthropic(text: str, slides: int, language: str, tone: str, cfg: di
     effort = cfg.get("anthropic_effort") or "medium"
     kwargs: dict[str, Any] = dict(
         model=model,
-        max_tokens=32000,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": build_user_prompt(text, slides, language, tone)}],
-        output_config={"effort": effort, "format": {"type": "json_schema", "schema": OUTLINE_SCHEMA}},
+        max_tokens=max_tokens,
+        system=system,
+        messages=[{"role": "user", "content": user}],
+        output_config={"format": {"type": "json_schema", "schema": schema}},
     )
+    if not model.startswith(_NO_EFFORT_PREFIXES):
+        kwargs["output_config"]["effort"] = effort
     use_fallbacks = model in _FALLBACK_MODELS
     try:
         client = anthropic.Anthropic(api_key=key) if key else anthropic.Anthropic()
-        if use_fallbacks:
-            # Se o modelo recusar por política, a API refaz o pedido no modelo
-            # de fallback recomendado, dentro da mesma chamada.
-            with client.beta.messages.stream(betas=["server-side-fallback-2026-07-01"], fallbacks="default", **kwargs) as stream:
-                message = stream.get_final_message()
-        else:
-            with client.messages.stream(**kwargs) as stream:
-                message = stream.get_final_message()
+        try:
+            message = _anthropic_stream(client, kwargs, use_fallbacks)
+        except anthropic.BadRequestError as exc:
+            # Modelo novo/desconhecido que não aceita `effort`: refaz sem ele.
+            reason = str(exc).lower()
+            if "effort" not in kwargs["output_config"] or not ("effort" in reason or "output_config" in reason):
+                raise
+            kwargs["output_config"].pop("effort", None)
+            message = _anthropic_stream(client, kwargs, use_fallbacks)
     except anthropic.AuthenticationError as exc:
         raise AIError("Chave da Anthropic inválida. Confira em Configurações.") from exc
     except anthropic.PermissionDeniedError as exc:
@@ -152,7 +210,12 @@ def generate_anthropic(text: str, slides: int, language: str, tone: str, cfg: di
 
 # ------------------------------------------------------- OpenAI compatível ---
 
-def generate_openai_compatible(text: str, slides: int, language: str, tone: str, cfg: dict[str, Any]) -> dict[str, Any]:
+def generate_openai_compatible(text: str, slides: int, language: str, tone: str, cfg: dict[str, Any],
+                               detail: str = "medium") -> dict[str, Any]:
+    return _openai_json(SYSTEM_PROMPT, build_user_prompt(text, slides, language, tone, detail), cfg)
+
+
+def _openai_json(system: str, user: str, cfg: dict[str, Any]) -> dict[str, Any]:
     base = (cfg.get("openai_base_url") or "").rstrip("/")
     if not base.startswith(("http://", "https://")):
         raise AIError("URL do servidor de IA inválida (ex.: http://localhost:11434/v1).")
@@ -163,8 +226,8 @@ def generate_openai_compatible(text: str, slides: int, language: str, tone: str,
         "model": model,
         "temperature": 0.6,
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": build_user_prompt(text, slides, language, tone)},
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
         ],
         "response_format": {"type": "json_object"},
     }
@@ -230,6 +293,19 @@ def _sentences(text: str) -> list[str]:
     return [p.strip() for p in parts if p.strip()]
 
 
+def _image_query(*parts: str) -> str:
+    """Junta os textos em um termo de busca de imagem, sem repetir palavras
+    (ex.: 'Energia Solar' + 'Energia Solar Direta' -> 'Energia Solar Direta')."""
+    seen: set[str] = set()
+    words: list[str] = []
+    for part in parts:
+        for w in re.findall(r"[\w-]+", part or "", flags=re.UNICODE):
+            if w.lower() not in seen:
+                seen.add(w.lower())
+                words.append(w)
+    return " ".join(words[:8])
+
+
 def generate_offline(text: str, slides: int, language: str = "", tone: str = "") -> dict[str, Any]:
     """Sem IA: estrutura o texto colado. Títulos (# ou linhas curtas sem
     ponto final) viram slides; listas viram tópicos; parágrafos são quebrados
@@ -270,7 +346,7 @@ def generate_offline(text: str, slides: int, language: str = "", tone: str = "")
             layout = cycle[(i + k) % len(cycle)] if chunk else "section"
             t = sec["title"] + (f" ({k + 1})" if len(chunks) > 1 else "")
             out_slides.append({"layout": layout, "title": t, "bullets": chunk,
-                               "image_query": f"{title} {sec['title']}"})
+                               "image_query": _image_query(title, sec["title"])})
     out_slides = out_slides[:max(1, slides - 1)]
     out_slides.append({"layout": "closing", "title": "Obrigado!", "subtitle": title})
     return {"title": title, "subtitle": "", "slides": out_slides}
@@ -303,7 +379,8 @@ def _skeleton(topic: str, slides: int) -> dict[str, Any]:
 
 # ------------------------------------------------------------------ entrada ---
 
-def generate_outline(text: str, slides: int, language: str, tone: str, cfg: dict[str, Any]) -> tuple[dict[str, Any], str]:
+def generate_outline(text: str, slides: int, language: str, tone: str, cfg: dict[str, Any],
+                     detail: str = "medium") -> tuple[dict[str, Any], str]:
     """Devolve (roteiro normalizado, nome do provedor usado)."""
     text = (text or "").strip()
     if not text:
@@ -311,12 +388,81 @@ def generate_outline(text: str, slides: int, language: str, tone: str, cfg: dict
     slides = max(3, min(40, int(slides or 8)))
     provider = cfg.get("provider", "offline")
     if provider == "anthropic":
-        raw = generate_anthropic(text, slides, language, tone, cfg)
+        raw = generate_anthropic(text, slides, language, tone, cfg, detail)
         used = f"Claude ({cfg.get('anthropic_model')})"
     elif provider == "openai":
-        raw = generate_openai_compatible(text, slides, language, tone, cfg)
+        raw = generate_openai_compatible(text, slides, language, tone, cfg, detail)
         used = f"{cfg.get('openai_model')} @ {cfg.get('openai_base_url')}"
     else:
         raw = generate_offline(text, slides, language, tone)
         used = "Modo offline (sem IA)"
     return normalize_outline(raw, max_slides=slides), used
+
+
+# ------------------------------------------------ reescrever a quantidade de texto ---
+
+REWRITE_SCHEMA = _obj({"items": _arr(_obj({"id": _str(), "text": _str()}))})
+
+REWRITE_SYSTEM = """You rewrite the body text of presentation slides to a requested TEXT AMOUNT, keeping the meaning.
+You receive JSON items: {"id", "kind": "bullets"|"paragraph", "slide_title", "text", "max_chars"}.
+Return ONLY JSON: {"items": [{"id": str, "text": str}]} with exactly the same ids.
+Rules:
+- Keep the same language, facts and terminology of the original. Never invent statistics, dates or quotes.
+- For kind "bullets": one bullet per line, separated by "\n", no bullet symbols, no numbering, no markdown.
+- For kind "paragraph": plain text, no markdown.
+- Never exceed max_chars for an item (count all characters). If the requested amount does not fit, write less.
+- Use slide_title only as context; do not repeat it."""
+
+REWRITE_GUIDE = {
+    "basic": "TEXT AMOUNT: BASIC. Cut to the essentials: bullets of at most ~10 words (2-3 bullets); paragraphs of 1 short sentence.",
+    "medium": "TEXT AMOUNT: MEDIUM. Balanced: bullets of about 10-16 words (3-5 bullets); paragraphs of 1-2 sentences.",
+    "extensive": ("TEXT AMOUNT: EXTENSIVE. Explain fully using your knowledge of the subject: bullets as complete explanatory "
+                  "sentences of about 16-30 words with a concrete detail or example (3-5 bullets); paragraphs of 3-4 sentences."),
+}
+
+
+def _rewrite_offline(items: list[dict[str, Any]], level: str) -> dict[str, str]:
+    """Sem IA só dá para reduzir: mantém os primeiros tópicos e corta frases longas."""
+    if level == "extensive":
+        raise AIError("Para ampliar o texto é preciso uma IA (Gemini, Claude ou Ollama em ⚙ Configurações). "
+                      "Sem IA o app só consegue reduzir o texto (quantidade básica).")
+    if level == "medium":
+        return {it["id"]: it["text"] for it in items}
+    out: dict[str, str] = {}
+    for it in items:
+        lines = [ln for ln in it["text"].split("\n") if ln.strip()]
+        if it.get("kind") == "bullets":
+            kept = lines[:3]
+        else:
+            sentences = _sentences(" ".join(lines))
+            kept = sentences[:1]
+        cut = []
+        for ln in kept:
+            words = ln.split()
+            cut.append(" ".join(words[:12]).rstrip(",;:") + ("…" if len(words) > 12 else ""))
+        out[it["id"]] = "\n".join(cut)
+    return out
+
+
+def rewrite_texts(items: list[dict[str, Any]], level: str, language: str, cfg: dict[str, Any]) -> tuple[dict[str, str], str]:
+    """Reescreve os textos (lista de {id, kind, slide_title, text, max_chars}) na quantidade pedida.
+    Devolve ({id: novo texto}, nome do provedor)."""
+    level = normalize_level(level)
+    if not items:
+        return {}, ""
+    provider = cfg.get("provider", "offline")
+    if provider == "offline":
+        return _rewrite_offline(items, level), "Modo offline (sem IA)"
+    user = (f"{REWRITE_GUIDE[level]}\nLanguage of the text: {language or 'the same as the original'}.\n"
+            "<items>\n" + json.dumps(items, ensure_ascii=False) + "\n</items>")
+    if provider == "anthropic":
+        raw, used = _anthropic_json(REWRITE_SYSTEM, user, REWRITE_SCHEMA, cfg, max_tokens=16000), f"Claude ({cfg.get('anthropic_model')})"
+    else:
+        raw, used = _openai_json(REWRITE_SYSTEM, user, cfg), f"{cfg.get('openai_model')} @ {cfg.get('openai_base_url')}"
+    out: dict[str, str] = {}
+    for it in raw.get("items") or []:
+        if isinstance(it, dict) and isinstance(it.get("id"), str) and isinstance(it.get("text"), str) and it["text"].strip():
+            out[it["id"]] = it["text"].strip()
+    if not out:
+        raise AIError("A IA não devolveu o texto reescrito. Tente de novo.")
+    return out, used

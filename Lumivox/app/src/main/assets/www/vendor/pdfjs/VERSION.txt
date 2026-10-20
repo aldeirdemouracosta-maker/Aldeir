@@ -1,0 +1,2 @@
+pdf.js (pdfjs-dist) 6.4.299 - build legacy, Apache-2.0. Origem: https://www.npmjs.com/package/pdfjs-dist
+Modificação do Lumivox: as primeiras linhas de pdf.min.mjs e pdf.worker.min.mjs trazem complementos (polyfills) para WebViews antigos; o restante é o original.

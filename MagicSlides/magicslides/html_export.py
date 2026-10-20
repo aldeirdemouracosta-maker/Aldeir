@@ -2,6 +2,8 @@
 tem modo apresentação com as setas do teclado e pode ser impresso em PDF)."""
 from __future__ import annotations
 
+import math
+import re
 from html import escape
 from typing import Any
 
@@ -10,14 +12,33 @@ from .core import CANVAS_H
 
 def _num(v: Any, default: float = 0.0) -> float:
     try:
-        return float(v)
+        f = float(v)
     except (TypeError, ValueError):
         return default
+    return f if math.isfinite(f) else default
+
+
+_HEX = re.compile(r"#[0-9A-Fa-f]{6}")
+_ALIGN = ("left", "center", "right", "justify")
+# Nome de fonte: só letras, números, espaço, ponto, sublinhado e hífen.
+# Sem aspas, ponto e vírgula ou parênteses, o valor não consegue injetar
+# declarações CSS dentro do atributo style.
+_FONT = re.compile(r"[^A-Za-z0-9 ._-]")
 
 
 def _color(v: Any, default: str) -> str:
     s = str(v or "")
-    return s if len(s) == 7 and s.startswith("#") else default
+    return s if _HEX.fullmatch(s) else default
+
+
+def _align(v: Any) -> str:
+    s = str(v or "").strip().lower()
+    return s if s in _ALIGN else "left"
+
+
+def _font(v: Any, default: str) -> str:
+    name = _FONT.sub("", str(v or "")).strip()[:64]
+    return name or default
 
 
 def _element_html(e: dict[str, Any], theme: dict[str, Any]) -> str:
@@ -30,14 +51,15 @@ def _element_html(e: dict[str, Any], theme: dict[str, Any]) -> str:
         bullets = bool(e.get("bullets"))
         paras = "".join(f"<div>{escape(line) or '<br>'}</div>" for line in str(e.get("text", "")).split("\n"))
         justify = {"middle": "center", "bottom": "flex-end"}.get(e.get("valign"), "flex-start")
-        font = escape(str(e.get("font") or theme.get("font") or "Segoe UI"), quote=True)
+        font = escape(_font(e.get("font") or theme.get("font"), "Segoe UI"), quote=True)
         style = (f"{pos};--fs:{fs:.1f};font-weight:{700 if e.get('bold') else 400};"
                  f"font-style:{'italic' if e.get('italic') else 'normal'};color:{_color(e.get('color'), '#16181D')};"
-                 f"text-align:{escape(str(e.get('align', 'left')))};justify-content:{justify};"
+                 f"text-align:{_align(e.get('align'))};justify-content:{justify};"
                  f"font-family:'{font}',system-ui,sans-serif")
         return f'<div class="el txt{" bul" if bullets else ""}" style="{style}">{paras}</div>'
     if typ == "shape":
         opacity = _num(e.get("opacity"), 1.0) if e.get("opacity") is not None else 1.0
+        opacity = min(1.0, max(0.0, opacity))
         if e.get("shape") == "ellipse":
             radius = "50%"
         else:

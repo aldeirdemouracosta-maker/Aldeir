@@ -7,6 +7,7 @@ PIXABAY_API_KEY) são usadas quando o campo correspondente estiver vazio.
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import sys
@@ -14,15 +15,18 @@ import threading
 from pathlib import Path
 from typing import Any
 
-SECRET_KEYS = ("anthropic_api_key", "openai_api_key", "pexels_api_key", "unsplash_access_key", "pixabay_api_key")
+SECRET_KEYS = ("anthropic_api_key", "openai_api_key", "pexels_api_key", "unsplash_access_key", "pixabay_api_key",
+               "imagegen_api_key")
 ENV_FALLBACK = {
     "anthropic_api_key": "ANTHROPIC_API_KEY",
     "openai_api_key": "OPENAI_API_KEY",
     "pexels_api_key": "PEXELS_API_KEY",
     "unsplash_access_key": "UNSPLASH_ACCESS_KEY",
     "pixabay_api_key": "PIXABAY_API_KEY",
+    "imagegen_api_key": "IMAGEGEN_API_KEY",
 }
 PROVIDERS = ("offline", "anthropic", "openai")
+IMAGEGEN_PROVIDERS = ("gemini", "openai", "pollinations", "automatic1111")
 IMAGE_SOURCES = ("openverse", "wikimedia", "pexels", "unsplash", "pixabay")
 
 DEFAULTS: dict[str, Any] = {
@@ -40,11 +44,69 @@ DEFAULTS: dict[str, Any] = {
     "pexels_api_key": "",
     "unsplash_access_key": "",
     "pixabay_api_key": "",
+    # Imagens geradas por IA (alternativa às fotos da internet)
+    "imagegen_provider": "gemini",
+    "imagegen_model": "gemini-3.1-flash-image-preview",
+    "imagegen_base_url": "https://api.openai.com/v1",
+    "imagegen_api_key": "",
+    "imagegen_steps": 20,      # só para o Stable Diffusion local
+    "imagegen_width": 768,     # idem; a altura segue 16:9
     "language": "Português do Brasil",
     "author": "",
 }
 
 _lock = threading.Lock()
+_DPAPI_PREFIX = "dpapi:"
+
+
+def _dpapi(data: bytes, protect: bool) -> bytes:
+    """Criptografa/descriptografa com o DPAPI do Windows (atrelado ao usuário)."""
+    import ctypes
+    from ctypes import wintypes
+
+    class _Blob(ctypes.Structure):
+        _fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.POINTER(ctypes.c_char))]
+
+    crypt32, kernel32 = ctypes.windll.crypt32, ctypes.windll.kernel32
+    fn = crypt32.CryptProtectData if protect else crypt32.CryptUnprotectData
+    fn.argtypes = [ctypes.POINTER(_Blob), ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
+                   ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(_Blob)]
+    fn.restype = wintypes.BOOL
+    kernel32.LocalFree.argtypes = [ctypes.c_void_p]
+    buf = ctypes.create_string_buffer(data, len(data))
+    src = _Blob(len(data), ctypes.cast(buf, ctypes.POINTER(ctypes.c_char)))
+    out = _Blob()
+    if not fn(ctypes.byref(src), None, None, None, None, 0, ctypes.byref(out)):
+        raise OSError("DPAPI falhou")
+    try:
+        return ctypes.string_at(out.pbData, out.cbData)
+    finally:
+        kernel32.LocalFree(ctypes.cast(out.pbData, ctypes.c_void_p))
+
+
+def _protect(value: str) -> str:
+    """No Windows grava a chave criptografada (o chmod 0600 não vale lá)."""
+    if not value or not sys.platform.startswith("win"):
+        return value
+    try:
+        return _DPAPI_PREFIX + base64.b64encode(_dpapi(value.encode("utf-8"), True)).decode("ascii")
+    except Exception as exc:
+        # Não dá para falhar o salvamento inteiro, mas o usuário precisa saber
+        # que a chave ficou em texto puro.
+        sys.stderr.write(f"[MagicSlides] Aviso: o DPAPI do Windows falhou ({exc}); "
+                         "a chave de API será gravada sem criptografia.\n")
+        return value
+
+
+def _unprotect(value: Any) -> Any:
+    if not isinstance(value, str) or not value.startswith(_DPAPI_PREFIX):
+        return value  # texto puro (arquivo antigo) ou outro sistema
+    try:
+        return _dpapi(base64.b64decode(value[len(_DPAPI_PREFIX):]), False).decode("utf-8")
+    except Exception:
+        sys.stderr.write("[MagicSlides] Aviso: uma chave salva não pôde ser descriptografada "
+                         "(outro usuário/PC?). Informe a chave de novo em Configurações.\n")
+        return ""  # outro usuário/PC: pede a chave de novo em vez de quebrar
 
 
 def config_dir() -> Path:
@@ -68,7 +130,7 @@ def load() -> dict[str, Any]:
     try:
         stored = json.loads(config_path().read_text(encoding="utf-8"))
         if isinstance(stored, dict):
-            data.update({k: v for k, v in stored.items() if k in DEFAULTS})
+            data.update({k: (_unprotect(v) if k in SECRET_KEYS else v) for k, v in stored.items() if k in DEFAULTS})
     except (OSError, ValueError):
         pass
     return _clean(data)
@@ -86,6 +148,8 @@ def effective(data: dict[str, Any] | None = None) -> dict[str, Any]:
 def _clean(data: dict[str, Any]) -> dict[str, Any]:
     if data.get("provider") not in PROVIDERS:
         data["provider"] = "offline"
+    if data.get("imagegen_provider") not in IMAGEGEN_PROVIDERS:
+        data["imagegen_provider"] = DEFAULTS["imagegen_provider"]
     sources = data.get("image_sources")
     if not isinstance(sources, list):
         sources = list(DEFAULTS["image_sources"])
@@ -115,7 +179,8 @@ def save(update: dict[str, Any]) -> dict[str, Any]:
         path = config_path()
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        on_disk = {k: (_protect(v) if k in SECRET_KEYS else v) for k, v in data.items()}
+        tmp.write_text(json.dumps(on_disk, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(tmp, path)
         try:
             os.chmod(path, 0o600)

@@ -41,6 +41,7 @@ Aplicativo de desktop para Windows (também roda no Linux e no macOS) que **gera
 | Provedor | O que preencher |
 |---|---|
 | **Claude** (melhor qualidade) | A chave de API de [console.anthropic.com](https://console.anthropic.com). O modelo padrão é `claude-opus-5`; para gastar menos, use `claude-sonnet-5` ou `claude-haiku-4-5`. Também é possível usar a variável de ambiente `ANTHROPIC_API_KEY`. |
+| **Gemini** (Google, tem camada grátis) | Em *IA local ou compatível*, clique em **Gemini**, cole a chave de [aistudio.google.com/apikey](https://aistudio.google.com/apikey) e confira o nome do modelo. A camada gratuita tem limites e o Google pode usar o conteúdo enviado para melhorar seus produtos. |
 | **Ollama** (grátis, offline) | Instale o [Ollama](https://ollama.com), rode `ollama pull llama3.1` e escolha o preset *Ollama*. |
 | **LM Studio / llama.cpp** | Use o preset e informe o nome do modelo carregado. |
 | **OpenAI / Groq / OpenRouter** | Use o preset e informe o modelo e a chave. |
@@ -62,7 +63,7 @@ magicslides/
   core.py                      formato canônico presentation.json + validação/migração
   static/                      editor (HTML/CSS/JS puro, sem build)
 packaging/                     PyInstaller (.spec), Inno Setup (.iss), gerador de ícone
-tests/                         pytest (25 testes: layouts, IA simulada, imagens, exportação, servidor)
+tests/                         pytest (47 testes: layouts, IA simulada, imagens, exportação, servidor)
 ```
 
 O princípio do projeto original continua valendo: **`presentation.json` é a fonte da verdade**. Gerador, editor e exportadores leem e escrevem o mesmo formato.
@@ -76,6 +77,45 @@ python MagicSlides.py --browser        # abre no navegador
 ```
 
 O GitHub Actions (`.github/workflows/magicslides-windows.yml`) roda os testes, compila o `.exe` no Windows, faz um teste de fumaça, gera o instalador e o `.zip` portátil, e anexa tudo a cada *Release* publicada.
+
+## Texto e imagens ao criar
+
+Na janela **✨ Criar apresentação** você escolhe:
+
+- **Quantidade de texto:** *Básica* (explicação curta, tópicos de até ~10 palavras), *Média* ou *Extensa* (explicação completa, com detalhe ou exemplo em cada tópico; as notas do apresentador também ficam mais completas).
+- **Tamanho da letra:** Pequeno, Médio, Grande ou Muito grande.
+- **Imagens:** *Fotos da internet*, *Geradas por IA* ou *Sem imagens*.
+
+### Mudar depois, em todos os slides
+
+- **📝 Quantidade de texto** (barra do editor): a IA **reescreve** o texto de todos os slides (ou só do atual) como *Básica*, *Média* ou *Extensa*, mantendo o assunto. Dá para desfazer com Ctrl+Z. Sem IA só é possível reduzir (Básica).
+- **A−** e **A＋**: diminuem ou aumentam a letra de todos os slides.
+
+### Imagens geradas por IA (⚙ Configurações)
+
+| Provedor | O que precisa |
+|---|---|
+| **Gemini (Google)** | Chave de [aistudio.google.com/apikey](https://aistudio.google.com/apikey). O nome do modelo vem como `gemini-3.1-flash-image-preview` e pode ser trocado. Nem todo plano gratuito inclui geração de imagens. |
+| **API compatível com a da OpenAI** | Endereço e chave (OpenAI: `gpt-image-1` ou `dall-e-3`) ou um programa local que ofereça `POST /images/generations`. |
+| **Pollinations** | Nada: serviço comunitário gratuito e sem chave, com qualidade e disponibilidade variáveis. |
+| **Stable Diffusion local** | Um Stable Diffusion WebUI (AUTOMATIC1111, Forge ou SD.Next) rodando no seu computador, iniciado com a opção `--api`. Nada sai da sua máquina. Veja abaixo. |
+
+As imagens geradas entram no slide de créditos como *"Imagem gerada por IA (provedor, modelo)"*. Cada imagem pode ser cobrada pelo provedor. O Claude não gera imagens.
+
+#### Imagens 100% locais (Stable Diffusion no seu computador)
+
+1. Instale um Stable Diffusion WebUI: [AUTOMATIC1111](https://github.com/AUTOMATIC1111/stable-diffusion-webui) ou [Forge](https://github.com/lllyasviel/stable-diffusion-webui-forge) (siga as instruções deles para a sua placa de vídeo; em AMD costuma ser com ROCm).
+2. Baixe um modelo (*checkpoint*) compatível e coloque na pasta `models/Stable-diffusion` deles. Para computadores modestos, modelos da família **Stable Diffusion 1.5** ou **Turbo** (poucos passos) são os mais leves. Confira a licença de cada modelo.
+3. Inicie o WebUI com `--api` (por exemplo, `./webui.sh --api`).
+4. No MagicSlides, ⚙ Configurações → Imagens geradas por IA → **Stable Diffusion LOCAL**. Endereço padrão: `http://127.0.0.1:7860`. **Passos:** 20 para modelos comuns, 1 a 4 para Turbo. **Largura:** 768 (a altura segue 16:9; use 512–640 se a memória da placa for pequena).
+
+O app gera **uma imagem por vez** nesse modo. Sem placa de vídeo, cada imagem pode levar vários minutos.
+
+## Gerenciar as imagens
+
+No editor, o botão **🗂 Imagens** lista todos os slides e mostra quais têm foto. Ali você pode **preencher de uma vez as que faltam**, editar o termo de busca de um slide e **buscar de novo**, **gerar uma imagem por IA** (por slide ou todas as que faltam), enviar uma imagem do computador, remover uma imagem e **copiar os créditos** de todas.
+
+> **Importante:** só uma IA entende o tema e escreve o conteúdo. O modo **Sem IA** apenas reorganiza o texto que você digitar; use Gemini, Claude ou Ollama para a apresentação ser contextualizada.
 
 ## Limitações conhecidas
 

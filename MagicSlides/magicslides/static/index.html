@@ -44,6 +44,11 @@
         <button id="addShapeBtn" title="Adicionar forma">▭ Forma</button>
         <button id="addWebImageBtn" title="Buscar imagem na internet">🔎 Imagem web</button>
         <button id="addImageBtn" title="Imagem do computador">🖼 Do PC</button>
+        <button id="imageManagerBtn" title="Ver e gerenciar as imagens de todos os slides">🗂 Imagens</button>
+        <span class="divider"></span>
+        <button id="textAmountBtn" title="Deixar o texto de todos os slides básico, médio ou extenso (com IA)">📝 Quantidade de texto</button>
+        <button id="textSmallerBtn" class="icon-btn" title="Diminuir a letra de todos os slides" aria-label="Diminuir a letra de todos os slides">A−</button>
+        <button id="textBiggerBtn" class="icon-btn" title="Aumentar a letra de todos os slides" aria-label="Aumentar a letra de todos os slides">A＋</button>
         <span class="divider"></span>
         <button id="undoBtn" class="icon-btn" title="Desfazer (Ctrl+Z)">↶</button>
         <button id="redoBtn" class="icon-btn" title="Refazer (Ctrl+Y)">↷</button>
@@ -166,7 +171,23 @@
           <option value="inspirador e envolvente">Inspirador</option><option value="descontraído e divertido">Descontraído</option>
           <option value="técnico e detalhado">Técnico</option><option value="persuasivo, pitch de vendas">Vendas / pitch</option>
         </select></label>
-        <label>&nbsp;<span class="chips"><label class="chip"><input id="genImages" type="checkbox" checked /> Imagens da internet</label></span></label>
+        <label>Quantidade de texto<select id="genDetail">
+          <option value="basic">Básica — explicação curta</option>
+          <option value="medium" selected>Média</option>
+          <option value="extensive">Extensa — explicação completa</option>
+        </select></label>
+      </div>
+      <div class="grid4">
+        <label>Tamanho da letra<select id="genTextSize">
+          <option value="small">Pequeno</option><option value="normal" selected>Médio</option>
+          <option value="large">Grande</option><option value="xlarge">Muito grande</option>
+        </select></label>
+        <label>Imagens<select id="genImageMode">
+          <option value="web">Fotos da internet</option>
+          <option value="ai">Geradas por IA</option>
+          <option value="none">Sem imagens</option>
+        </select></label>
+        <label class="span2">&nbsp;<span id="genImageNote" class="muted small"></span></label>
       </div>
       <label class="chip inline"><input id="genCredits" type="checkbox" checked /> Adicionar slide com créditos das imagens</label>
       <h4>Tema</h4>
@@ -207,6 +228,44 @@
     </form>
   </dialog>
 
+  <!-- Quantidade de texto -->
+  <dialog id="textAmountDialog" class="dialog">
+    <form method="dialog" id="textAmountForm">
+      <h2>📝 Quantidade de texto</h2>
+      <p class="muted">A IA reescreve o texto dos slides no nível escolhido, mantendo o assunto. Dá para desfazer com Ctrl+Z.</p>
+      <div class="provider-options">
+        <label class="option"><input type="radio" name="textLevel" value="basic" /> <span><b>Básica</b><small>Explicação curta: poucos tópicos de até ~10 palavras.</small></span></label>
+        <label class="option"><input type="radio" name="textLevel" value="medium" checked /> <span><b>Média</b><small>Tópicos de 10 a 16 palavras.</small></span></label>
+        <label class="option"><input type="radio" name="textLevel" value="extensive" /> <span><b>Extensa</b><small>Explicação completa, com detalhe ou exemplo em cada tópico.</small></span></label>
+      </div>
+      <label>Aplicar em
+        <select id="textAmountScope"><option value="all">Todos os slides</option><option value="current">Só o slide atual</option></select>
+      </label>
+      <p id="textAmountNote" class="provider-line"></p>
+      <div class="dialog-actions">
+        <button value="cancel" formnovalidate>Cancelar</button>
+        <button type="button" class="magic" id="textAmountApply">✨ Aplicar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Gerenciador de imagens -->
+  <dialog id="imageManagerDialog" class="dialog xwide">
+    <form method="dialog" id="imageManagerForm">
+      <h2>🗂 Imagens dos slides</h2>
+      <p id="imSummary" class="muted"></p>
+      <div class="im-actions">
+        <button type="button" class="primary" id="imFillBtn">✨ Preencher as que faltam</button>
+        <label class="chip">com <select id="imFillMode"><option value="web">fotos da internet</option><option value="ai">imagens geradas por IA</option></select></label>
+        <button type="button" id="imCreditsBtn">📋 Copiar créditos</button>
+        <span id="imProgress" class="muted small" role="status" aria-live="polite"></span>
+      </div>
+      <div id="imList" class="im-list"></div>
+      <p class="muted small">Dica: termos em inglês costumam trazer mais resultados. Edite o termo de busca de um slide e use <b>Buscar de novo</b>. Respeite a licença de cada imagem; use <b>Copiar créditos</b> para citá-las.</p>
+      <div class="dialog-actions"><button value="cancel" formnovalidate>Fechar</button></div>
+    </form>
+  </dialog>
+
   <!-- Configurações -->
   <dialog id="settingsDialog" class="dialog wide">
     <form method="dialog" id="settingsForm">
@@ -228,6 +287,7 @@
       </fieldset>
       <fieldset data-provider="openai">
         <div class="presets" id="openaiPresets">
+          <button type="button" data-url="https://generativelanguage.googleapis.com/v1beta/openai" data-model="gemini-3.6-flash">Gemini (Google, tem camada grátis)</button>
           <button type="button" data-url="http://localhost:11434/v1" data-model="llama3.1">Ollama</button>
           <button type="button" data-url="http://localhost:1234/v1" data-model="">LM Studio</button>
           <button type="button" data-url="http://localhost:8080/v1" data-model="local">llama.cpp</button>
@@ -240,7 +300,7 @@
           <label>Modelo<input id="setOpenaiModel" placeholder="llama3.1" /></label>
           <label>Chave (se precisar)<input id="setOpenaiKey" type="password" autocomplete="off" /></label>
         </div>
-        <p class="muted small">Grátis e offline: instale o Ollama (ollama.com) e rode <code>ollama pull llama3.1</code>.</p>
+        <p class="muted small"><b>Gemini:</b> crie uma chave em aistudio.google.com/apikey, escolha o botão Gemini e cole a chave acima. A camada gratuita tem limites e o Google pode usar o conteúdo enviado para melhorar seus produtos. Se o nome do modelo mudar, troque-o no campo Modelo.<br><b>Grátis e offline:</b> instale o Ollama (ollama.com) e rode <code>ollama pull llama3.1</code>.</p>
       </fieldset>
       <h4>Fontes de imagens</h4>
       <div class="chips">
@@ -253,6 +313,26 @@
         <label>Unsplash (Access Key)<input id="setUnsplash" type="password" autocomplete="off" placeholder="unsplash.com/developers" /></label>
         <label>Pixabay<input id="setPixabay" type="password" autocomplete="off" placeholder="pixabay.com/api/docs" /></label>
       </div>
+      <h4>Imagens geradas por IA</h4>
+      <p class="muted small">Usadas quando você escolhe “Geradas por IA” ao criar a apresentação ou no gerenciador de imagens. Cada imagem gerada pode ser cobrada pelo provedor.</p>
+      <div class="grid2">
+        <label>Provedor<select id="setImgenProvider">
+          <option value="gemini">Gemini (Google) — chave de API</option>
+          <option value="openai">API compatível com a da OpenAI (OpenAI, servidor local)</option>
+          <option value="pollinations">Pollinations — grátis, sem chave</option>
+          <option value="automatic1111">Stable Diffusion LOCAL (WebUI iniciado com --api) — no seu computador</option>
+        </select></label>
+        <label>Modelo<input id="setImgenModel" placeholder="gemini-3.1-flash-image-preview" /></label>
+      </div>
+      <div class="grid2">
+        <label id="setImgenUrlRow">Endereço do servidor<input id="setImgenUrl" placeholder="https://api.openai.com/v1" /></label>
+        <label id="setImgenKeyRow">Chave de API<input id="setImgenKey" type="password" autocomplete="off" /></label>
+      </div>
+      <div class="grid2" id="setImgenLocalRow">
+        <label>Passos (qualidade × velocidade)<input id="setImgenSteps" type="number" min="1" max="80" placeholder="20" /></label>
+        <label>Largura em pixels (a altura segue 16:9)<input id="setImgenWidth" type="number" min="256" max="1536" step="8" placeholder="768" /></label>
+      </div>
+      <p class="muted small" id="setImgenHelp"></p>
       <h4>Geral</h4>
       <div class="grid2">
         <label>Idioma padrão<select id="setLanguage">
