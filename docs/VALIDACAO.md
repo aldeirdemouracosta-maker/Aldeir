@@ -1,1 +1,3 @@
 ﻿# Validacao: consultas de inventario executadas; sem P100. Teste reprodutivel: .venv/Scripts/python.exe scripts/validate_cuda.py. Exit 2 significa CUDA indisponivel; exit 3 GPU/arquitetura incorreta. PASS exige P100 sm_60, multiplicacao real e sincronizacao. Resultados de instalacao e teste serao registrados separadamente.
+
+Instalado torch 2.7.1+cu126 no venv exclusivo. Comando: .venv/Scripts/python.exe scripts/validate_cuda.py. Codigo de saida: 2. Veja resultado-cuda.txt. Pacotes de treinamento e bitsandbytes adiados ate hardware aprovado. pip install sofreu timeout transitorio ao baixar sympy e recuperou automaticamente.
