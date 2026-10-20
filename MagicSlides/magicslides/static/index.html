@@ -320,12 +320,17 @@
           <option value="gemini">Gemini (Google) — chave de API</option>
           <option value="openai">API compatível com a da OpenAI (OpenAI, servidor local)</option>
           <option value="pollinations">Pollinations — grátis, sem chave</option>
+          <option value="automatic1111">Stable Diffusion LOCAL (WebUI iniciado com --api) — no seu computador</option>
         </select></label>
         <label>Modelo<input id="setImgenModel" placeholder="gemini-3.1-flash-image-preview" /></label>
       </div>
       <div class="grid2">
         <label id="setImgenUrlRow">Endereço do servidor<input id="setImgenUrl" placeholder="https://api.openai.com/v1" /></label>
         <label id="setImgenKeyRow">Chave de API<input id="setImgenKey" type="password" autocomplete="off" /></label>
+      </div>
+      <div class="grid2" id="setImgenLocalRow">
+        <label>Passos (qualidade × velocidade)<input id="setImgenSteps" type="number" min="1" max="80" placeholder="20" /></label>
+        <label>Largura em pixels (a altura segue 16:9)<input id="setImgenWidth" type="number" min="256" max="1536" step="8" placeholder="768" /></label>
       </div>
       <p class="muted small" id="setImgenHelp"></p>
       <h4>Geral</h4>

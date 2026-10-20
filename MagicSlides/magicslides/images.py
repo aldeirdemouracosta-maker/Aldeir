@@ -305,7 +305,9 @@ def _fill_with_ai(presentation: dict[str, Any], cfg: dict[str, Any], todo: list,
 
     credit = imagegen.credit_for(cfg)
     done = 0
-    with ThreadPoolExecutor(max_workers=3) as pool:
+    # No seu computador uma imagem por vez (várias juntas travam a placa de vídeo).
+    workers = 1 if cfg.get("imagegen_provider") == "automatic1111" else 3
+    with ThreadPoolExecutor(max_workers=workers) as pool:
         for el, result, err in pool.map(work, todo):
             if err and err not in warnings:
                 warnings.append(err)

@@ -98,8 +98,18 @@ Na janela **✨ Criar apresentação** você escolhe:
 | **Gemini (Google)** | Chave de [aistudio.google.com/apikey](https://aistudio.google.com/apikey). O nome do modelo vem como `gemini-3.1-flash-image-preview` e pode ser trocado. Nem todo plano gratuito inclui geração de imagens. |
 | **API compatível com a da OpenAI** | Endereço e chave (OpenAI: `gpt-image-1` ou `dall-e-3`) ou um programa local que ofereça `POST /images/generations`. |
 | **Pollinations** | Nada: serviço comunitário gratuito e sem chave, com qualidade e disponibilidade variáveis. |
+| **Stable Diffusion local** | Um Stable Diffusion WebUI (AUTOMATIC1111, Forge ou SD.Next) rodando no seu computador, iniciado com a opção `--api`. Nada sai da sua máquina. Veja abaixo. |
 
 As imagens geradas entram no slide de créditos como *"Imagem gerada por IA (provedor, modelo)"*. Cada imagem pode ser cobrada pelo provedor. O Claude não gera imagens.
+
+#### Imagens 100% locais (Stable Diffusion no seu computador)
+
+1. Instale um Stable Diffusion WebUI: [AUTOMATIC1111](https://github.com/AUTOMATIC1111/stable-diffusion-webui) ou [Forge](https://github.com/lllyasviel/stable-diffusion-webui-forge) (siga as instruções deles para a sua placa de vídeo; em AMD costuma ser com ROCm).
+2. Baixe um modelo (*checkpoint*) compatível e coloque na pasta `models/Stable-diffusion` deles. Para computadores modestos, modelos da família **Stable Diffusion 1.5** ou **Turbo** (poucos passos) são os mais leves. Confira a licença de cada modelo.
+3. Inicie o WebUI com `--api` (por exemplo, `./webui.sh --api`).
+4. No MagicSlides, ⚙ Configurações → Imagens geradas por IA → **Stable Diffusion LOCAL**. Endereço padrão: `http://127.0.0.1:7860`. **Passos:** 20 para modelos comuns, 1 a 4 para Turbo. **Largura:** 768 (a altura segue 16:9; use 512–640 se a memória da placa for pequena).
+
+O app gera **uma imagem por vez** nesse modo. Sem placa de vídeo, cada imagem pode levar vários minutos.
 
 ## Gerenciar as imagens
 

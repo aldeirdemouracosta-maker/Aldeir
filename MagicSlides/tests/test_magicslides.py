@@ -730,3 +730,65 @@ def test_rewrite_endpoint(live_server, monkeypatch):
     out = json.load(urllib.request.urlopen(req))
     assert out["ok"] and out["level"] == "medium" and out["items"][0]["id"] == "t1"
     assert out["items"][0]["text"].startswith("Novo texto") and out["items"][0]["fontSize"] > 0
+
+
+
+# ---------------------------------------------- Stable Diffusion local (WebUI) ---
+
+def test_imagegen_automatic1111_request_and_response(monkeypatch):
+    seen = {}
+
+    def fake_urlopen(req, timeout=0):
+        seen["url"], seen["body"], seen["timeout"] = req.full_url, json.loads(req.data), timeout
+        return _FakeResp(json.dumps({"images": [base64.b64encode(_ig_png((20, 140, 60))).decode()]}).encode())
+
+    monkeypatch.setattr(imagegen.urllib.request, "urlopen", fake_urlopen)
+    cfg = {"imagegen_provider": "automatic1111", "imagegen_base_url": "http://127.0.0.1:7860/", "imagegen_model": "sd15.safetensors",
+           "imagegen_steps": 20, "imagegen_width": 768}
+    src, w, h = imagegen.generate("painéis solares", cfg)
+    assert src.startswith("data:image/") and (w, h) == (64, 36)
+    b = seen["body"]
+    assert seen["url"] == "http://127.0.0.1:7860/sdapi/v1/txt2img"
+    assert (b["width"], b["height"], b["steps"], b["cfg_scale"]) == (768, 432, 20, 7.0)
+    assert b["override_settings"] == {"sd_model_checkpoint": "sd15.safetensors"} and "text" in b["negative_prompt"]
+    assert seen["timeout"] == imagegen.LOCAL_TIMEOUT
+    # modelo Turbo: poucos passos -> cfg baixo; sem modelo escolhido -> não troca o checkpoint
+    imagegen.generate("x", {"imagegen_provider": "automatic1111", "imagegen_base_url": "http://localhost:7860", "imagegen_steps": 2})
+    assert seen["body"]["cfg_scale"] == 1.0 and "override_settings" not in seen["body"]
+
+
+def test_imagegen_automatic1111_sizes_and_errors(monkeypatch):
+    assert imagegen.local_size({"imagegen_width": 1000}) == (1000, 560)
+    assert imagegen.local_size({"imagegen_width": "lixo"}) == (768, 432)
+    assert imagegen.local_size({"imagegen_width": 99999}) == (1536, 864)
+    with pytest.raises(images.ImageError, match="inválido"):
+        imagegen.generate("x", {"imagegen_provider": "automatic1111", "imagegen_base_url": "localhost"})
+
+    def refused(req, timeout=0):
+        raise imagegen.urllib.error.URLError("Connection refused")
+
+    monkeypatch.setattr(imagegen.urllib.request, "urlopen", refused)
+    with pytest.raises(images.ImageError, match="--api"):
+        imagegen.generate("x", {"imagegen_provider": "automatic1111", "imagegen_base_url": "http://127.0.0.1:7860"})
+    monkeypatch.setattr(imagegen.urllib.request, "urlopen", lambda req, timeout=0: _FakeResp(b'{"images": []}'))
+    with pytest.raises(images.ImageError, match="não devolveu imagem"):
+        imagegen.generate("x", {"imagegen_provider": "automatic1111", "imagegen_base_url": "http://127.0.0.1:7860"})
+
+
+def test_local_provider_is_known_and_fills_one_at_a_time(monkeypatch):
+    assert "automatic1111" in config.IMAGEGEN_PROVIDERS and "automatic1111" in imagegen.PROVIDER_LABELS
+    config.save({"imagegen_provider": "automatic1111", "imagegen_steps": 4})
+    assert config.load()["imagegen_provider"] == "automatic1111" and config.load()["imagegen_steps"] == 4
+    active, peak = [0], [0]
+
+    def fake_generate(prompt, cfg):
+        active[0] += 1; peak[0] = max(peak[0], active[0])
+        import time; time.sleep(0.03)
+        active[0] -= 1
+        return _data_url(), 64, 40
+
+    monkeypatch.setattr(imagegen, "generate", fake_generate)
+    outline, _ = ai.generate_outline("Energia solar", 6, "pt", "", {"provider": "offline"})
+    pres = layouts.build_presentation(outline, None)
+    images.fill_presentation_images(pres, {"imagegen_provider": "automatic1111"}, mode="ai")
+    assert peak[0] == 1

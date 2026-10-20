@@ -721,7 +721,7 @@ function openGenerateDialog() {
 }
 function imagegenReady() {
   const p = settings.imagegen_provider || 'gemini';
-  return p === 'pollinations' || !!settings.has_imagegen_api_key || (p === 'openai' && /^http:\/\/(localhost|127\.0\.0\.1)/.test(settings.imagegen_base_url || ''));
+  return p === 'pollinations' || p === 'automatic1111' || !!settings.has_imagegen_api_key || (p === 'openai' && /^http:\/\/(localhost|127\.0\.0\.1)/.test(settings.imagegen_base_url || ''));
 }
 function updateImageNote() {
   const mode = $('genImageMode').value;
@@ -1107,7 +1107,7 @@ async function fillMissingWithAI() {
       done++; progress();
     }
   };
-  await Promise.all(Array.from({ length: 2 }, worker));
+  await Promise.all(Array.from({ length: settings.imagegen_provider === 'automatic1111' ? 1 : 2 }, worker));
   imBusy = false; $('imProgress').textContent = '';
   render(); renderImageManager();
   if (failed.length) toast(`Não consegui gerar para os slides ${[...new Set(failed)].sort((x, y) => x - y).join(', ')}: ${[...errors][0]}`, 'warn', 12000);
@@ -1142,6 +1142,8 @@ function openSettings(focusProvider = false) {
   $('setImgenProvider').value = s.imagegen_provider || 'gemini';
   $('setImgenModel').value = s.imagegen_model || '';
   $('setImgenUrl').value = s.imagegen_base_url || '';
+  $('setImgenSteps').value = s.imagegen_steps || 20;
+  $('setImgenWidth').value = s.imagegen_width || 768;
   $('setImgenKey').value = ''; $('setImgenKey').placeholder = mask(s.has_imagegen_api_key, s.imagegen_api_key_from_env);
   toggleImagegenFields();
   $('setLanguage').value = s.language || 'Português do Brasil';
@@ -1151,18 +1153,24 @@ function openSettings(focusProvider = false) {
   $('settingsDialog').showModal();
   if (focusProvider) document.querySelector('input[name=provider]:checked')?.focus();
 }
-const IMGEN_DEFAULT_MODEL = { gemini: 'gemini-3.1-flash-image-preview', openai: 'gpt-image-1', pollinations: '' };
+const IMGEN_DEFAULT_MODEL = { gemini: 'gemini-3.1-flash-image-preview', openai: 'gpt-image-1', pollinations: '', automatic1111: '' };
+const IMGEN_DEFAULT_URL = { openai: 'https://api.openai.com/v1', automatic1111: 'http://127.0.0.1:7860' };
 const IMGEN_HELP = {
   gemini: 'Crie a chave em aistudio.google.com/apikey. Nem todo plano gratuito inclui geração de imagens; o nome do modelo pode mudar — troque-o aqui se aparecer “modelo não encontrado”.',
   openai: 'Funciona com a OpenAI (gpt-image-1, dall-e-3) e com programas locais que oferecem POST /images/generations.',
   pollinations: 'Serviço comunitário gratuito e sem chave. A qualidade e a disponibilidade variam, e os pedidos passam pelos servidores deles.',
+  automatic1111: 'Tudo no seu computador, sem enviar nada para fora. Abra o Stable Diffusion WebUI (AUTOMATIC1111, Forge ou SD.Next) com a opção --api. Modelo: nome do checkpoint (opcional; vazio usa o que estiver carregado). Passos: 20 para modelos comuns, 1 a 4 para modelos Turbo. Sem placa de vídeo, cada imagem pode levar vários minutos; o app gera uma por vez.',
 };
 function toggleImagegenFields(changed) {
   const p = $('setImgenProvider').value;
-  if (changed) $('setImgenModel').value = IMGEN_DEFAULT_MODEL[p];
-  $('setImgenUrlRow').hidden = p !== 'openai';
-  $('setImgenKeyRow').hidden = p === 'pollinations';
+  if (changed) {
+    $('setImgenModel').value = IMGEN_DEFAULT_MODEL[p];
+    if (IMGEN_DEFAULT_URL[p]) $('setImgenUrl').value = IMGEN_DEFAULT_URL[p];
+  }
+  $('setImgenUrlRow').hidden = p !== 'openai' && p !== 'automatic1111';
+  $('setImgenKeyRow').hidden = p === 'pollinations' || p === 'automatic1111';
   $('setImgenModel').closest('label').hidden = p === 'pollinations';
+  $('setImgenLocalRow').hidden = p !== 'automatic1111';
   $('setImgenHelp').textContent = IMGEN_HELP[p];
 }
 function toggleProviderFields() {
@@ -1179,6 +1187,7 @@ async function saveSettings() {
     pexels_api_key: $('setPexels').value, unsplash_access_key: $('setUnsplash').value, pixabay_api_key: $('setPixabay').value,
     imagegen_provider: $('setImgenProvider').value, imagegen_model: $('setImgenModel').value.trim(),
     imagegen_base_url: $('setImgenUrl').value.trim(), imagegen_api_key: $('setImgenKey').value,
+    imagegen_steps: Number($('setImgenSteps').value) || 20, imagegen_width: Number($('setImgenWidth').value) || 768,
     language: $('setLanguage').value, author: $('setAuthor').value.trim(),
   };
   try {

@@ -26,7 +26,7 @@ ENV_FALLBACK = {
     "imagegen_api_key": "IMAGEGEN_API_KEY",
 }
 PROVIDERS = ("offline", "anthropic", "openai")
-IMAGEGEN_PROVIDERS = ("gemini", "openai", "pollinations")
+IMAGEGEN_PROVIDERS = ("gemini", "openai", "pollinations", "automatic1111")
 IMAGE_SOURCES = ("openverse", "wikimedia", "pexels", "unsplash", "pixabay")
 
 DEFAULTS: dict[str, Any] = {
@@ -49,6 +49,8 @@ DEFAULTS: dict[str, Any] = {
     "imagegen_model": "gemini-3.1-flash-image-preview",
     "imagegen_base_url": "https://api.openai.com/v1",
     "imagegen_api_key": "",
+    "imagegen_steps": 20,      # só para o Stable Diffusion local
+    "imagegen_width": 768,     # idem; a altura segue 16:9
     "language": "Português do Brasil",
     "author": "",
 }
