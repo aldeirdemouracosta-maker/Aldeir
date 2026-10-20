@@ -1,0 +1,1 @@
+﻿# Fases: 0 auditoria bloqueada pela ausencia da P100; 1 ambiente isolado em preparacao. Fases 2–12 nao iniciadas. Proxima etapa: disponibilizar P100 com driver compativel, repetir auditoria e aprovar scripts/validate_cuda.py. Aguardar AVANCAR PARA FASE 2.

@@ -1,0 +1,1 @@
+﻿# Fine-tuning: nao iniciado. Futuro Qwen2.5-Coder-1.5B Base, LoRA FP16 rank 8, alpha 16, dropout 0.05, eager, checkpointing. Nenhum modelo ou dataset baixado. Fase 2 depende da instrucao expressa do usuario e validacao CUDA.

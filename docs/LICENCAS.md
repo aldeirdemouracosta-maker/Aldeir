@@ -1,0 +1,1 @@
+﻿# Licencas: nenhum codigo de terceiros incorporado nem dataset criado. Inventario de licencas/SPDX por versao e origem pendente antes de integracoes ou coleta. Licenca do proprio projeto ainda nao escolhida.

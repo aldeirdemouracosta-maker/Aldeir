@@ -1,0 +1,6 @@
+﻿.venv/
+__pycache__/
+ai/models/*
+ai/datasets/*
+ai/adapters/*
+*.mp4

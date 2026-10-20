@@ -1,0 +1,1 @@
+﻿# Validacao: consultas de inventario executadas; sem P100. Teste reprodutivel: .venv/Scripts/python.exe scripts/validate_cuda.py. Exit 2 significa CUDA indisponivel; exit 3 GPU/arquitetura incorreta. PASS exige P100 sm_60, multiplicacao real e sincronizacao. Resultados de instalacao e teste serao registrados separadamente.
