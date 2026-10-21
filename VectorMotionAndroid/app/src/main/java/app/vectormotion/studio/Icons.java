@@ -9,7 +9,7 @@ import android.graphics.RectF;
 final class Icons {
     static final int ONION = 0, LOCK = 1, UNLOCK = 2, FX = 3, UNDO = 4, PLAY = 5, PAUSE = 6,
             TRASH = 7, COPY = 8, LEFT = 9, RIGHT = 10, EXPORT = 11, NEW = 12, CLOSE = 13,
-            PLUS = 14, MINUS = 15;
+            PLUS = 14, MINUS = 15, MIC = 16, SOUND = 17;
 
     private static final Path P = new Path();
     private static final RectF R = new RectF();
@@ -132,6 +132,32 @@ final class Icons {
                 p.setStyle(Paint.Style.STROKE);
                 c.drawLine(cx - h * 0.6f, cy - h * 0.6f, cx + h * 0.6f, cy + h * 0.6f, p);
                 c.drawLine(cx + h * 0.6f, cy - h * 0.6f, cx - h * 0.6f, cy + h * 0.6f, p);
+                break;
+            case MIC:
+                p.setStyle(Paint.Style.FILL);
+                R.set(cx - h * 0.28f, cy - h * 0.9f, cx + h * 0.28f, cy + h * 0.25f);
+                c.drawRoundRect(R, h * 0.28f, h * 0.28f, p);
+                p.setStyle(Paint.Style.STROKE);
+                R.set(cx - h * 0.62f, cy - h * 0.5f, cx + h * 0.62f, cy + h * 0.55f);
+                c.drawArc(R, 0, 180, false, p);
+                c.drawLine(cx, cy + h * 0.55f, cx, cy + h * 0.9f, p);
+                break;
+            case SOUND:
+                p.setStyle(Paint.Style.FILL);
+                P.reset();
+                P.moveTo(cx - h * 0.85f, cy - h * 0.3f);
+                P.lineTo(cx - h * 0.4f, cy - h * 0.3f);
+                P.lineTo(cx + h * 0.05f, cy - h * 0.75f);
+                P.lineTo(cx + h * 0.05f, cy + h * 0.75f);
+                P.lineTo(cx - h * 0.4f, cy + h * 0.3f);
+                P.lineTo(cx - h * 0.85f, cy + h * 0.3f);
+                P.close();
+                c.drawPath(P, p);
+                p.setStyle(Paint.Style.STROKE);
+                R.set(cx - h * 0.35f, cy - h * 0.45f, cx + h * 0.45f, cy + h * 0.45f);
+                c.drawArc(R, -50, 100, false, p);
+                R.set(cx - h * 0.55f, cy - h * 0.8f, cx + h * 0.85f, cy + h * 0.8f);
+                c.drawArc(R, -50, 100, false, p);
                 break;
             default:
                 break;

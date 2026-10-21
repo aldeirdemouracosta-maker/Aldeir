@@ -1,10 +1,12 @@
 package app.vectormotion.studio;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
@@ -37,6 +39,7 @@ import java.util.concurrent.Executors;
 
 /** Tela principal do estúdio: câmera 9:16, onion skin, linha do tempo, efeitos CGI e exportação. */
 final class StudioView extends FrameLayout implements TextureView.SurfaceTextureListener, CameraController.Listener {
+    static final int REQ_MEME = 7;
     private static final int CAP_W = 1080, CAP_H = 1920;
     private static final int[] FPS_STEPS = {6, 8, 10, 12, 15, 24};
     private static final String[] FX_NAMES = {"Sem FX", "Herói", "Energia", "Cósmico", "Noir"};
@@ -142,7 +145,10 @@ final class StudioView extends FrameLayout implements TextureView.SurfaceTexture
     private final LinearLayout editRow;
     private final TextView holdLabel;
     private final LinearLayout fxPanel;
-    private final HudButton onionBtn, lockBtn, fxBtn, fpsBtn, newBtn, undoBtn, playBtn;
+    private final HudButton onionBtn, lockBtn, fxBtn, soundBtn, fpsBtn, newBtn, undoBtn, playBtn;
+    private final AudioPanel audioPanel;
+    private final PcmPlayer player = new PcmPlayer();
+    private final VoiceRecorder voice = new VoiceRecorder();
     private final ReactorButton reactor;
     private final HudButton[] fxChips = new HudButton[FX_NAMES.length];
 
@@ -155,6 +161,8 @@ final class StudioView extends FrameLayout implements TextureView.SurfaceTexture
     private boolean onion = true;
     private boolean aeLock = true;
     private boolean fxOpen;
+    private boolean audioOpen;
+    private boolean voicePlayback;
     private boolean newArmed;
     private volatile boolean playing;
     private int selected = -1;
@@ -223,6 +231,7 @@ final class StudioView extends FrameLayout implements TextureView.SurfaceTexture
         onionBtn = tool(Icons.ONION, "Onion");
         lockBtn = tool(Icons.LOCK, "Trava");
         fxBtn = tool(Icons.FX, "CGI");
+        soundBtn = tool(Icons.SOUND, "Som");
         fpsBtn = tool(Icons.PLAY, "");
         newBtn = tool(Icons.NEW, "Novo");
         onionBtn.setActive(true);
@@ -230,6 +239,7 @@ final class StudioView extends FrameLayout implements TextureView.SurfaceTexture
         onionBtn.setOnClickListener(v -> toggleOnion());
         lockBtn.setOnClickListener(v -> toggleLock());
         fxBtn.setOnClickListener(v -> toggleFx());
+        soundBtn.setOnClickListener(v -> toggleSound());
         fpsBtn.setOnClickListener(v -> cycleFps());
         newBtn.setOnClickListener(v -> newProject());
         final LayoutParams sp = new LayoutParams(Theme.dpi(58), -2, Gravity.TOP | Gravity.END);
@@ -284,6 +294,40 @@ final class StudioView extends FrameLayout implements TextureView.SurfaceTexture
         final TextView fxHint = Theme.label(a, "Efeito aplicado na reprodução e na exportação", 9, Theme.MUTED);
         fxPanel.addView(fxHint, new LinearLayout.LayoutParams(-1, -2));
         bottom.addView(fxPanel, new LinearLayout.LayoutParams(-1, -2));
+
+        audioPanel = new AudioPanel(a, project, new AudioPanel.Host() {
+            @Override
+            public long cursorUs() {
+                return StudioView.this.cursorUs();
+            }
+
+            @Override
+            public String cursorLabel() {
+                return StudioView.this.cursorLabel();
+            }
+
+            @Override
+            public void addSfx(String name) {
+                StudioView.this.addSfx(name);
+            }
+
+            @Override
+            public void importMeme() {
+                StudioView.this.importMeme();
+            }
+
+            @Override
+            public void toggleVoice() {
+                StudioView.this.toggleVoice();
+            }
+
+            @Override
+            public void changed() {
+                // eventos mudaram: nada a recalcular (a mixagem é refeita ao tocar/exportar)
+            }
+        });
+        audioPanel.setVisibility(GONE);
+        bottom.addView(audioPanel, new LinearLayout.LayoutParams(-1, -2));
 
         editRow = new LinearLayout(a);
         editRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -353,8 +397,8 @@ final class StudioView extends FrameLayout implements TextureView.SurfaceTexture
 
     private HudButton tool(int icon, String label) {
         final HudButton b = new HudButton(act, icon, label);
-        final LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, Theme.dpi(54));
-        lp.bottomMargin = Theme.dpi(8);
+        final LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, Theme.dpi(48));
+        lp.bottomMargin = Theme.dpi(6);
         side.addView(b, lp);
         return b;
     }
@@ -409,6 +453,7 @@ final class StudioView extends FrameLayout implements TextureView.SurfaceTexture
 
     void onPause() {
         resumed = false;
+        voice.stop();
         stopPlayback();
         cancelExport();
         camera.close();
@@ -418,6 +463,8 @@ final class StudioView extends FrameLayout implements TextureView.SurfaceTexture
     }
 
     void onDestroy() {
+        voice.stop();
+        player.stop();
         stopPlayback();
         cancelExport();
         camera.close();
@@ -441,6 +488,10 @@ final class StudioView extends FrameLayout implements TextureView.SurfaceTexture
         }
         if (fxOpen) {
             toggleFx();
+            return true;
+        }
+        if (audioOpen) {
+            toggleSound();
             return true;
         }
         return false;
@@ -585,9 +636,130 @@ final class StudioView extends FrameLayout implements TextureView.SurfaceTexture
     }
 
     private void toggleFx() {
+        if (!fxOpen && audioOpen) toggleSound();
         fxOpen = !fxOpen;
         fxPanel.setVisibility(fxOpen ? VISIBLE : GONE);
         fxBtn.setActive(fxOpen);
+    }
+
+    // ---------------------------------------------------------------- áudio
+
+    private void toggleSound() {
+        if (!audioOpen && fxOpen) toggleFx();
+        audioOpen = !audioOpen;
+        audioPanel.setVisibility(audioOpen ? VISIBLE : GONE);
+        soundBtn.setActive(audioOpen);
+        if (audioOpen) audioPanel.refresh();
+    }
+
+    /** Onde o próximo som entra: início do frame selecionado (ou 0). */
+    private long cursorUs() {
+        return selected >= 0 ? project.frameStartUs(selected) : 0;
+    }
+
+    private String cursorLabel() {
+        if (selected < 0) return "início (0.0s) • selecione um frame";
+        return String.format(Locale.US, "frame %d (%.1fs)", selected + 1, project.frameStartUs(selected) / 1_000_000.0);
+    }
+
+    private void addSfx(String name) {
+        final long at = cursorUs();
+        if (!project.audioAdd(at, 1000, "sfx:" + name)) {
+            toast("Limite de sons atingido.");
+            return;
+        }
+        thumbExec.execute(() -> player.playOnce(NativeCore.sfxPreview(name)));
+        audioPanel.refresh();
+    }
+
+    private void importMeme() {
+        final Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.setType("*/*");
+        i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"audio/*", "video/*"});
+        try {
+            act.startActivityForResult(i, REQ_MEME);
+        } catch (android.content.ActivityNotFoundException e) {
+            toast("Nenhum seletor de arquivos disponível.");
+        }
+    }
+
+    /** Resultado do seletor: decodifica, limita a 8 s, normaliza e coloca no cursor. */
+    void onPickedAudio(Uri uri) {
+        if (uri == null) return;
+        final long at = cursorUs();
+        toast("Importando meme (máx. 8 s)…");
+        io.execute(() -> {
+            final File tmp = new File(act.getCacheDir(), "import_tmp.wav");
+            String error = null;
+            try {
+                AudioDecoder.decodeToWav(act, uri, tmp, 9000);
+                final String name = project.nextAudioName("meme");
+                final File dst = new File(project.audioDir(), name);
+                if (!NativeCore.wavImport(tmp.getPath(), dst.getPath(), 8000)) error = "Áudio inválido.";
+                else if (!project.audioAdd(at, 1000, "file:" + name)) {
+                    //noinspection ResultOfMethodCallIgnored
+                    dst.delete();
+                    error = "Limite de sons atingido.";
+                }
+            } catch (java.io.IOException e) {
+                error = e.getMessage() != null ? e.getMessage() : "Falha ao importar.";
+            }
+            //noinspection ResultOfMethodCallIgnored
+            tmp.delete();
+            final String err = error;
+            main.post(() -> {
+                if (err != null) toast(err);
+                else toast("Meme adicionado.");
+                audioPanel.refresh();
+            });
+        });
+    }
+
+    private void toggleVoice() {
+        if (voice.isRecording()) {
+            voice.stop();
+            return;
+        }
+        if (act.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            toast("Microfone não liberado: ative em Ajustes > Permissões.");
+            return;
+        }
+        final File tmp = new File(act.getCacheDir(), "voice_tmp.wav");
+        final long startUs = project.count() > 0 ? 0 : cursorUs();
+        if (!voice.start(tmp, main, (wav, err) -> finishVoice(wav, err, startUs))) {
+            toast("Não foi possível usar o microfone.");
+            return;
+        }
+        audioPanel.setRecording(true);
+        if (project.count() > 0 && !playing) {   // narra assistindo ao vídeo (sem áudio, para o mic não captar os efeitos)
+            voicePlayback = true;
+            startPlayback(false);
+        }
+    }
+
+    private void finishVoice(File wav, String err, long startUs) {
+        audioPanel.setRecording(false);
+        if (voicePlayback) {
+            voicePlayback = false;
+            stopPlayback();
+        }
+        if (err != null || wav == null) {
+            toast(err != null ? err : "Falha na gravação.");
+            return;
+        }
+        io.execute(() -> {
+            final String name = project.nextAudioName("voz");
+            final File dst = new File(project.audioDir(), name);
+            final boolean ok = NativeCore.wavImport(wav.getPath(), dst.getPath(), VoiceRecorder.MAX_MS)
+                    && project.audioAdd(startUs, 1000, "file:" + name);
+            //noinspection ResultOfMethodCallIgnored
+            wav.delete();
+            main.post(() -> {
+                toast(ok ? "Voz adicionada." : "Não foi possível salvar a voz.");
+                audioPanel.refresh();
+            });
+        });
     }
 
     private void setFx(int preset) {
@@ -639,6 +811,7 @@ final class StudioView extends FrameLayout implements TextureView.SurfaceTexture
         select(-1);
         project.clear();
         renderer.clear();
+        audioPanel.refresh();
         onionView.setImageDrawable(null);
         onionView.setVisibility(GONE);
         rebuildStrip();
@@ -681,6 +854,7 @@ final class StudioView extends FrameLayout implements TextureView.SurfaceTexture
             t.invalidate();
         }
         editRow.setVisibility(selected >= 0 ? VISIBLE : GONE);
+        if (audioOpen) audioPanel.refresh();
         if (selected < 0) {
             playView.setVisibility(GONE);
             hud.setTag("AO VIVO", Theme.RED);
@@ -761,6 +935,22 @@ final class StudioView extends FrameLayout implements TextureView.SurfaceTexture
             stopPlayback();
             return;
         }
+        startPlayback(true);
+    }
+
+    private static short[] mixAll(long ae, long durUs) {
+        final int total = (int) (durUs * NativeCore.AUDIO_RATE / 1_000_000L);
+        final short[] all = new short[total];
+        final short[] piece = new short[NativeCore.AUDIO_RATE];
+        for (int pos = 0; pos < total; pos += piece.length) {
+            final int n = Math.min(piece.length, total - pos);
+            NativeCore.aeRender(ae, pos, piece, n);
+            System.arraycopy(piece, 0, all, pos, n);
+        }
+        return all;
+    }
+
+    private void startPlayback(boolean withAudio) {
         if (project.count() == 0) {
             toast("Capture alguns frames primeiro.");
             return;
@@ -771,9 +961,16 @@ final class StudioView extends FrameLayout implements TextureView.SurfaceTexture
         hud.setTag("REPRODUZINDO", Theme.CYAN);
         playThread = new Thread(() -> {
             final long tl = project.cloneTimeline();
+            long ae = 0;
             try {
                 final long dur = NativeCore.tlDurationUs(tl);
                 if (dur <= 0) return;
+                if (withAudio && project.audioCount() > 0) {
+                    ae = project.newAudioSnapshot();
+                    final short[] mix = mixAll(ae, dur);
+                    if (!playing) return;
+                    player.playLoop(mix);   // o relógio do vídeo começa logo em seguida
+                }
                 long start = System.nanoTime();
                 int last = -2;
                 while (playing) {
@@ -802,6 +999,8 @@ final class StudioView extends FrameLayout implements TextureView.SurfaceTexture
                 }
             } finally {
                 NativeCore.tlFree(tl);
+                if (ae != 0) NativeCore.aeFree(ae);
+                player.stop();
             }
         }, "playback");
         playThread.start();
@@ -822,6 +1021,7 @@ final class StudioView extends FrameLayout implements TextureView.SurfaceTexture
     private void stopPlayback() {
         if (!playing) return;
         playing = false;
+        player.stop();
         if (playThread != null) playThread.interrupt();
         playThread = null;
         playBtn.setActive(false);

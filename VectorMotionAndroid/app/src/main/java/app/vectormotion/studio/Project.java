@@ -17,17 +17,133 @@ final class Project {
 
     private final File dir;
     private final File frames;
+    private final File audio;
     private final long tl;
+    private final long ae;
 
     Project(Context ctx) {
         dir = new File(ctx.getFilesDir(), "projects/default");
         frames = new File(dir, "frames");
         //noinspection ResultOfMethodCallIgnored
         frames.mkdirs();
+        audio = new File(dir, "audio");
+        //noinspection ResultOfMethodCallIgnored
+        audio.mkdirs();
         tl = NativeCore.tlNew(12);
+        ae = NativeCore.aeNew(audio.getPath());
+        NativeCore.aeLoad(ae, audioIndex().getPath());
         final boolean loaded = NativeCore.tlLoad(tl, timelineFile().getPath());
         if (!loaded) rebuildFromFrames();
         recover();
+        recoverAudio();
+    }
+
+    private File audioIndex() {
+        return new File(dir, "audio.vma");
+    }
+
+    /** Remove .part, eventos cujo arquivo sumiu e WAVs que nenhum evento usa. */
+    private synchronized void recoverAudio() {
+        boolean changed = false;
+        for (int i = NativeCore.aeSize(ae) - 1; i >= 0; i--) {
+            final String src = NativeCore.aeSource(ae, i);
+            if (src.startsWith("file:") && !new File(audio, src.substring(5)).isFile()) {
+                NativeCore.aeRemove(ae, i);
+                changed = true;
+            }
+        }
+        final File[] list = audio.listFiles();
+        if (list != null) {
+            for (File f : list) {
+                final String n = f.getName();
+                if (n.endsWith(".part") || (n.endsWith(".wav") && !audioUses("file:" + n))) //noinspection ResultOfMethodCallIgnored
+                    f.delete();
+            }
+        }
+        if (changed) saveAudio();
+    }
+
+    private boolean audioUses(String source) {
+        for (int i = 0; i < NativeCore.aeSize(ae); i++) if (NativeCore.aeSource(ae, i).equals(source)) return true;
+        return false;
+    }
+
+    private void saveAudio() {
+        NativeCore.aeSave(ae, audioIndex().getPath());
+    }
+
+    File audioDir() {
+        return audio;
+    }
+
+    synchronized int audioCount() {
+        return NativeCore.aeSize(ae);
+    }
+
+    synchronized long audioStartUs(int i) {
+        return NativeCore.aeStartUs(ae, i);
+    }
+
+    synchronized int audioGain(int i) {
+        return NativeCore.aeGain(ae, i);
+    }
+
+    synchronized String audioSource(int i) {
+        return NativeCore.aeSource(ae, i);
+    }
+
+    synchronized boolean audioAdd(long startUs, int gainMilli, String source) {
+        final boolean ok = NativeCore.aeAdd(ae, Math.max(0, startUs), gainMilli, source);
+        if (ok) saveAudio();
+        return ok;
+    }
+
+    synchronized boolean audioSetGain(int i, int gainMilli) {
+        final boolean ok = NativeCore.aeSetGain(ae, i, gainMilli);
+        if (ok) saveAudio();
+        return ok;
+    }
+
+    /** Remove o evento; o WAV só é apagado se nenhum outro evento o usa. */
+    synchronized boolean audioRemove(int i) {
+        final String src = NativeCore.aeSource(ae, i);
+        if (!NativeCore.aeRemove(ae, i)) return false;
+        if (src.startsWith("file:") && !audioUses(src)) //noinspection ResultOfMethodCallIgnored
+            new File(audio, src.substring(5)).delete();
+        saveAudio();
+        return true;
+    }
+
+    /** Próximo nome livre: voz_001.wav / meme_001.wav. */
+    synchronized String nextAudioName(String prefix) {
+        int max = 0;
+        final String[] names = audio.list();
+        if (names != null) {
+            for (String n : names) {
+                if (n.startsWith(prefix + "_") && n.endsWith(".wav")) {
+                    try {
+                        max = Math.max(max, Integer.parseInt(n.substring(prefix.length() + 1, n.length() - 4)));
+                    } catch (NumberFormatException ignored) {
+                        // nome estranho
+                    }
+                }
+            }
+        }
+        return String.format(java.util.Locale.US, "%s_%03d.wav", prefix, max + 1);
+    }
+
+    /** Instante (µs) em que o frame `index` começa na linha do tempo. */
+    synchronized long frameStartUs(int index) {
+        long frames = 0;
+        for (int i = 0; i < index && i < NativeCore.tlSize(tl); i++) frames += NativeCore.tlHold(tl, i);
+        return frames * 1_000_000L / NativeCore.tlFps(tl);
+    }
+
+    /** Motor de áudio independente (cópia dos eventos) para tocar/exportar em outra thread. Liberar com aeFree. */
+    synchronized long newAudioSnapshot() {
+        final long h = NativeCore.aeNew(audio.getPath());
+        NativeCore.aeParse(h, NativeCore.aeSerialize(ae));
+        return h;
     }
 
     private File timelineFile() {
@@ -200,5 +316,12 @@ final class Project {
                 f.delete();
         }
         save();
+        NativeCore.aeClear(ae);
+        final File[] wavs = audio.listFiles();
+        if (wavs != null) {
+            for (File f : wavs) //noinspection ResultOfMethodCallIgnored
+                f.delete();
+        }
+        saveAudio();
     }
 }

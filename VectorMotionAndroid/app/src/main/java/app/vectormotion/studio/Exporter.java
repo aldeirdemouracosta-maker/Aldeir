@@ -18,6 +18,8 @@ import android.provider.MediaStore;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.ArrayList;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -63,6 +65,7 @@ final class Exporter {
 
     private void run(Listener l) {
         final long h = project.cloneTimeline();
+        final long ae = project.audioCount() > 0 ? project.newAudioSnapshot() : 0;
         try {
             if (NativeCore.tlSize(h) == 0) {
                 post(() -> l.onError("Não há frames para exportar."));
@@ -74,7 +77,7 @@ final class Exporter {
                 Uri uri = null;
                 try {
                     uri = createEntry();
-                    encode(h, uri, s[0], s[1], l);
+                    encode(h, ae, uri, s[0], s[1], l);
                     final ContentValues done = new ContentValues();
                     done.put(MediaStore.Video.Media.IS_PENDING, 0);
                     ctx.getContentResolver().update(uri, done, null, null);
@@ -94,6 +97,7 @@ final class Exporter {
             post(() -> l.onError("Não foi possível exportar: " + msg));
         } finally {
             NativeCore.tlFree(h);
+            if (ae != 0) NativeCore.aeFree(ae);
         }
     }
 
@@ -122,15 +126,86 @@ final class Exporter {
         }
     }
 
-    private void encode(long tl, Uri uri, int w, int h, Listener l) throws IOException {
+    /** Amostra de saída guardada até o muxer iniciar (só inicia quando vídeo e áudio têm formato). */
+    private static final class Pending {
+        final boolean audio;
+        final byte[] data;
+        final MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
+
+        Pending(boolean audio, ByteBuffer src, MediaCodec.BufferInfo i) {
+            this.audio = audio;
+            data = new byte[i.size];
+            src.get(data);
+            info.set(0, i.size, i.presentationTimeUs, i.flags);
+        }
+    }
+
+    private static final class Mux {
+        MediaMuxer muxer;
+        int videoTrack = -1, audioTrack = -1;
+        boolean started;
+        final boolean hasAudio;
+        final ArrayList<Pending> pending = new ArrayList<>();
+
+        Mux(boolean hasAudio) {
+            this.hasAudio = hasAudio;
+        }
+
+        void format(boolean audio, MediaFormat f) throws IOException {
+            if (started) throw new IOException("Formato mudou durante a gravação");
+            if (audio) audioTrack = muxer.addTrack(f);
+            else videoTrack = muxer.addTrack(f);
+            if (videoTrack >= 0 && (!hasAudio || audioTrack >= 0)) {
+                muxer.start();
+                started = true;
+                for (Pending p : pending) write(p.audio, ByteBuffer.wrap(p.data), p.info);
+                pending.clear();
+            }
+        }
+
+        void write(boolean audio, ByteBuffer buf, MediaCodec.BufferInfo info) {
+            muxer.writeSampleData(audio ? audioTrack : videoTrack, buf, info);
+        }
+
+        void sample(boolean audio, ByteBuffer buf, MediaCodec.BufferInfo info) {
+            if (started) write(audio, buf, info);
+            else pending.add(new Pending(audio, buf, info));
+        }
+    }
+
+    /** Esvazia o codec; devolve true ao receber o fim de fluxo. */
+    private boolean drain(MediaCodec codec, boolean audio, Mux mux, MediaCodec.BufferInfo info, long timeoutUs) throws IOException {
+        while (true) {
+            final int oi = codec.dequeueOutputBuffer(info, timeoutUs);
+            if (oi == MediaCodec.INFO_TRY_AGAIN_LATER) return false;
+            if (oi == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                mux.format(audio, codec.getOutputFormat());
+                continue;
+            }
+            if (oi < 0) continue;
+            final ByteBuffer ob = codec.getOutputBuffer(oi);
+            if ((info.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) info.size = 0;
+            if (info.size > 0 && ob != null) {
+                ob.position(info.offset);
+                ob.limit(info.offset + info.size);
+                mux.sample(audio, ob, info);
+            }
+            codec.releaseOutputBuffer(oi, false);
+            if ((info.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) return true;
+        }
+    }
+
+    private void encode(long tl, long ae, Uri uri, int w, int h, Listener l) throws IOException {
         final ContentResolver cr = ctx.getContentResolver();
         final long totalUs = NativeCore.tlDurationUs(tl);
         final int totalOut = (int) Math.max(1, (totalUs * OUT_FPS + 999_999L) / 1_000_000L);
+        final long totalAudio = ae != 0 ? totalUs * NativeCore.AUDIO_RATE / 1_000_000L : 0;
+        final boolean withAudio = totalAudio > 0;
 
         MediaCodec codec = null;
-        MediaMuxer muxer = null;
+        MediaCodec acodec = null;
         Bitmap cur = null;
-        boolean muxerStarted = false;
+        final Mux mux = new Mux(withAudio);
         try (ParcelFileDescriptor pfd = cr.openFileDescriptor(uri, "rw")) {
             if (pfd == null) throw new IOException("Sem acesso ao arquivo de saída");
             final MediaFormat f = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h);
@@ -143,17 +218,29 @@ final class Exporter {
             codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
             codec.configure(f, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
             codec.start();
-            muxer = new MediaMuxer(pfd.getFileDescriptor(), MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
+            if (withAudio) {
+                final MediaFormat af = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, NativeCore.AUDIO_RATE, 1);
+                af.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC);
+                af.setInteger(MediaFormat.KEY_BIT_RATE, 128_000);
+                af.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 16384);
+                acodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC);
+                acodec.configure(af, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+                acodec.start();
+            }
+            mux.muxer = new MediaMuxer(pfd.getFileDescriptor(), MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
 
-            final MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
-            int track = -1;
+            final MediaCodec.BufferInfo vinfo = new MediaCodec.BufferInfo();
+            final MediaCodec.BufferInfo ainfo = new MediaCodec.BufferInfo();
+            final short[] chunk = new short[4096];
+            final ByteBuffer scratch = ByteBuffer.allocate(chunk.length * 2).order(ByteOrder.LITTLE_ENDIAN);
             int fed = 0;
+            long audioFed = 0;
             int lastPercent = -1;
-            boolean inputDone = false;
-            boolean outDone = false;
+            boolean inputDone = false, outDone = false;
+            boolean audioInputDone = !withAudio, audioOutDone = !withAudio;
             String curName = null;
 
-            while (!outDone) {
+            while (!outDone || !audioOutDone) {
                 if (cancelled) throw new Cancelled();
 
                 if (!inputDone) {
@@ -200,47 +287,52 @@ final class Exporter {
                         }
                     }
                 }
+                if (!outDone) outDone = drain(codec, false, mux, vinfo, inputDone ? TIMEOUT_US : 0);
 
-                while (true) {
-                    final int oi = codec.dequeueOutputBuffer(info, inputDone ? TIMEOUT_US : 0);
-                    if (oi == MediaCodec.INFO_TRY_AGAIN_LATER) break;
-                    if (oi == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                        if (muxerStarted) throw new IOException("Formato mudou durante a gravação");
-                        track = muxer.addTrack(codec.getOutputFormat());
-                        muxer.start();
-                        muxerStarted = true;
-                        continue;
-                    }
-                    if (oi < 0) continue;
-                    final ByteBuffer ob = codec.getOutputBuffer(oi);
-                    if ((info.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) info.size = 0;
-                    if (info.size > 0 && muxerStarted && ob != null) {
-                        ob.position(info.offset);
-                        ob.limit(info.offset + info.size);
-                        muxer.writeSampleData(track, ob, info);
-                    }
-                    codec.releaseOutputBuffer(oi, false);
-                    if ((info.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
-                        outDone = true;
-                        break;
+                if (!audioInputDone) {
+                    // mantém o áudio perto do vídeo para o MP4 sair intercalado
+                    final long audioUs = audioFed * 1_000_000L / NativeCore.AUDIO_RATE;
+                    final long videoUs = (long) fed * 1_000_000L / OUT_FPS;
+                    if (inputDone || audioUs <= videoUs + 400_000L) {
+                        final int ai = acodec.dequeueInputBuffer(0);
+                        if (ai >= 0) {
+                            final ByteBuffer ib = acodec.getInputBuffer(ai);
+                            final long pts = audioFed * 1_000_000L / NativeCore.AUDIO_RATE;
+                            final long remaining = totalAudio - audioFed;
+                            if (remaining <= 0 || ib == null) {
+                                acodec.queueInputBuffer(ai, 0, 0, pts, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
+                                audioInputDone = true;
+                            } else {
+                                final int n = (int) Math.min(remaining, Math.min(chunk.length, ib.capacity() / 2));
+                                if (!NativeCore.aeRender(ae, audioFed, chunk, n)) throw new IOException("Mixagem de áudio falhou");
+                                scratch.clear();
+                                scratch.asShortBuffer().put(chunk, 0, n);
+                                ib.clear();
+                                ib.put(scratch.array(), 0, n * 2);
+                                acodec.queueInputBuffer(ai, 0, n * 2, pts, 0);
+                                audioFed += n;
+                            }
+                        }
                     }
                 }
+                if (!audioOutDone) audioOutDone = drain(acodec, true, mux, ainfo, 0);
             }
-            if (!muxerStarted) throw new IOException("Codec não produziu vídeo");
-            muxer.stop();
+            if (!mux.started) throw new IOException("Codec não produziu vídeo");
+            mux.muxer.stop();
         } finally {
             if (cur != null) cur.recycle();
-            if (codec != null) {
+            for (MediaCodec c : new MediaCodec[]{codec, acodec}) {
+                if (c == null) continue;
                 try {
-                    codec.stop();
+                    c.stop();
                 } catch (RuntimeException ignored) {
                     // já parado
                 }
-                codec.release();
+                c.release();
             }
-            if (muxer != null) {
+            if (mux.muxer != null) {
                 try {
-                    muxer.release();
+                    mux.muxer.release();
                 } catch (RuntimeException ignored) {
                     // não iniciado ou já liberado
                 }

@@ -36,6 +36,30 @@ final class NativeCore {
     static native boolean tlSave(long h, String path);
     static native boolean tlLoad(long h, String path);
 
+    // ---- áudio (mono 44,1 kHz) ----
+    static final int AUDIO_RATE = 44100;
+    static final String[] SFX = {"explosion", "gunshot", "whoosh", "laser", "boom", "glass", "airhorn", "riser", "scratch"};
+
+    static native long aeNew(String dir);
+    static native void aeFree(long h);
+    static native int aeSize(long h);
+    static native long aeStartUs(long h, int i);
+    static native int aeGain(long h, int i);
+    static native String aeSource(long h, int i);
+    static native boolean aeAdd(long h, long startUs, int gainMilli, String source);
+    static native boolean aeRemove(long h, int i);
+    static native boolean aeSetGain(long h, int i, int gainMilli);
+    static native boolean aeSetStart(long h, int i, long startUs);
+    static native void aeClear(long h);
+    static native String aeSerialize(long h);
+    static native boolean aeParse(long h, String text);
+    static native boolean aeSave(long h, String path);
+    static native boolean aeLoad(long h, String path);
+    static native long aeSourceDurationUs(long h, String source);
+    static native boolean aeRender(long h, long startFrame, short[] out, int n);
+    static native short[] sfxPreview(String name);
+    static native boolean wavImport(String src, String dst, int maxMs);
+
     /** Bitmap precisa ser mutável ARGB_8888. */
     static native boolean fxApply(Bitmap b, int preset, float intensity, int seed);
     static native boolean onionGhost(Bitmap b, int tintRgb, float strength);

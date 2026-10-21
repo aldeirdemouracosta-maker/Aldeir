@@ -43,7 +43,23 @@ Pesquisa feita em 21/10/2026 (resultados de busca; não verifiquei código-fonte
 - **Candidatos para depois**: Oboe (áudio de baixa latência), ThorVG (SVG/Lottie vetorial, já usado no original),
   Media3 Transformer (cortes/transições, se um dia a exportação ficar complexa).
 
-## 4. Troca de rosto ("faceup")
+## 4. Módulo de áudio (efeitos e memes curtos)
+
+- **Efeitos**: sintetizados proceduralmente em C++ (`core/src/audio.cpp`), determinísticos e testados (espectrogramas conferidos:
+  laser desce, riser sobe, etc.). Não há áudio de terceiros embutido no app.
+- **Memes**: o usuário **importa o próprio clipe** (seletor de arquivos do sistema, sem permissão de armazenamento). O app decodifica
+  qualquer áudio/vídeo (`MediaExtractor` + `MediaCodec`), corta em 8 s, converte para mono 44,1 kHz, normaliza e aplica fade.
+  Direitos autorais do clipe são de quem importa: áudio com copyright pode ser silenciado ou bloqueado pelo TikTok.
+- **Voz**: `AudioRecord` (permissão de microfone já pedida na abertura, nunca de novo); grava assistindo ao vídeo, sem tocar os efeitos
+  (para o microfone não captar o alto-falante).
+- **Mixagem**: `AudioEngine` soma os eventos com ganho individual e um limitador suave (`tanh`), nunca estoura. A mesma mixagem alimenta a
+  prévia (`AudioTrack`) e o MP4 (AAC-LC 128 kbps, muxer com duas trilhas, amostras intercaladas).
+- **Robustez**: nomes validados (sem `../`), arquivos ausentes são ignorados, WAV truncado/inválido é recusado, eventos órfãos e
+  `.part` limpos na abertura, exportação usa uma **cópia** dos eventos (editar durante a exportação não corrompe o vídeo).
+- **Limites**: 400 sons por projeto, 30 s de voz, 8 s por meme. A narração fica sincronizada ao início do vídeo; sons que passam do
+  fim do vídeo são cortados na exportação.
+
+## 5. Troca de rosto ("faceup")
 
 Pedido novo, ainda **não implementado**. Plano e condições:
 

@@ -3,6 +3,7 @@
 
 #include <string>
 
+#include "vm/audio.hpp"
 #include "vm/pixel_ops.hpp"
 #include "vm/timeline.hpp"
 
@@ -11,6 +12,7 @@
 namespace {
 
 vm::Timeline* tl(jlong h) { return reinterpret_cast<vm::Timeline*>(h); }
+vm::AudioEngine* ae(jlong h) { return reinterpret_cast<vm::AudioEngine*>(h); }
 
 std::string str(JNIEnv* env, jstring s) {
     if (!s) return {};
@@ -98,4 +100,55 @@ JNI(jboolean, bitmapToYuv420)(JNIEnv* env, jclass, jobject bmp, jobject yb, jint
     return vm::rgba_to_yuv420(l.data(), static_cast<int>(l.info.width), static_cast<int>(l.info.height),
                               static_cast<int>(l.info.stride), plane(env, yb, yr, yp),
                               plane(env, ub, ur, up), plane(env, vb, vr, vp)) ? JNI_TRUE : JNI_FALSE;
+}
+
+// ---------------------------------------------------------------- áudio
+JNI(jlong, aeNew)(JNIEnv* env, jclass, jstring dir) { return reinterpret_cast<jlong>(new vm::AudioEngine(str(env, dir))); }
+JNI(void, aeFree)(JNIEnv*, jclass, jlong h) { delete ae(h); }
+JNI(jint, aeSize)(JNIEnv*, jclass, jlong h) { return h ? static_cast<jint>(ae(h)->timeline().size()) : 0; }
+JNI(jlong, aeStartUs)(JNIEnv*, jclass, jlong h, jint i) {
+    const vm::AudioEvent* e = (h && i >= 0) ? ae(h)->timeline().at(static_cast<size_t>(i)) : nullptr;
+    return e ? e->start_us : 0;
+}
+JNI(jint, aeGain)(JNIEnv*, jclass, jlong h, jint i) {
+    const vm::AudioEvent* e = (h && i >= 0) ? ae(h)->timeline().at(static_cast<size_t>(i)) : nullptr;
+    return e ? e->gain_milli : 0;
+}
+JNI(jstring, aeSource)(JNIEnv* env, jclass, jlong h, jint i) {
+    const vm::AudioEvent* e = (h && i >= 0) ? ae(h)->timeline().at(static_cast<size_t>(i)) : nullptr;
+    return env->NewStringUTF(e ? e->source.c_str() : "");
+}
+JNI(jboolean, aeAdd)(JNIEnv* env, jclass, jlong h, jlong startUs, jint gain, jstring src) {
+    return h && ae(h)->timeline().add(startUs, gain, str(env, src));
+}
+JNI(jboolean, aeRemove)(JNIEnv*, jclass, jlong h, jint i) { return h && i >= 0 && ae(h)->timeline().remove(static_cast<size_t>(i)); }
+JNI(jboolean, aeSetGain)(JNIEnv*, jclass, jlong h, jint i, jint g) { return h && i >= 0 && ae(h)->timeline().set_gain(static_cast<size_t>(i), g); }
+JNI(jboolean, aeSetStart)(JNIEnv*, jclass, jlong h, jint i, jlong us) { return h && i >= 0 && ae(h)->timeline().set_start(static_cast<size_t>(i), us); }
+JNI(void, aeClear)(JNIEnv*, jclass, jlong h) { if (h) ae(h)->timeline().clear(); }
+JNI(jstring, aeSerialize)(JNIEnv* env, jclass, jlong h) { return env->NewStringUTF(h ? ae(h)->timeline().serialize().c_str() : ""); }
+JNI(jboolean, aeParse)(JNIEnv* env, jclass, jlong h, jstring t) { return h && ae(h)->timeline().parse(str(env, t)); }
+JNI(jboolean, aeSave)(JNIEnv* env, jclass, jlong h, jstring p) { return h && ae(h)->timeline().save_atomic(str(env, p)); }
+JNI(jboolean, aeLoad)(JNIEnv* env, jclass, jlong h, jstring p) { return h && ae(h)->timeline().load(str(env, p)); }
+JNI(jlong, aeSourceDurationUs)(JNIEnv* env, jclass, jlong h, jstring src) { return h ? ae(h)->source_duration_us(str(env, src)) : 0; }
+
+// Mistura n amostras (mono 44,1 kHz) a partir de startFrame para out[0..n).
+JNI(jboolean, aeRender)(JNIEnv* env, jclass, jlong h, jlong startFrame, jshortArray out, jint n) {
+    if (!h || !out || n <= 0 || env->GetArrayLength(out) < n) return JNI_FALSE;
+    std::vector<std::int16_t> buf(static_cast<size_t>(n));
+    ae(h)->render(startFrame, buf.size(), buf.data());
+    env->SetShortArrayRegion(out, 0, n, buf.data());
+    return JNI_TRUE;
+}
+
+JNI(jshortArray, sfxPreview)(JNIEnv* env, jclass, jstring name) {
+    vm::Sfx s;
+    if (!vm::sfx_from_name(str(env, name), s)) return nullptr;
+    const vm::Pcm p = vm::synth(s);
+    jshortArray arr = env->NewShortArray(static_cast<jsize>(p.size()));
+    if (arr) env->SetShortArrayRegion(arr, 0, static_cast<jsize>(p.size()), p.data());
+    return arr;
+}
+
+JNI(jboolean, wavImport)(JNIEnv* env, jclass, jstring src, jstring dst, jint maxMs) {
+    return vm::import_wav(str(env, src), str(env, dst), maxMs) ? JNI_TRUE : JNI_FALSE;
 }

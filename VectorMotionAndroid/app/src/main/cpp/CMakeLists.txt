@@ -7,7 +7,8 @@ set(CORE ${CMAKE_CURRENT_SOURCE_DIR}/../../../../core)
 add_library(vmcore SHARED
     jni_bridge.cpp
     ${CORE}/src/timeline.cpp
-    ${CORE}/src/pixel_ops.cpp)
+    ${CORE}/src/pixel_ops.cpp
+    ${CORE}/src/audio.cpp)
 target_include_directories(vmcore PRIVATE ${CORE}/include)
 target_compile_options(vmcore PRIVATE -O2 -fvisibility=hidden -Wall -Wextra)
 target_link_libraries(vmcore jnigraphics log)

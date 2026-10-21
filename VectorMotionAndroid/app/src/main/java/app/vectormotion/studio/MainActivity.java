@@ -137,6 +137,12 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onActivityResult(int req, int result, Intent data) {
+        super.onActivityResult(req, result, data);
+        if (req == StudioView.REQ_MEME && result == RESULT_OK && data != null && studio != null) studio.onPickedAudio(data.getData());
+    }
+
+    @Override
     public void onBackPressed() {
         if (studio != null && studio.onBack()) return;
         super.onBackPressed();

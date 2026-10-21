@@ -11,6 +11,9 @@ o núcleo C++ portátil e um app Android nativo, **sem nenhuma dependência de t
 - **Efeitos CGI em C++**: Herói (teal & orange), Energia (brilho + aberração cromática), Cósmico, Noir (vermelho isolado), com intensidade.
 - Reprodução em loop com os efeitos.
 - **Exportação MP4** vertical H.264 30 fps → `Filmes/VectorMotion`, e botão **Enviar ao TikTok** (ou outros apps).
+- **Som & Memes** (botão *Som*): 9 efeitos sintetizados em C++ (explosão, tiro, whoosh, laser, boom, vidro, buzina, riser, scratch),
+  **importar meme** (áudio ou vídeo do seu aparelho, cortado em 8 s e normalizado), **gravar voz** assistindo ao vídeo, volume por som.
+  Cada som entra no frame selecionado; a mixagem toca na reprodução e vai como trilha AAC no MP4 exportado.
 - Interface estilo blockbuster: abertura animada, botão-reator, HUD, painéis inclinados.
 
 ## Visual e mockup
@@ -22,7 +25,7 @@ emite o SVG do mockup e o `VectorDrawable` do app a partir da mesma descrição.
 
 ## Próximos marcos
 
-- Voz/narração (AudioRecord → AAC no MP4) e trilha.
+- Trilha musical de fundo e transições de áudio.
 - Troca de rosto (ver `docs/ANALISE_E_AJUSTES.md`).
 
 ## Permissões

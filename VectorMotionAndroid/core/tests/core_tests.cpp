@@ -1,8 +1,11 @@
+#include "vm/audio.hpp"
 #include "vm/pixel_ops.hpp"
 #include "vm/timeline.hpp"
 
 #include <cstdio>
+#include <cmath>
 #include <cstdlib>
+#include <fstream>
 #include <vector>
 
 static int failures = 0;
@@ -135,8 +138,109 @@ static void yuv() {
     CHECK(rgba_to_yuv420(odd.data(), 5, 3, 20, {oy.data(), 5, 1, oy.size()}, {ou.data(), 3, 1, ou.size()}, {ov.data(), 3, 1, ov.size()}));
 }
 
+
+static int peak(const vm::Pcm& p) { int m = 0; for (auto v : p) m = std::max(m, std::abs((int)v)); return m; }
+
+static void audio_synth() {
+    for (int i = 0; i < (int)Sfx::Count; ++i) {
+        const Sfx s = (Sfx)i;
+        Pcm a = synth(s), b = synth(s);
+        CHECK(a == b);                                   // determinístico
+        CHECK(a.size() > 4000 && a.size() < 3 * kAudioRate);
+        CHECK(peak(a) > 20000 && peak(a) <= 32767);      // normalizado, sem estourar
+        Sfx back; CHECK(sfx_from_name(sfx_name(s), back) && back == s);
+        // não pode terminar com estalo: cauda quase silenciosa
+        int tail = 0; for (size_t k = a.size() - 64; k < a.size(); ++k) tail = std::max(tail, std::abs((int)a[k]));
+        CHECK(tail < 6000);
+    }
+    Sfx x; CHECK(!sfx_from_name("nada", x) && !sfx_from_name("", x));
+}
+
+static void audio_convert() {
+    // 48 kHz estéreo -> 44,1 kHz mono
+    std::vector<int16_t> st(48000 * 2);
+    for (int i = 0; i < 48000; ++i) { st[2*i] = (int16_t)(8000 * std::sin(i * 0.05)); st[2*i+1] = st[2*i]; }
+    Pcm m = to_mono_44k(st.data(), 48000, 48000, 2);
+    CHECK(std::abs((int)m.size() - 44100) <= 2);
+    CHECK(peak(m) > 7000 && peak(m) < 9000);
+    // 22,05 kHz mono (ampliando)
+    std::vector<int16_t> lo(22050, 1000);
+    Pcm u = to_mono_44k(lo.data(), lo.size(), 22050, 1);
+    CHECK(std::abs((int)u.size() - 44100) <= 2 && u[100] == 1000);
+    CHECK(to_mono_44k(nullptr, 10, 44100, 1).empty());
+    CHECK(to_mono_44k(lo.data(), 0, 44100, 1).empty());
+    CHECK(to_mono_44k(lo.data(), 10, 100, 1).empty() && to_mono_44k(lo.data(), 10, 44100, 0).empty());
+    // normalização não amplifica silêncio
+    Pcm quiet(1000, 3); normalize_peak(quiet); CHECK(quiet[0] == 3);
+    Pcm f(2000, 10000); fade_edges(f, 10); CHECK(f[0] == 0 && f[1000] == 10000 && std::abs(f.back()) < 200);
+}
+
+static void audio_wav() {
+    const char* path = "/tmp/vm_core_test.wav";
+    Pcm src = synth(Sfx::Laser);
+    CHECK(write_wav(path, src));
+    std::vector<int16_t> back; int rate = 0, ch = 0;
+    CHECK(read_wav(path, back, rate, ch) && rate == kAudioRate && ch == 1 && back == src);
+    // importação limita a duração e converte
+    Pcm longclip(kAudioRate * 12, 0);
+    for (size_t i = 0; i < longclip.size(); ++i) longclip[i] = (int16_t)(6000 * std::sin(i * 0.03));
+    CHECK(write_wav("/tmp/vm_core_long.wav", longclip));
+    CHECK(import_wav("/tmp/vm_core_long.wav", "/tmp/vm_core_imp.wav", 8000));
+    CHECK(read_wav("/tmp/vm_core_imp.wav", back, rate, ch) && back.size() == (size_t)kAudioRate * 8 && peak(back) > 28000);
+    // arquivos inválidos
+    { std::ofstream o("/tmp/vm_core_bad.wav", std::ios::binary); o << "isto nao e um wav, bem maior que 44 bytes................."; }
+    CHECK(!read_wav("/tmp/vm_core_bad.wav", back, rate, ch) && !import_wav("/tmp/vm_core_bad.wav", "/tmp/x.wav"));
+    CHECK(!read_wav("/tmp/nao_existe_vm.wav", back, rate, ch));
+    { // cabeçalho válido, dados truncados/sem amostras
+      std::ifstream i(path, std::ios::binary); std::string all((std::istreambuf_iterator<char>(i)), std::istreambuf_iterator<char>());
+      { std::ofstream o("/tmp/vm_core_trunc.wav", std::ios::binary); o.write(all.data(), 44); }
+      CHECK(!read_wav("/tmp/vm_core_trunc.wav", back, rate, ch));
+      { std::ofstream o("/tmp/vm_core_trunc2.wav", std::ios::binary); o.write(all.data(), 44 + 2001); }   // metade de uma amostra sobra
+      CHECK(read_wav("/tmp/vm_core_trunc2.wav", back, rate, ch) && back.size() == 1000);
+    }
+}
+
+static void audio_timeline_and_mix() {
+    AudioTimeline t;
+    CHECK(t.add(2000000, 1000, "sfx:boom") && t.add(500000, 500, "sfx:laser") && t.add(0, 1000, "file:voz_1.wav"));
+    CHECK(t.size() == 3 && t.at(0)->start_us == 0 && t.at(2)->start_us == 2000000);   // ordenado
+    CHECK(!t.add(0, 1000, "sfx:nope") && !t.add(0, 1000, "file:../x.wav") && !t.add(0, 1000, "arquivo") && !t.add(-5, 1000, "sfx:boom"));
+    CHECK(t.add(0, 99999, "sfx:glass"));
+    size_t gi = 99; for (size_t i = 0; i < t.size(); ++i) if (t.at(i)->source == "sfx:glass") gi = i;
+    CHECK(gi < t.size() && t.at(gi)->gain_milli == AudioTimeline::kMaxGain);
+    CHECK(t.set_gain(gi, -4) && t.at(gi)->gain_milli == 0 && !t.set_gain(99, 1));
+    CHECK(t.remove(gi) && !t.remove(99) && t.size() == 3);
+    const char* path = "/tmp/vm_core_test.vma";
+    CHECK(t.save_atomic(path));
+    AudioTimeline r; CHECK(r.load(path) && r.size() == t.size() && r.at(1)->source == t.at(1)->source);
+    CHECK(!r.parse("lixo") && !r.parse("VMA1\nevent 0 1000 sfx:nope\n") && !r.parse("VMA1\nevent -1 1000 sfx:boom\n") && !r.parse("VMA1\nevent 0 9999999 sfx:boom\n"));
+    CHECK(r.size() == t.size());
+
+    // mixagem: silêncio antes do evento, som depois, blocos consistentes
+    AudioEngine e("/tmp");
+    e.timeline().add(1000000, 1000, "sfx:gunshot");              // começa em 1,0 s
+    std::vector<int16_t> whole(kAudioRate * 2), part(1000);
+    e.render(0, whole.size(), whole.data());
+    bool silent = true; for (int i = 0; i < kAudioRate - 1; ++i) if (whole[i] != 0) silent = false;
+    CHECK(silent);
+    CHECK(peak(Pcm(whole.begin() + kAudioRate, whole.end())) > 20000);
+    e.render(kAudioRate + 5000, part.size(), part.data());      // bloco no meio do evento == mesmo trecho da mixagem inteira
+    CHECK(std::equal(part.begin(), part.end(), whole.begin() + kAudioRate + 5000));
+    // ganho 0 = mudo; ganho alto nunca ultrapassa o limitador
+    AudioEngine g("/tmp"); g.timeline().add(0, 0, "sfx:boom"); g.render(0, whole.size(), whole.data()); CHECK(peak(Pcm(whole.begin(), whole.end())) == 0);
+    AudioEngine h("/tmp");
+    for (int i = 0; i < 12; ++i) h.timeline().add(0, 3000, "sfx:explosion");
+    h.render(0, whole.size(), whole.data()); CHECK(peak(Pcm(whole.begin(), whole.end())) <= 32767 * 0.98 + 1);
+    // arquivo ausente é ignorado sem travar
+    AudioEngine m("/tmp"); m.timeline().add(0, 1000, "file:nao_existe_vm.wav");
+    m.render(0, whole.size(), whole.data()); CHECK(peak(Pcm(whole.begin(), whole.end())) == 0);
+    CHECK(m.source_duration_us("file:nao_existe_vm.wav") == 0 && e.source_duration_us("sfx:gunshot") > 400000);
+    // faixas fora do alcance e argumentos inválidos
+    e.render(kAudioRate * 100, 100, part.data()); e.render(0, 0, part.data()); e.render(0, 10, nullptr);
+}
+
 int main() {
-    timeline_ops(); timeline_io(); fx(); onion(); yuv();
+    timeline_ops(); timeline_io(); fx(); onion(); yuv(); audio_synth(); audio_convert(); audio_wav(); audio_timeline_and_mix();
     if (failures) { std::fprintf(stderr, "%d falha(s)\n", failures); return 1; }
     std::puts("core_tests: OK");
     return 0;
