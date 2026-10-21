@@ -1,0 +1,49 @@
+name: Vector Motion Android
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'VectorMotionAndroid/**'
+      - '.github/workflows/build-vectormotion-android.yml'
+
+jobs:
+  build:
+    name: Testes do núcleo C++ e APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: VectorMotionAndroid
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Testes do núcleo C++ (host, com sanitizers)
+        run: |
+          g++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -fsanitize=address,undefined \
+              -Icore/include core/src/*.cpp core/tests/core_tests.cpp -o /tmp/core_tests
+          /tmp/core_tests
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Compilar APKs (NDK + CMake)
+        run: gradle --no-daemon :app:assembleDebug :app:assembleRelease --stacktrace
+
+      - name: Reunir APKs
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/*.apk dist/VectorMotion-debug.apk
+          cp app/build/outputs/apk/release/*.apk dist/VectorMotion-release.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VectorMotion-APK
+          path: VectorMotionAndroid/dist/*.apk

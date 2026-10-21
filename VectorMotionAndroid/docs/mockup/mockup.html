@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>Vector Motion — mockup</title>
+<style>
+:root{--bg:#07080D;--panel:#0E1220;--p2:#151B2E;--red:#ED1D24;--red-d:#8E0F14;--gold:#F5C518;--cyan:#00E5FF;--text:#F2F4F8;--muted:#8A93AD;--line:#2A3350}
+*{box-sizing:border-box;margin:0}
+body{background:radial-gradient(circle at 50% 0,#10151f,#05060a 70%);font-family:"Roboto Condensed","Liberation Sans Narrow","Arial Narrow",Arial,sans-serif;color:var(--text);padding:28px 30px 20px;width:1740px}
+h1{font-size:22px;letter-spacing:.18em;text-transform:uppercase;font-style:italic;font-weight:800;margin-bottom:4px}
+h1 b{color:var(--red)} .sub{color:var(--muted);font-size:13px;letter-spacing:.08em;margin-bottom:20px}
+.row{display:flex;gap:30px}
+.col{width:380px}
+.cap{margin-top:12px;text-align:center;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);font-weight:700}
+.phone{width:380px;height:812px;border-radius:38px;border:7px solid #1b2133;position:relative;overflow:hidden;background:var(--bg);box-shadow:0 0 0 2px #05060a,0 20px 60px #000,0 0 40px rgba(237,29,36,.18)}
+.art{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.cut{clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%)}
+/* botões inclinados */
+.btn{position:relative;width:54px;height:54px;color:var(--text);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:8.5px;letter-spacing:.06em;text-transform:uppercase;font-weight:700;gap:3px}
+.btn::before{content:"";position:absolute;inset:0;background:var(--line);clip-path:polygon(9px 0,100% 0,calc(100% - 9px) 100%,0 100%)}
+.btn::after{content:"";position:absolute;inset:2px;background:var(--p2);clip-path:polygon(9px 0,100% 0,calc(100% - 9px) 100%,0 100%)}
+.btn>*{position:relative;z-index:1}
+.btn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.btn small{color:var(--muted);font-size:8.5px}
+.btn.on::before{background:var(--red);filter:drop-shadow(0 0 5px var(--red))} .btn.on::after{background:#2A0E12} .btn.on{color:var(--gold)} .btn.on small{color:var(--red)}
+.btn .num{font-size:17px;font-weight:800;line-height:1}
+.top{position:absolute;left:0;right:0;top:30px;height:56px;display:flex;align-items:center;gap:6px;padding:0 12px}
+.title{background:var(--red);padding:5px 18px 5px 14px;font-style:italic;font-weight:800;font-size:15px;letter-spacing:.1em;clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);text-transform:uppercase;white-space:nowrap}
+.count{flex:1;text-align:center;white-space:nowrap;color:var(--gold);font-size:9px;letter-spacing:.1em;text-transform:uppercase;font-weight:700}
+.panel{position:absolute;left:50%;transform:translateX(-50%);top:88px;width:366px;height:650px;overflow:hidden}
+.panel .art{filter:none}
+.hud{position:absolute;inset:0;pointer-events:none}
+.hud i{position:absolute;width:26px;height:26px;border:3px solid var(--red)}
+.hud i:nth-child(1){left:9px;top:9px;border-right:0;border-bottom:0}.hud i:nth-child(2){right:9px;top:9px;border-left:0;border-bottom:0}
+.hud i:nth-child(3){left:9px;bottom:9px;border-right:0;border-top:0}.hud i:nth-child(4){right:9px;bottom:9px;border-left:0;border-top:0}
+.hud .tag{position:absolute;left:20px;top:21px;font-size:11px;font-weight:800;letter-spacing:.14em;display:flex;align-items:center;gap:7px}
+.hud .tag::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--red);box-shadow:0 0 8px var(--red)}
+.hud .cross{position:absolute;left:50%;top:50%;width:22px;height:22px;transform:translate(-50%,-50%);opacity:.45}
+.hud .cross::before,.hud .cross::after{content:"";position:absolute;background:var(--gold)}.hud .cross::before{left:0;right:0;top:10px;height:1.5px}.hud .cross::after{top:0;bottom:0;left:10px;width:1.5px}
+.side{position:absolute;right:12px;top:102px;display:flex;flex-direction:column;gap:8px}
+.bottom{position:absolute;left:0;right:0;bottom:0;padding:34px 0 18px;background:linear-gradient(180deg,transparent,rgba(5,6,10,.93) 36%,#05060a)}
+.strip{display:flex;gap:5px;padding:4px 10px;height:88px;overflow:hidden}
+.th{flex:none;width:46px;height:80px;background-size:auto 200%;position:relative;border:0}
+.th b{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.65);font-size:9px;padding:1px 4px;display:flex;justify-content:space-between}
+.th b em{color:var(--gold);font-style:normal}
+.th.sel{outline:3px solid var(--red);box-shadow:0 0 10px var(--red)}
+.controls{display:flex;align-items:center;justify-content:center;gap:26px;margin-top:4px}
+.reactor{position:relative;width:92px;height:92px}
+.reactor .halo{position:absolute;inset:-6px;border-radius:50%;background:radial-gradient(circle,transparent 52%,rgba(237,29,36,.48) 72%,transparent 100%)}
+.reactor .r1{position:absolute;inset:8px;border-radius:50%;border:3px dashed var(--red)}
+.reactor .r2{position:absolute;inset:18px;border-radius:50%;border:1.5px dotted var(--gold)}
+.reactor .core{position:absolute;inset:25px;border-radius:50%;background:radial-gradient(circle,#fff 0,#ff6a5e 30%,var(--red) 70%,var(--red-d));border:2px solid #fff}
+.edit{display:flex;justify-content:center;gap:4px;margin-bottom:6px}.edit .btn{width:44px;height:44px}.edit .lbl{width:36px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:var(--gold)}
+.fx{padding:0 8px;margin-bottom:6px}.fx .chips{display:flex;gap:4px}.fx .chips .btn{flex:1;width:auto;height:46px}
+.slider{height:6px;background:var(--line);margin:12px 8px 4px;position:relative;border-radius:3px}.slider i{position:absolute;left:0;top:0;bottom:0;width:78%;background:var(--red);border-radius:3px;box-shadow:0 0 8px var(--red)}.slider b{position:absolute;left:78%;top:-6px;width:18px;height:18px;border-radius:50%;background:var(--gold);transform:translateX(-50%)}
+.hint{font-size:8.5px;text-align:center;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+/* abertura */
+.scrimB{position:absolute;left:0;right:0;bottom:0;height:42%;background:linear-gradient(180deg,transparent,rgba(0,0,0,.95))}
+.scrimT{position:absolute;left:0;right:0;top:0;height:18%;background:linear-gradient(180deg,rgba(0,0,0,.65),transparent)}
+.banner{position:absolute;left:6%;right:6%;top:71%;height:72px;background:var(--red);clip-path:polygon(24px 0,100% 0,calc(100% - 24px) 100%,0 100%);display:flex;align-items:center;justify-content:center;font-size:31px;white-space:nowrap;font-weight:800;font-style:italic;letter-spacing:.05em;filter:drop-shadow(0 0 16px var(--red))}
+.tagline{position:absolute;left:0;right:0;top:86%;text-align:center;color:var(--gold);font-weight:700;font-size:12px;letter-spacing:.34em}
+.load{position:absolute;left:25%;right:25%;top:94%;height:3px;background:var(--line)}.load i{display:block;height:100%;width:62%;background:var(--red)}
+/* exportar */
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.72)}
+.card{position:absolute;left:18px;right:18px;top:50%;transform:translateY(-50%);background:var(--panel);padding:22px}
+.card h3{font-size:19px;font-style:italic;font-weight:800;letter-spacing:.06em;text-transform:uppercase;line-height:1.15}
+.card p{color:var(--gold);font-size:12px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;margin:8px 0 14px}
+.bar{height:13px;background:var(--line);clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%)}.bar i{display:block;height:100%;width:100%;background:var(--red)}
+.pill{position:relative;height:50px;margin-top:9px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;font-style:italic;letter-spacing:.08em;text-transform:uppercase}
+.pill::before{content:"";position:absolute;inset:0;clip-path:polygon(12px 0,100% 0,calc(100% - 12px) 100%,0 100%);background:var(--panel);box-shadow:inset 0 0 0 2px var(--line)}
+.pill.p::before{background:var(--red);box-shadow:none;filter:drop-shadow(0 0 8px var(--red))}.pill span{position:relative;z-index:2}
+.pill:not(.p)::before{background:var(--line)}.pill:not(.p)::after{content:"";position:absolute;inset:2px;background:var(--panel);clip-path:polygon(11px 0,100% 0,calc(100% - 11px) 100%,0 100%)}
+.note{margin-top:18px;color:var(--muted);font-size:12px;letter-spacing:.04em;width:1640px}
+</style></head><body>
+<h1>Vector <b>Motion</b> — mockup do app (Android 10)</h1>
+<div class="sub">Arte de abertura gerada por código (tools/gen_hero_art.py) · mesmas telas e cores do app · silhuetas genéricas inspiradas em filmes de ação</div>
+<div class="row">
+
+<!-- 1. abertura -->
+<div class="col"><div class="phone">
+  <img class="art" src="hero_scene.svg"><div class="scrimT"></div><div class="scrimB"></div>
+  <div class="banner">VECTOR MOTION</div>
+  <div class="tagline">STOP-MOTION • CGI • SHORTS</div><div class="load"><i></i></div>
+</div><div class="cap">1 · Abertura</div></div>
+
+<!-- 2. ao vivo -->
+<div class="col"><div class="phone">
+  <div class="top"><div class="title">Vector Motion</div><div class="count">12 fr • 1.0s</div>
+    <div class="btn"><svg viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5M4 13v7h16v-7"/></svg><small>Exportar</small></div></div>
+  <div class="panel"><img class="art" src="hero_scene.svg" style="filter:brightness(.95)">
+    <div class="hud"><i></i><i></i><i></i><i></i><div class="tag">AO VIVO</div><div class="cross"></div></div></div>
+  <div class="side">
+    <div class="btn on"><svg viewBox="0 0 24 24"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/></svg><small>Onion</small></div>
+    <div class="btn on"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor"/><path d="M8 11V7a4 4 0 018 0v4"/></svg><small>Trava</small></div>
+    <div class="btn"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-2 8 10-13h-7z" fill="currentColor"/></svg><small>CGI</small></div>
+    <div class="btn"><span class="num">12</span><small>FPS</small></div>
+    <div class="btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><small>Novo</small></div>
+  </div>
+  <div class="bottom">
+    <div class="strip">
+      <div class="th" style="background-image:url(hero_scene.svg);background-position:20% 30%"><b>1</b></div>
+      <div class="th" style="background-image:url(hero_scene.svg);background-position:45% 20%"><b>2</b></div>
+      <div class="th" style="background-image:url(hero_scene.svg);background-position:70% 40%"><b>3<em>x2</em></b></div>
+      <div class="th" style="background-image:url(hero_scene.svg);background-position:85% 55%"><b>4</b></div>
+      <div class="th" style="background-image:url(hero_scene.svg);background-position:30% 60%"><b>5</b></div>
+      <div class="th" style="background-image:url(hero_scene.svg);background-position:60% 70%"><b>6</b></div>
+      <div class="th" style="background-image:url(hero_scene.svg);background-position:10% 80%"><b>7</b></div>
+    </div>
+    <div class="controls">
+      <div class="btn"><svg viewBox="0 0 24 24"><path d="M5 9a8 8 0 111 9M5 4v5h5"/></svg><small>Desfazer</small></div>
+      <div class="reactor"><div class="halo"></div><div class="r1"></div><div class="r2"></div><div class="core"></div></div>
+      <div class="btn"><svg viewBox="0 0 24 24"><path d="M8 5l12 7-12 7z" fill="currentColor"/></svg><small>Reproduzir</small></div>
+    </div>
+  </div>
+</div><div class="cap">2 · Estúdio ao vivo (câmera 9:16 + onion skin)</div></div>
+
+<!-- 3. CGI -->
+<div class="col"><div class="phone">
+  <div class="top"><div class="title">Vector Motion</div><div class="count">12 fr • 1.0s</div>
+    <div class="btn"><svg viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5M4 13v7h16v-7"/></svg><small>Exportar</small></div></div>
+  <div class="panel"><img class="art" src="hero_scene.svg" style="filter:saturate(1.45) contrast(1.18) brightness(1.08) hue-rotate(-6deg)">
+    <div style="position:absolute;inset:0;background:radial-gradient(circle at 55% 50%,transparent 45%,rgba(0,0,0,.55))"></div>
+    <div class="hud"><i style="border-color:var(--gold)"></i><i style="border-color:var(--gold)"></i><i style="border-color:var(--gold)"></i><i style="border-color:var(--gold)"></i><div class="tag" style="--c:gold">FRAME 7</div></div></div>
+  <div class="side">
+    <div class="btn on"><svg viewBox="0 0 24 24"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/></svg><small>Onion</small></div>
+    <div class="btn on"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor"/><path d="M8 11V7a4 4 0 018 0v4"/></svg><small>Trava</small></div>
+    <div class="btn on"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-2 8 10-13h-7z" fill="currentColor"/></svg><small>CGI</small></div>
+    <div class="btn"><span class="num">12</span><small>FPS</small></div>
+    <div class="btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><small>Novo</small></div>
+  </div>
+  <div class="bottom">
+    <div class="fx"><div class="chips">
+      <div class="btn"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-2 8 10-13h-7z"/></svg><small>Sem FX</small></div>
+      <div class="btn"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-2 8 10-13h-7z"/></svg><small>Herói</small></div>
+      <div class="btn on"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-2 8 10-13h-7z" fill="currentColor"/></svg><small>Energia</small></div>
+      <div class="btn"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-2 8 10-13h-7z"/></svg><small>Cósmico</small></div>
+      <div class="btn"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-2 8 10-13h-7z"/></svg><small>Noir</small></div></div>
+      <div class="slider"><i></i><b></b></div><div class="hint">Efeito aplicado na reprodução e na exportação</div></div>
+    <div class="edit">
+      <div class="btn"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></div><div class="btn"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></div>
+      <div class="btn"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><rect x="4" y="4" width="11" height="11" rx="2"/></svg></div>
+      <div class="btn"><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></div><div class="lbl">x2</div><div class="btn"><svg viewBox="0 0 24 24"><path d="M12 6v12M6 12h12"/></svg></div>
+      <div class="btn"><svg viewBox="0 0 24 24"><path d="M4 7h16M7 7v13h10V7M10 3h4"/></svg></div>
+      <div class="btn"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></div></div>
+    <div class="strip">
+      <div class="th" style="background-image:url(hero_scene.svg);background-position:20% 30%"><b>5</b></div>
+      <div class="th" style="background-image:url(hero_scene.svg);background-position:45% 20%"><b>6</b></div>
+      <div class="th sel" style="background-image:url(hero_scene.svg);background-position:70% 40%"><b>7<em>x2</em></b></div>
+      <div class="th" style="background-image:url(hero_scene.svg);background-position:85% 55%"><b>8</b></div>
+      <div class="th" style="background-image:url(hero_scene.svg);background-position:30% 60%"><b>9</b></div>
+      <div class="th" style="background-image:url(hero_scene.svg);background-position:60% 70%"><b>10</b></div>
+      <div class="th" style="background-image:url(hero_scene.svg);background-position:10% 80%"><b>11</b></div>
+    </div>
+  </div>
+</div><div class="cap">3 · Efeitos CGI + edição do frame</div></div>
+
+<!-- 4. exportar -->
+<div class="col"><div class="phone">
+  <img class="art" src="hero_scene.svg" style="filter:blur(2px) brightness(.7)"><div class="dim"></div>
+  <div class="card"><h3>Pronto! Salvo em Filmes/VectorMotion</h3><p>Vídeo vertical 9:16 • 30 fps</p>
+    <div class="bar"><i></i></div>
+    <div class="pill p"><span>Enviar ao TikTok</span></div><div class="pill"><span>Outros apps</span></div><div class="pill"><span>Fechar</span></div></div>
+</div><div class="cap">4 · Exportação e envio ao TikTok</div></div>
+
+</div>
+<div class="note">Mockup ilustrativo. A arte é vetorial (SVG no mockup, VectorDrawable no app). Os personagens são silhuetas genéricas — não reproduzem rosto de ator nem marcas dos filmes.</div>
+</body></html>
