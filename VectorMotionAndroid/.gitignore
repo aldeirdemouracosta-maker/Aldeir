@@ -7,3 +7,6 @@ local.properties
 *.keystore
 *.jks
 app/src/main/assets/face_landmarker.task
+saida*/
+build_pc/
+*.onnx
