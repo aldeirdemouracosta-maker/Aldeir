@@ -59,15 +59,30 @@ Pesquisa feita em 21/10/2026 (resultados de busca; não verifiquei código-fonte
 - **Limites**: 400 sons por projeto, 30 s de voz, 8 s por meme. A narração fica sincronizada ao início do vídeo; sons que passam do
   fim do vídeo são cortados na exportação.
 
-## 5. Troca de rosto ("faceup")
+## 5. Troca de rosto (face swap)
 
-Pedido novo, ainda **não implementado**. Plano e condições:
+Implementada como **módulo opcional** (APK `faceswap`), porque a detecção de pontos do rosto exige a biblioteca MediaPipe, que o proxy
+do ambiente de desenvolvimento bloqueia. O GitHub Actions baixa a biblioteca (`-PfaceSwap=true`) e o modelo (`tools/fetch_face_model.sh`).
 
-1. Detecção de pontos faciais **no aparelho** com o [MediaPipe Face Landmarker](https://developers.google.com/edge/mediapipe/solutions/vision/face_landmarker/android)
-   (`com.google.mediapipe:tasks-vision`; 3D landmarks + blendshapes). Licença do código e dos modelos **a confirmar** antes de embarcar.
-2. Troca por warp de malha (triângulos) + correção de cor, em C++ no mesmo núcleo.
-3. Regras de produto: o rosto de origem precisa ser do próprio usuário ou ter consentimento; todo vídeo com troca recebe
-   marca d'água visível "conteúdo alterado" (não removível no app). Nada sai do aparelho.
-4. Custo: modelo ≈ alguns MB e um AAR (primeira dependência de terceiros do app).
+**Como funciona** (tudo no aparelho): extrai quadros do vídeo no ritmo do projeto (≤ 8 s, recorte 9:16) → MediaPipe devolve 478 pontos por
+quadro (modo vídeo, rastreando) → filtro One-Euro tira o tremor → o rosto da foto é deformado triângulo a triângulo (Delaunay) sobre os
+pontos do quadro → a cor é igualada (média/desvio) → máscara com borda suave pela distância ao contorno → quadro gravado no projeto.
+A expressão (boca, olhos) acompanha o vídeo porque a malha da foto é deformada para a malha do quadro.
 
-Pergunta em aberto: "faceup" é o nome de um app específico que você quer imitar, ou o recurso genérico de trocar/animar rosto?
+**Como foi validado**
+- Núcleo C++ (`core/src/face_swap.cpp`) com testes sintéticos sob ASan/UBSan: geometria exata do mapeamento, cobertura da triangulação, correção
+  de cor, bordas suaves, rosto cortado pelo canto, entradas inválidas.
+- **Com dados reais**: modelo oficial + MediaPipe para Python numa imagem de teste de domínio público: os índices que o app usa batem com as listas
+  oficiais (`tools/check_face_indices.py`); a troca "sobre si mesma" reproduz o alvo (diferença média 1,1/765) e uma foto espelhada entra na pose
+  girada do alvo com olhos, boca e borda alinhados. Custo ≈ 60 ms/quadro de composição no PC.
+- Os nomes da API Java do MediaPipe (`FaceLandmarker`, `detectForVideo`, `BaseOptions`...) foram conferidos no código-fonte oficial
+  (`google-ai-edge/mediapipe`). **Ainda não executado no celular**, e a versão `0.10.14` do artefato Maven não foi verificada daqui.
+
+**Limites honestos**: é troca por malha, não IA generativa: o rosto fica um pouco "colado" (sem refazer luz, barba, cabelo ou oclusões como
+mão na frente do rosto), um rosto por vez, funciona melhor com foto frontal nítida e vídeo com rosto bem visível.
+
+**Salvaguardas** (não substituem bom senso nem a lei): consentimento a cada troca (a foto é sua ou autorizada, o vídeo é usável, sem enganar,
+difamar ou assediar); selo **CONTEÚDO ALTERADO • IA** em toda exportação que contenha quadros trocados, sem opção de desligar (apagar os quadros
+trocados da linha do tempo remove o selo); nada sai do aparelho; o app não embute cenas de filmes nem fotos de ninguém. Um vídeo exportado ainda
+pode ser recortado por quem quiser remover o selo: o app não consegue impedir isso. Direitos autorais do clipe e uso da imagem da pessoa
+continuam sendo de responsabilidade de quem usa; evite publicar cenas de filmes sem autorização.

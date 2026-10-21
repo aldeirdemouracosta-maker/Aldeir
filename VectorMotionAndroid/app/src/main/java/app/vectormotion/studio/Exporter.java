@@ -4,6 +4,10 @@ import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.RectF;
+import android.graphics.Typeface;
 import android.media.Image;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
@@ -47,6 +51,7 @@ final class Exporter {
     private final float intensity;
     private final Handler main = new Handler(Looper.getMainLooper());
     private volatile boolean cancelled;
+    private boolean badge;
 
     Exporter(Context ctx, Project project, int preset, float intensity) {
         this.ctx = ctx.getApplicationContext();
@@ -66,6 +71,7 @@ final class Exporter {
     private void run(Listener l) {
         final long h = project.cloneTimeline();
         final long ae = project.audioCount() > 0 ? project.newAudioSnapshot() : 0;
+        badge = project.faceSwapUsed();
         try {
             if (NativeCore.tlSize(h) == 0) {
                 post(() -> l.onError("Não há frames para exportar."));
@@ -99,6 +105,23 @@ final class Exporter {
             NativeCore.tlFree(h);
             if (ae != 0) NativeCore.aeFree(ae);
         }
+    }
+
+    /** Selo obrigatório em vídeos com rosto trocado; não há opção para desligá-lo. */
+    private static void drawBadge(Bitmap b) {
+        final Canvas c = new Canvas(b);
+        final float size = b.getWidth() * 0.034f;
+        final Paint t = new Paint(Paint.ANTI_ALIAS_FLAG);
+        t.setTypeface(Typeface.create("sans-serif-condensed", Typeface.BOLD));
+        t.setTextSize(size);
+        t.setColor(0xFFFFFFFF);
+        final String text = "CONTEÚDO ALTERADO • IA";
+        final float pad = size * 0.55f, w = t.measureText(text);
+        final float left = b.getWidth() * 0.04f, top = b.getHeight() * 0.065f;
+        final Paint bg = new Paint(Paint.ANTI_ALIAS_FLAG);
+        bg.setColor(0xB3000000);
+        c.drawRoundRect(new RectF(left, top, left + w + 2 * pad, top + size + 2 * pad), pad, pad, bg);
+        c.drawText(text, left + pad, top + pad + size * 0.82f, t);
     }
 
     private void post(Runnable r) {
@@ -259,6 +282,7 @@ final class Exporter {
                                 if (b == null) throw new IOException("Frame corrompido: " + name);
                                 if (preset != NativeCore.FX_NONE)
                                     NativeCore.fxApply(b, preset, intensity, name.hashCode());
+                                if (badge) drawBadge(b);
                                 if (b.getWidth() != w || b.getHeight() != h) {
                                     final Bitmap s = Bitmap.createScaledBitmap(b, w, h, true);
                                     if (s != b) b.recycle();

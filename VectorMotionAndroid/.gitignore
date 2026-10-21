@@ -6,3 +6,4 @@ local.properties
 .cxx/
 *.keystore
 *.jks
+app/src/main/assets/face_landmarker.task

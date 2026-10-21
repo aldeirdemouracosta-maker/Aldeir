@@ -39,7 +39,7 @@ import java.util.concurrent.Executors;
 
 /** Tela principal do estúdio: câmera 9:16, onion skin, linha do tempo, efeitos CGI e exportação. */
 final class StudioView extends FrameLayout implements TextureView.SurfaceTextureListener, CameraController.Listener {
-    static final int REQ_MEME = 7;
+    static final int REQ_MEME = 7, REQ_SWAP_VIDEO = 8, REQ_SWAP_PHOTO = 9;
     private static final int CAP_W = 1080, CAP_H = 1920;
     private static final int[] FPS_STEPS = {6, 8, 10, 12, 15, 24};
     private static final String[] FX_NAMES = {"Sem FX", "Herói", "Energia", "Cósmico", "Noir"};
@@ -163,6 +163,8 @@ final class StudioView extends FrameLayout implements TextureView.SurfaceTexture
     private boolean fxOpen;
     private boolean audioOpen;
     private boolean voicePlayback;
+    private Uri swapVideo;
+    private FaceSwapJob swapJob;
     private boolean newArmed;
     private volatile boolean playing;
     private int selected = -1;
@@ -293,6 +295,11 @@ final class StudioView extends FrameLayout implements TextureView.SurfaceTexture
         fxPanel.addView(seek, seekLp);
         final TextView fxHint = Theme.label(a, "Efeito aplicado na reprodução e na exportação", 9, Theme.MUTED);
         fxPanel.addView(fxHint, new LinearLayout.LayoutParams(-1, -2));
+        final PillButton swapBtn = new PillButton(a, "Trocar rosto (vídeo + foto)", false);
+        swapBtn.setOnClickListener(v -> startFaceSwap());
+        final LinearLayout.LayoutParams swapLp = new LinearLayout.LayoutParams(-1, -2);
+        swapLp.leftMargin = swapLp.rightMargin = Theme.dpi(10);
+        fxPanel.addView(swapBtn, swapLp);
         bottom.addView(fxPanel, new LinearLayout.LayoutParams(-1, -2));
 
         audioPanel = new AudioPanel(a, project, new AudioPanel.Host() {
@@ -453,6 +460,7 @@ final class StudioView extends FrameLayout implements TextureView.SurfaceTexture
 
     void onPause() {
         resumed = false;
+        if (swapJob != null) swapJob.cancel();
         voice.stop();
         stopPlayback();
         cancelExport();
@@ -476,6 +484,7 @@ final class StudioView extends FrameLayout implements TextureView.SurfaceTexture
     /** @return true se consumiu o botão voltar. */
     boolean onBack() {
         if (exportOverlay != null) {
+            if (swapJob != null) swapJob.cancel();
             return true;
         }
         if (playing) {
@@ -640,6 +649,113 @@ final class StudioView extends FrameLayout implements TextureView.SurfaceTexture
         fxOpen = !fxOpen;
         fxPanel.setVisibility(fxOpen ? VISIBLE : GONE);
         fxBtn.setActive(fxOpen);
+    }
+
+    // ---------------------------------------------------------------- troca de rosto
+
+    private void startFaceSwap() {
+        if (!FaceLandmarks.supported()) {
+            toast("Esta versão não inclui troca de rosto. Instale o APK \"faceswap\".");
+            return;
+        }
+        if (swapJob != null || exportOverlay != null) return;
+        if (project.count() >= Project.MAX_FRAMES) {
+            toast("Limite de " + Project.MAX_FRAMES + " frames atingido.");
+            return;
+        }
+        // consentimento a cada troca: a foto é do usuário ou autorizada, o vídeo é usável, sem enganar ninguém
+        new android.app.AlertDialog.Builder(act, android.R.style.Theme_Material_Dialog_Alert)
+                .setTitle("Antes de trocar o rosto")
+                .setMessage("Esta ferramenta coloca o rosto de uma foto no rosto de uma pessoa em um vídeo.\n\n"
+                        + "Use somente se:\n"
+                        + "• a pessoa da foto é você ou autorizou;\n"
+                        + "• você tem direito de usar o vídeo;\n"
+                        + "• não vai usar para enganar, difamar, assediar ou se passar por alguém.\n\n"
+                        + "Tudo é processado no seu aparelho. Vídeos exportados recebem o selo \"CONTEÚDO ALTERADO\", "
+                        + "que não pode ser removido.")
+                .setPositiveButton("Concordo e continuar", (d, w) -> pick("video/*", REQ_SWAP_VIDEO))
+                .setNegativeButton("Cancelar", null)
+                .show();
+    }
+
+    private void pick(String mime, int req) {
+        final Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.setType(mime);
+        try {
+            act.startActivityForResult(i, req);
+        } catch (android.content.ActivityNotFoundException e) {
+            toast("Nenhum seletor de arquivos disponível.");
+        }
+    }
+
+    /** Resultado dos seletores: 1º o vídeo, depois a foto. uri == null = cancelado. */
+    void onPickedSwap(int req, Uri uri) {
+        if (uri == null) {
+            swapVideo = null;
+            return;
+        }
+        if (req == REQ_SWAP_VIDEO) {
+            swapVideo = uri;
+            toast("Agora escolha a foto do rosto (frontal e nítida).");
+            pick("image/*", REQ_SWAP_PHOTO);
+        } else if (req == REQ_SWAP_PHOTO && swapVideo != null) {
+            runFaceSwap(swapVideo, uri);
+            swapVideo = null;
+        }
+    }
+
+    private void runFaceSwap(Uri video, Uri photo) {
+        stopPlayback();
+        select(-1);
+        final FaceSwapJob job = new FaceSwapJob(act, project, video, photo);
+        swapJob = job;
+        exportOverlay = new ExportOverlay(act, new ExportOverlay.Actions() {
+            @Override
+            public void onCancel() {
+                job.cancel();
+            }
+
+            @Override
+            public void onTikTok(Uri u) {}
+
+            @Override
+            public void onShare(Uri u) {}
+
+            @Override
+            public void onClose() {
+                closeExport();
+            }
+        });
+        exportOverlay.setTitle("Trocando o rosto");
+        addView(exportOverlay, new LayoutParams(-1, -1));
+        job.start(new FaceSwapJob.Listener() {
+            @Override
+            public void onProgress(float f) {
+                if (exportOverlay != null && swapJob == job) exportOverlay.setProgress(f);
+            }
+
+            @Override
+            public void onDone(int swapped, int total) {
+                swapJob = null;
+                rebuildStrip();
+                updateCounter();
+                refreshOnionFromLast();
+                if (exportOverlay != null) {
+                    exportOverlay.showInfo(swapped > 0 ? "Pronto!" : "Nenhum rosto encontrado",
+                            swapped + " de " + total + " quadros com o rosto trocado. Os quadros foram adicionados à linha do tempo."
+                                    + (swapped > 0 ? " A exportação terá o selo CONTEÚDO ALTERADO." : ""));
+                }
+            }
+
+            @Override
+            public void onError(String message) {
+                swapJob = null;
+                rebuildStrip();
+                updateCounter();
+                if (exportOverlay != null) exportOverlay.showInfo("Não foi possível trocar o rosto", message);
+            }
+        });
     }
 
     // ---------------------------------------------------------------- áudio

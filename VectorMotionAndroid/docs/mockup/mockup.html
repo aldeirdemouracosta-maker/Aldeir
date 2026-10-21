@@ -3,7 +3,7 @@
 <style>
 :root{--bg:#07080D;--panel:#0E1220;--p2:#151B2E;--red:#ED1D24;--red-d:#8E0F14;--gold:#F5C518;--cyan:#00E5FF;--text:#F2F4F8;--muted:#8A93AD;--line:#2A3350}
 *{box-sizing:border-box;margin:0}
-body{background:radial-gradient(circle at 50% 0,#10151f,#05060a 70%);font-family:"Roboto Condensed","Liberation Sans Narrow","Arial Narrow",Arial,sans-serif;color:var(--text);padding:28px 30px 20px;width:2170px}
+body{background:radial-gradient(circle at 50% 0,#10151f,#05060a 70%);font-family:"Roboto Condensed","Liberation Sans Narrow","Arial Narrow",Arial,sans-serif;color:var(--text);padding:28px 30px 20px;width:2600px}
 h1{font-size:22px;letter-spacing:.18em;text-transform:uppercase;font-style:italic;font-weight:800;margin-bottom:4px}
 h1 b{color:var(--red)} .sub{color:var(--muted);font-size:13px;letter-spacing:.08em;margin-bottom:20px}
 .row{display:flex;gap:30px}
@@ -67,7 +67,13 @@ h1 b{color:var(--red)} .sub{color:var(--muted);font-size:13px;letter-spacing:.08
 .pill::before{content:"";position:absolute;inset:0;clip-path:polygon(12px 0,100% 0,calc(100% - 12px) 100%,0 100%);background:var(--panel);box-shadow:inset 0 0 0 2px var(--line)}
 .pill.p::before{background:var(--red);box-shadow:none;filter:drop-shadow(0 0 8px var(--red))}.pill span{position:relative;z-index:2}
 .pill:not(.p)::before{background:var(--line)}.pill:not(.p)::after{content:"";position:absolute;inset:2px;background:var(--panel);clip-path:polygon(11px 0,100% 0,calc(100% - 11px) 100%,0 100%)}
-.note{margin-top:18px;color:var(--muted);font-size:12px;letter-spacing:.04em;width:2000px}
+.note{margin-top:18px;color:var(--muted);font-size:12px;letter-spacing:.04em;width:2400px}
+.dlg{position:absolute;left:16px;right:16px;top:50%;transform:translateY(-50%);background:var(--panel);padding:20px;box-shadow:0 0 0 2px var(--line)}
+.dlg h3{font-size:18px;font-style:italic;font-weight:800;letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px}
+.dlg p{font-family:Arial,sans-serif;font-size:11.5px;line-height:1.45;color:#c9d0e2;margin-bottom:8px}
+.dlg ul{font-family:Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#c9d0e2;padding-left:16px;margin-bottom:8px}
+.dlg .acts{display:flex;justify-content:flex-end;gap:18px;margin-top:12px;font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}.dlg .acts b{color:var(--red)}.dlg .acts span{color:var(--muted)}
+.badge{position:absolute;left:14px;top:48px;background:rgba(0,0,0,.7);padding:5px 10px;border-radius:8px;font-size:11px;font-weight:800;letter-spacing:.06em}
 .snd .cur{text-align:center;font-size:10px;letter-spacing:.08em;color:var(--gold);text-transform:uppercase;font-weight:700;padding:0 10px 4px}
 .snd .chips2{display:flex;gap:4px;padding:2px 8px 6px;overflow:hidden}.snd .chips2 .btn{flex:none;width:58px;height:52px}
 .snd .ev{display:flex;align-items:center;gap:4px;padding:0 12px;height:34px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
@@ -178,6 +184,20 @@ h1 b{color:var(--red)} .sub{color:var(--muted);font-size:13px;letter-spacing:.08
     <div class="strip" style="margin-top:4px"><div class="th" style="background-image:url(hero_scene.svg);background-position:20% 30%"><b>3</b></div><div class="th" style="background-image:url(hero_scene.svg);background-position:45% 20%"><b>4</b></div><div class="th sel" style="background-image:url(hero_scene.svg);background-position:70% 40%"><b>5<em>x2</em></b></div><div class="th" style="background-image:url(hero_scene.svg);background-position:85% 55%"><b>6</b></div><div class="th" style="background-image:url(hero_scene.svg);background-position:30% 60%"><b>7</b></div><div class="th" style="background-image:url(hero_scene.svg);background-position:60% 70%"><b>8</b></div><div class="th" style="background-image:url(hero_scene.svg);background-position:10% 80%"><b>9</b></div></div>
   </div>
 </div><div class="cap">5 · Som &amp; memes (efeitos, voz, clipes de 8 s)</div></div>
+
+<!-- 6. trocar rosto -->
+<div class="col"><div class="phone">
+  <div class="top"><div class="title">Vector Motion</div><div class="count">96 fr • 8.0s</div>
+    <div class="btn"><svg viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5M4 13v7h16v-7"/></svg><small>Exportar</small></div></div>
+  <div class="panel"><img class="art" src="hero_scene.svg" style="filter:brightness(.55)"><div class="badge">CONTEÚDO ALTERADO • IA</div></div>
+  <div class="dim" style="background:rgba(0,0,0,.6)"></div>
+  <div class="dlg"><h3>Antes de trocar o rosto</h3>
+    <p>Esta ferramenta coloca o rosto de uma foto no rosto de uma pessoa em um vídeo.</p>
+    <p><b>Use somente se:</b></p>
+    <ul><li>a pessoa da foto é você ou autorizou;</li><li>você tem direito de usar o vídeo;</li><li>não vai usar para enganar, difamar, assediar ou se passar por alguém.</li></ul>
+    <p>Tudo é processado no seu aparelho. Vídeos exportados recebem o selo “CONTEÚDO ALTERADO”, que não pode ser removido.</p>
+    <div class="acts"><span>Cancelar</span><b>Concordo e continuar</b></div></div>
+</div><div class="cap">6 · Trocar rosto: consentimento + selo obrigatório</div></div>
 
 </div>
 <div class="note">Mockup ilustrativo. Os efeitos são sintetizados no app; memes são clipes que o próprio usuário importa (≤ 8 s). A arte é vetorial (SVG no mockup, VectorDrawable no app). Os personagens são silhuetas genéricas — não reproduzem rosto de ator nem marcas dos filmes.</div>

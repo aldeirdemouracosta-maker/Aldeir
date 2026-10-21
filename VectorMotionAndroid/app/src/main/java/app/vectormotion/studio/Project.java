@@ -132,6 +132,36 @@ final class Project {
         return String.format(java.util.Locale.US, "%s_%03d.wav", prefix, max + 1);
     }
 
+    private File swapIndex() {
+        return new File(dir, "faceswap.txt");
+    }
+
+    /** Registra que este frame veio de uma troca de rosto (usado para o selo na exportação). */
+    synchronized void markFaceSwap(String frameName) {
+        try (java.io.FileWriter w = new java.io.FileWriter(swapIndex(), true)) {
+            w.write(frameName + "\n");
+        } catch (IOException ignored) {
+            // sem registro o selo não apareceria: por segurança, tenta de novo com um marcador global
+            try (java.io.FileWriter w = new java.io.FileWriter(new File(dir, "faceswap.flag"))) {
+                w.write("1");
+            } catch (IOException ignoredAgain) {
+                // disco cheio: addFrame já teria falhado antes
+            }
+        }
+    }
+
+    /** true enquanto algum frame trocado ainda estiver na linha do tempo (apagar esses frames remove o selo). */
+    synchronized boolean faceSwapUsed() {
+        if (new File(dir, "faceswap.flag").isFile()) return true;
+        try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(swapIndex()))) {
+            String line;
+            while ((line = r.readLine()) != null) if (NativeCore.tlReferences(tl, line.trim())) return true;
+        } catch (IOException ignored) {
+            // sem registro: nenhum frame trocado
+        }
+        return false;
+    }
+
     /** Instante (µs) em que o frame `index` começa na linha do tempo. */
     synchronized long frameStartUs(int index) {
         long frames = 0;
@@ -316,6 +346,10 @@ final class Project {
                 f.delete();
         }
         save();
+        //noinspection ResultOfMethodCallIgnored
+        swapIndex().delete();
+        //noinspection ResultOfMethodCallIgnored
+        new File(dir, "faceswap.flag").delete();
         NativeCore.aeClear(ae);
         final File[] wavs = audio.listFiles();
         if (wavs != null) {

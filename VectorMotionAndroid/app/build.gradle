@@ -2,6 +2,9 @@ plugins {
     id 'com.android.application'
 }
 
+// Troca de rosto (MediaPipe) é opcional: ./gradlew assembleDebug -PfaceSwap=true
+def faceSwap = (project.findProperty('faceSwap') ?: 'false') != 'false'
+
 android {
     namespace 'app.vectormotion.studio'
     compileSdk 35
@@ -52,4 +55,15 @@ android {
     }
 
     lint { abortOnError false }
+
+    sourceSets {
+        main.java.srcDirs += faceSwap ? 'src/face/java' : 'src/noface/java'
+    }
+}
+
+dependencies {
+    if (faceSwap) {
+        // Detecção de pontos do rosto no aparelho. Modelo: app/src/main/assets/face_landmarker.task (tools/fetch_face_model.sh)
+        implementation 'com.google.mediapipe:tasks-vision:0.10.14'
+    }
 }

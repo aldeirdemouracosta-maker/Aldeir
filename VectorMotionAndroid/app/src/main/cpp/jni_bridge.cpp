@@ -4,6 +4,7 @@
 #include <string>
 
 #include "vm/audio.hpp"
+#include "vm/face_swap.hpp"
 #include "vm/pixel_ops.hpp"
 #include "vm/timeline.hpp"
 
@@ -13,6 +14,8 @@ namespace {
 
 vm::Timeline* tl(jlong h) { return reinterpret_cast<vm::Timeline*>(h); }
 vm::AudioEngine* ae(jlong h) { return reinterpret_cast<vm::AudioEngine*>(h); }
+vm::FaceSwapper* fsw(jlong h) { return reinterpret_cast<vm::FaceSwapper*>(h); }
+vm::LandmarkSmoother* sms(jlong h) { return reinterpret_cast<vm::LandmarkSmoother*>(h); }
 
 std::string str(JNIEnv* env, jstring s) {
     if (!s) return {};
@@ -151,4 +154,46 @@ JNI(jshortArray, sfxPreview)(JNIEnv* env, jclass, jstring name) {
 
 JNI(jboolean, wavImport)(JNIEnv* env, jclass, jstring src, jstring dst, jint maxMs) {
     return vm::import_wav(str(env, src), str(env, dst), maxMs) ? JNI_TRUE : JNI_FALSE;
+}
+
+// ---------------------------------------------------------------- troca de rosto
+// pts: 478 pontos (x,y em pixels) intercalados = 956 floats.
+JNI(jlong, fsNew)(JNIEnv* env, jclass, jobject bmp, jfloatArray pts) {
+    Locked l(env, bmp);
+    if (!l.px || !pts) return 0;
+    const jsize n = env->GetArrayLength(pts);
+    std::vector<float> xy(static_cast<size_t>(n));
+    env->GetFloatArrayRegion(pts, 0, n, xy.data());
+    auto* f = new vm::FaceSwapper();
+    if (!f->init(l.data(), static_cast<int>(l.info.width), static_cast<int>(l.info.height), static_cast<int>(l.info.stride),
+                 xy.data(), static_cast<int>(n))) {
+        delete f;
+        return 0;
+    }
+    return reinterpret_cast<jlong>(f);
+}
+JNI(void, fsFree)(JNIEnv*, jclass, jlong h) { delete fsw(h); }
+JNI(jboolean, fsApply)(JNIEnv* env, jclass, jlong h, jobject bmp, jfloatArray pts, jfloat color, jfloat feather) {
+    if (!h || !pts) return JNI_FALSE;
+    Locked l(env, bmp);
+    if (!l.px) return JNI_FALSE;
+    const jsize n = env->GetArrayLength(pts);
+    std::vector<float> xy(static_cast<size_t>(n));
+    env->GetFloatArrayRegion(pts, 0, n, xy.data());
+    vm::SwapParams p;
+    p.color_strength = color;
+    p.feather = feather;
+    return fsw(h)->apply(l.data(), static_cast<int>(l.info.width), static_cast<int>(l.info.height),
+                         static_cast<int>(l.info.stride), xy.data(), static_cast<int>(n), p) ? JNI_TRUE : JNI_FALSE;
+}
+JNI(jlong, smNew)(JNIEnv*, jclass) { return reinterpret_cast<jlong>(new vm::LandmarkSmoother()); }
+JNI(void, smFree)(JNIEnv*, jclass, jlong h) { delete sms(h); }
+JNI(void, smReset)(JNIEnv*, jclass, jlong h) { if (h) sms(h)->reset(); }
+JNI(void, smFilter)(JNIEnv* env, jclass, jlong h, jfloatArray pts, jdouble tSec) {
+    if (!h || !pts) return;
+    const jsize n = env->GetArrayLength(pts);
+    std::vector<float> xy(static_cast<size_t>(n));
+    env->GetFloatArrayRegion(pts, 0, n, xy.data());
+    sms(h)->filter(xy.data(), static_cast<int>(n), tSec);
+    env->SetFloatArrayRegion(pts, 0, n, xy.data());
 }

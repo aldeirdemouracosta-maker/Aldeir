@@ -37,11 +37,25 @@ jobs:
       - name: Compilar APKs (NDK + CMake)
         run: gradle --no-daemon :app:assembleDebug :app:assembleRelease --stacktrace
 
-      - name: Reunir APKs
+      - name: Reunir APKs (versão principal)
         run: |
           mkdir -p dist
           cp app/build/outputs/apk/debug/*.apk dist/VectorMotion-debug.apk
           cp app/build/outputs/apk/release/*.apk dist/VectorMotion-release.apk
+
+      # Troca de rosto: o GitHub tem acesso à internet, então baixa o modelo e a biblioteca MediaPipe aqui.
+      # Opcional: se falhar, a versão principal acima continua válida.
+      - name: Baixar modelo de rosto (MediaPipe)
+        id: model
+        continue-on-error: true
+        run: sh tools/fetch_face_model.sh
+
+      - name: Compilar APK com troca de rosto
+        if: steps.model.outcome == 'success'
+        continue-on-error: true
+        run: |
+          gradle --no-daemon :app:clean :app:assembleDebug -PfaceSwap=true --stacktrace
+          cp app/build/outputs/apk/debug/*.apk dist/VectorMotion-faceswap-debug.apk
 
       - uses: actions/upload-artifact@v4
         with:

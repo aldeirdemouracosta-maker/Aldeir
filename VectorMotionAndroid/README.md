@@ -14,6 +14,10 @@ o núcleo C++ portátil e um app Android nativo, **sem nenhuma dependência de t
 - **Som & Memes** (botão *Som*): 9 efeitos sintetizados em C++ (explosão, tiro, whoosh, laser, boom, vidro, buzina, riser, scratch),
   **importar meme** (áudio ou vídeo do seu aparelho, cortado em 8 s e normalizado), **gravar voz** assistindo ao vídeo, volume por som.
   Cada som entra no frame selecionado; a mixagem toca na reprodução e vai como trilha AAC no MP4 exportado.
+- **Trocar rosto** (painel *CGI* → "Trocar rosto"): escolha um vídeo (até 8 s) e uma foto; o rosto da foto é colocado no rosto do vídeo
+  e acompanha a cena (pontos do rosto → deformação da foto → correção de cor → borda suave, com suavização anti-tremor). Os quadros entram
+  na linha do tempo. Disponível no APK **faceswap** (veja abaixo). Pede consentimento a cada troca e a exportação leva o selo
+  **CONTEÚDO ALTERADO • IA**, que não pode ser desligado. Tudo roda no aparelho; o app não traz cenas de filmes (você escolhe o clipe).
 - Interface estilo blockbuster: abertura animada, botão-reator, HUD, painéis inclinados.
 
 ## Visual e mockup
@@ -23,10 +27,16 @@ o núcleo C++ portátil e um app Android nativo, **sem nenhuma dependência de t
 escopeta, chuva de código verde, fagulhas e estilhaços) é **vetorial e gerada por código**: `python3 tools/gen_hero_art.py`
 emite o SVG do mockup e o `VectorDrawable` do app a partir da mesma descrição. Os personagens são silhuetas genéricas.
 
+## Dois APKs
+
+- `VectorMotion-debug.apk` / `-release.apk`: versão principal, sem dependências de terceiros.
+- `VectorMotion-faceswap-debug.apk`: inclui o MediaPipe Face Landmarker (a biblioteca e o modelo `face_landmarker.task` são baixados
+  pelo GitHub Actions, que tem acesso à internet; o APK fica algumas dezenas de MB maior). Local: `tools/fetch_face_model.sh` e
+  `gradle :app:assembleDebug -PfaceSwap=true`.
+
 ## Próximos marcos
 
 - Trilha musical de fundo e transições de áudio.
-- Troca de rosto (ver `docs/ANALISE_E_AJUSTES.md`).
 
 ## Permissões
 

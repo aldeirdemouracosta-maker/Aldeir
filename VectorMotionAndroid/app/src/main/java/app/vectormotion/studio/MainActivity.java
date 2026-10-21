@@ -139,7 +139,10 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int req, int result, Intent data) {
         super.onActivityResult(req, result, data);
-        if (req == StudioView.REQ_MEME && result == RESULT_OK && data != null && studio != null) studio.onPickedAudio(data.getData());
+        if (studio == null) return;
+        final android.net.Uri uri = (result == RESULT_OK && data != null) ? data.getData() : null;
+        if (req == StudioView.REQ_MEME) studio.onPickedAudio(uri);
+        else if (req == StudioView.REQ_SWAP_VIDEO || req == StudioView.REQ_SWAP_PHOTO) studio.onPickedSwap(req, uri);
     }
 
     @Override

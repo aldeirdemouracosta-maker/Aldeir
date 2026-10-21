@@ -60,6 +60,15 @@ final class NativeCore {
     static native short[] sfxPreview(String name);
     static native boolean wavImport(String src, String dst, int maxMs);
 
+    // ---- troca de rosto (478 pontos = 956 floats x,y em pixels) ----
+    static native long fsNew(Bitmap photo, float[] pts);
+    static native void fsFree(long h);
+    static native boolean fsApply(long h, Bitmap frame, float[] pts, float colorStrength, float feather);
+    static native long smNew();
+    static native void smFree(long h);
+    static native void smReset(long h);
+    static native void smFilter(long h, float[] pts, double tSec);
+
     /** Bitmap precisa ser mutável ARGB_8888. */
     static native boolean fxApply(Bitmap b, int preset, float intensity, int seed);
     static native boolean onionGhost(Bitmap b, int tintRgb, float strength);

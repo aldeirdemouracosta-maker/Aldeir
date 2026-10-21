@@ -101,6 +101,18 @@ final class ExportOverlay extends FrameLayout {
         }
     }
 
+    void setTitle(String t) {
+        title.setText(t);
+    }
+
+    void showInfo(String t, String d) {
+        title.setText(t);
+        detail.setText(d);
+        final PillButton close = new PillButton(getContext(), "Fechar", false);
+        close.setOnClickListener(v -> actions.onClose());
+        showButtons(close);
+    }
+
     void setProgress(float f) {
         bar.value = Math.max(0f, Math.min(1f, f));
         bar.invalidate();
