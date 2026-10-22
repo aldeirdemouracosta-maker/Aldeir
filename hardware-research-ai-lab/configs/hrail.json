@@ -1,0 +1,12 @@
+{
+  "database_path": "data/hrail.db",
+  "reports_dir": "reports",
+  "catalog_dir": "catalog",
+  "command_timeout": "10s",
+  "enabled_levels": ["A", "B"],
+  "agents": {
+    "enabled": false,
+    "ollama_url": "http://127.0.0.1:11434",
+    "default_model": ""
+  }
+}

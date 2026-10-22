@@ -1,0 +1,240 @@
+{
+  "schema_version": 1,
+  "note": "Nenhuma fonte foi verificada online nesta sessão (sem acesso de rede aos hosts). verification.status=nao_verificado e last_commit_consulted=null são deliberados. Rodar a verificação (Fase 1) com acesso à rede antes de qualquer uso.",
+  "sources": [
+    {
+      "id": "mgpusim",
+      "name": "MGPUSim",
+      "url": "https://github.com/sarchlab/mgpusim",
+      "host_kind": "github",
+      "kind": "simulacao",
+      "license": "MIT",
+      "license_verified": false,
+      "architectures": [
+        "GCN3 (conforme documentação do projeto; não verificado)"
+      ],
+      "purpose": "Simulador de GPU AMD em Go, de ciclo preciso.",
+      "maintenance_state": "desconhecido",
+      "last_commit_consulted": null,
+      "limitations": [
+        "Modelo GCN3: nenhuma equivalência com Polaris/gfx803 ou gfx9 foi estabelecida.",
+        "Requer calibração com medições reais antes de qualquer comparação."
+      ],
+      "applications": [
+        "Simulação offline de kernels",
+        "Calibração de modelos (Fase 5)"
+      ],
+      "trust": "referencia_publica",
+      "allow_execution": false,
+      "verification": {
+        "status": "nao_verificado",
+        "checked_at": null,
+        "note": "Sem acesso de rede aos hosts na sessão de criação; existência e autenticidade não confirmadas."
+      }
+    },
+    {
+      "id": "gem5-repo",
+      "name": "gem5 (repositório)",
+      "url": "https://github.com/gem5/gem5",
+      "host_kind": "github",
+      "kind": "simulacao",
+      "license": "BSD-3-Clause",
+      "license_verified": false,
+      "architectures": [
+        "x86",
+        "ARM",
+        "RISC-V (conforme projeto; não verificado)"
+      ],
+      "purpose": "Simulador de arquiteturas de computadores (CPU e sistemas).",
+      "maintenance_state": "desconhecido",
+      "last_commit_consulted": null,
+      "limitations": [
+        "Foco em CPU/sistema; suporte a GPU AMD deve ser verificado separadamente.",
+        "Build pesado: não executar sem autorização."
+      ],
+      "applications": [
+        "Modelagem de CPU",
+        "Estudo de hierarquia de memória"
+      ],
+      "trust": "referencia_publica",
+      "allow_execution": false,
+      "verification": {
+        "status": "nao_verificado",
+        "checked_at": null,
+        "note": "Sem acesso de rede aos hosts na sessão de criação; existência e autenticidade não confirmadas."
+      }
+    },
+    {
+      "id": "gem5-site",
+      "name": "gem5 (site e documentação)",
+      "url": "https://www.gem5.org/",
+      "host_kind": "web",
+      "kind": "documentacao",
+      "license": "não aplicável (documentação; verificar termos)",
+      "license_verified": false,
+      "architectures": [],
+      "purpose": "Documentação oficial do gem5.",
+      "maintenance_state": "desconhecido",
+      "last_commit_consulted": null,
+      "limitations": [
+        "Documentação pode diferir da versão do código."
+      ],
+      "applications": [
+        "Referência para o adaptador gem5"
+      ],
+      "trust": "referencia_publica",
+      "allow_execution": false,
+      "verification": {
+        "status": "nao_verificado",
+        "checked_at": null,
+        "note": "Sem acesso de rede aos hosts na sessão de criação; existência e autenticidade não confirmadas."
+      }
+    },
+    {
+      "id": "mesa",
+      "name": "Mesa 3D",
+      "url": "https://gitlab.freedesktop.org/mesa/mesa",
+      "host_kind": "gitlab",
+      "kind": "driver_compilador",
+      "license": "MIT",
+      "license_verified": false,
+      "architectures": [
+        "AMD GCN/RDNA via RADV (conforme documentação; não verificado)"
+      ],
+      "purpose": "Pilha gráfica aberta: RADV, NIR, ACO.",
+      "maintenance_state": "desconhecido",
+      "last_commit_consulted": null,
+      "limitations": [
+        "Não instalar versões experimentais sobre o Mesa do sistema.",
+        "Leitura de código e histórico apenas."
+      ],
+      "applications": [
+        "Análise de histórico e reversões",
+        "Estudo de ACO/NIR"
+      ],
+      "trust": "referencia_publica",
+      "allow_execution": false,
+      "verification": {
+        "status": "nao_verificado",
+        "checked_at": null,
+        "note": "Sem acesso de rede aos hosts na sessão de criação; existência e autenticidade não confirmadas."
+      }
+    },
+    {
+      "id": "radv-docs",
+      "name": "Documentação do RADV",
+      "url": "https://docs.mesa3d.org/drivers/radv.html",
+      "host_kind": "web",
+      "kind": "documentacao",
+      "license": "não aplicável (documentação; verificar termos)",
+      "license_verified": false,
+      "architectures": [],
+      "purpose": "Documentação do driver Vulkan RADV.",
+      "maintenance_state": "desconhecido",
+      "last_commit_consulted": null,
+      "limitations": [
+        "Reflete a versão atual do Mesa, não necessariamente a instalada."
+      ],
+      "applications": [
+        "Variáveis de depuração, GPUs suportadas"
+      ],
+      "trust": "referencia_publica",
+      "allow_execution": false,
+      "verification": {
+        "status": "nao_verificado",
+        "checked_at": null,
+        "note": "Sem acesso de rede aos hosts na sessão de criação; existência e autenticidade não confirmadas."
+      }
+    },
+    {
+      "id": "vulkan-samples",
+      "name": "Khronos Vulkan-Samples",
+      "url": "https://github.com/KhronosGroup/Vulkan-Samples",
+      "host_kind": "github",
+      "kind": "benchmark_exemplos",
+      "license": "Apache-2.0",
+      "license_verified": false,
+      "architectures": [
+        "Independente de fornecedor"
+      ],
+      "purpose": "Exemplos oficiais de Vulkan.",
+      "maintenance_state": "desconhecido",
+      "last_commit_consulted": null,
+      "limitations": [
+        "Exige SDK e build; não baixar sem autorização.",
+        "Exemplos não são benchmarks calibrados."
+      ],
+      "applications": [
+        "Base para microbenchmarks Vulkan (Fase 4)"
+      ],
+      "trust": "referencia_publica",
+      "allow_execution": false,
+      "verification": {
+        "status": "nao_verificado",
+        "checked_at": null,
+        "note": "Sem acesso de rede aos hosts na sessão de criação; existência e autenticidade não confirmadas."
+      }
+    },
+    {
+      "id": "ps5-vulkan",
+      "name": "mihawk-99/PS5_Vulkan",
+      "url": "https://github.com/mihawk-99/PS5_Vulkan",
+      "host_kind": "github",
+      "kind": "engenharia_reversa",
+      "license": "desconhecida",
+      "license_verified": false,
+      "architectures": [
+        "Não verificado"
+      ],
+      "purpose": "Referência de terceiros sobre PS5 e Vulkan. Existência, autenticidade e conteúdo NÃO verificados.",
+      "maintenance_state": "desconhecido",
+      "last_commit_consulted": null,
+      "limitations": [
+        "Origem, licença e legalidade do conteúdo não avaliadas.",
+        "Não executar código; não usar chaves, firmware ou material proprietário.",
+        "Nenhuma equivalência entre PS5 e RX 580 pode ser presumida."
+      ],
+      "applications": [
+        "Somente leitura de documentação pública, após verificação"
+      ],
+      "trust": "nao_verificada",
+      "allow_execution": false,
+      "verification": {
+        "status": "nao_verificado",
+        "checked_at": null,
+        "note": "Sem acesso de rede aos hosts na sessão de criação; existência e autenticidade não confirmadas."
+      }
+    },
+    {
+      "id": "llama-cpp",
+      "name": "llama.cpp",
+      "url": "https://github.com/ggml-org/llama.cpp",
+      "host_kind": "github",
+      "kind": "ia_local",
+      "license": "MIT",
+      "license_verified": false,
+      "architectures": [
+        "CPU x86-64",
+        "Vulkan (backend; verificar suporte na versão instalada)"
+      ],
+      "purpose": "Inferência local de LLMs; possível provedor do ai-research-agent.",
+      "maintenance_state": "desconhecido",
+      "last_commit_consulted": null,
+      "limitations": [
+        "Não presumir AVX2 na CPU de referência.",
+        "Backend Vulkan deve ser medido, não presumido."
+      ],
+      "applications": [
+        "Provedor de IA local",
+        "Carga de teste Vulkan (Fase 4)"
+      ],
+      "trust": "referencia_publica",
+      "allow_execution": false,
+      "verification": {
+        "status": "nao_verificado",
+        "checked_at": null,
+        "note": "Sem acesso de rede aos hosts na sessão de criação; existência e autenticidade não confirmadas."
+      }
+    }
+  ]
+}
