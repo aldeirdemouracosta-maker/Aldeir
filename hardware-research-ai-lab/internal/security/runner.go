@@ -48,6 +48,8 @@ type Runner struct {
 	Timeout time.Duration
 	// Allow restringe os executáveis (nome base). Vazio = sem restrição (apenas testes).
 	Allow map[string]bool
+	// AllowPaths permite caminhos ABSOLUTOS exatos (ex.: binário de simulador compilado e verificado).
+	AllowPaths map[string]bool
 
 	mu      sync.Mutex
 	records []CommandRecord
@@ -76,6 +78,15 @@ func (r *Runner) Records() []CommandRecord {
 
 // LookPath resolve um executável respeitando a lista permitida.
 func (r *Runner) LookPath(name string) (string, error) {
+	if filepath.IsAbs(name) {
+		if r.AllowPaths[name] {
+			return name, nil
+		}
+		if len(r.Allow) > 0 {
+			return "", fmt.Errorf("%w: %s", ErrNotAllowed, name)
+		}
+		return name, nil
+	}
 	if len(r.Allow) > 0 && !r.Allow[filepath.Base(name)] {
 		return "", fmt.Errorf("%w: %s", ErrNotAllowed, name)
 	}
@@ -91,6 +102,20 @@ func (r *Runner) Run(ctx context.Context, name string, args ...string) (Result, 
 
 // RunWith é como Run, mas com timeout específico (ex.: operações de rede explícitas).
 func (r *Runner) RunWith(ctx context.Context, timeout time.Duration, name string, args ...string) (Result, error) {
+	return r.RunSpec(ctx, Spec{Timeout: timeout}, name, args...)
+}
+
+// Spec detalha uma execução: diretório de trabalho e ambiente.
+type Spec struct {
+	Timeout  time.Duration
+	Dir      string
+	Env      []string // acrescentado ao ambiente (ou único, se CleanEnv)
+	CleanEnv bool     // não herda o ambiente do processo atual
+}
+
+// RunSpec é a porta única de execução (sem shell, sem sudo, com timeout e registro).
+func (r *Runner) RunSpec(ctx context.Context, sp Spec, name string, args ...string) (Result, error) {
+	timeout := sp.Timeout
 	rec := CommandRecord{Time: time.Now().UTC(), Command: name, Args: args, ExitCode: -1}
 	finish := func(res Result, err error) (Result, error) {
 		if err != nil {
@@ -126,7 +151,12 @@ func (r *Runner) RunWith(ctx context.Context, timeout time.Duration, name string
 	defer cancel()
 
 	cmd := exec.CommandContext(cctx, path, args...)
-	cmd.Env = append(os.Environ(), "LC_ALL=C", "LANG=C", "GIT_TERMINAL_PROMPT=0")
+	base := os.Environ()
+	if sp.CleanEnv {
+		base = nil
+	}
+	cmd.Env = append(append(base, sp.Env...), "LC_ALL=C", "LANG=C", "GIT_TERMINAL_PROMPT=0")
+	cmd.Dir = sp.Dir
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.WaitDelay = 500 * time.Millisecond

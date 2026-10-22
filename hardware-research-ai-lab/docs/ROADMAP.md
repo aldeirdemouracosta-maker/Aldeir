@@ -11,7 +11,7 @@ CLI, descoberta somente leitura, catálogos, SQLite com migrações, risco A/B, 
 - **Dependências:** `git`; módulo `research`; tabela `evidences`.
 - **Riscos:** download volumoso; licenças ambíguas; rate limit; confundir correlação de commits com causalidade. Mitigação: shallow clone, limites, evidência sempre com URL e estado `sem_evidencia` ≠ incompatível.
 
-## Fase 2 — Integração inicial MGPUSim
+## Fase 2 — Integração inicial MGPUSim (IMPLEMENTADA — ver `docs/FASE2_MGPUSIM.md` e `reports/VALIDACAO_FASE_2.md`)
 - **Entrada:** Fase 1 concluída; MGPUSim verificado; autorização para baixar dependências Go.
 - **Conclusão:** build isolado em `data/`; execução de um exemplo mínimo com timeout; resultados gravados com `origin=simulated`; documento do que o modelo GCN3 cobre e não cobre.
 - **Dependências:** Go, adaptador `mgpusim`, `benchmark`.

@@ -1,10 +1,10 @@
-# Hardware Research AI Lab (HRAIL) — Fases 0 e 1
+# Hardware Research AI Lab (HRAIL) — Fases 0, 1 e 2
 
 Laboratório modular e extensível para pesquisa de hardware (GPU, CPU, NPU…), com CLI em português,
 banco SQLite local e política de segurança estrita. **Independente do Peregrinus OS**, mas com
 interfaces preparadas para integração futura.
 
-> **Estado: Fase 1 (histórico Git e evidências) sobre a Fase 0.** Somente leitura, análise offline (nível A) e diagnóstico
+> **Estado: Fase 2 (MGPUSim em sandbox) sobre as Fases 0 e 1.** Somente leitura, análise offline (nível A) e diagnóstico
 > leve em espaço de usuário (nível B). Nenhum driver, kernel, firmware, clock ou tensão é tocado.
 
 ## Primeiro comando
@@ -32,6 +32,7 @@ Requisitos: Go ≥ 1.24 (o `go.mod` atual declara 1.26 por exigência do driver 
 | `hrail research verificar [--online --clonar --id X]` | confirma fontes online (somente leitura); sem `--online` só mostra o gravado |
 | `hrail research historico --fonte X` | analisa commits, reversões, issues e palavras-chave de um clone |
 | `hrail research commits` / `evidencia` | consulta achados / registra evidência com URL (decisão humana) |
+| `hrail simulation preparar/revisar/aprovar/compilar/rodar/resultados` | **Fase 2:** MGPUSim em sandbox, versão fixa, com aprovação humana (`docs/FASE2_MGPUSIM.md`) |
 | `hrail simulation info` | detecta MGPUSim e gem5 (não simula) |
 | `hrail compiler info` | inventário Mesa/RADV/NIR/ACO e ferramentas SPIR-V |
 | `hrail agents check` | disponibilidade de Ollama e llama.cpp |

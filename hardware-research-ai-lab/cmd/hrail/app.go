@@ -78,6 +78,7 @@ Comandos:
   research commits          consulta achados gravados [--fonte ID] [--revertidos] [--palavra P]
   research evidencia        registra evidência com URL num experimento (--experimento --fonte --commit --postura --resumo)
   simulation info           detecta simuladores (MGPUSim, gem5) sem simular
+  simulation preparar|revisar|aprovar|compilar|rodar|resultados   Fase 2: MGPUSim em sandbox (ver docs/FASE2_MGPUSIM.md)
   compiler info             inventário Mesa/RADV/NIR/ACO e ferramentas de shader
   agents check              verifica disponibilidade de provedores de IA
   benchmark selftest        autoteste de CPU que valida o pipeline (NÃO é benchmark de hardware)
@@ -132,7 +133,7 @@ func (a *App) Run(args []string) (code int) {
 	case "research":
 		err = a.cmdResearch(sub, opts)
 	case "simulation":
-		err = a.cmdSimulation()
+		err = a.cmdSimulation(sub, opts)
 	case "compiler":
 		err = a.cmdCompiler()
 	case "agents":
@@ -547,7 +548,7 @@ func (a *App) cmdResearch(sub string, opts []string) error {
 	return fmt.Errorf("use: hrail research sources | validar | verificar | historico | commits | evidencia")
 }
 
-func (a *App) cmdSimulation() error {
+func (a *App) cmdSimulationInfo() error {
 	for _, i := range simulation.New(a.registry()).Describe(a.ctx) {
 		a.printf("%s: %s\n  estado: %s %s\n  arquiteturas: %s\n  equivalências declaradas: %d\n  executa cargas: %v\n  %s\n\n",
 			i.Metadata.ID, i.Metadata.Description, i.Check.Status, firstNonEmpty(i.Check.Path, i.Check.Detail),

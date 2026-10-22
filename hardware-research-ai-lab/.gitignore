@@ -3,3 +3,4 @@ data/*.db
 data/*.db-*
 reports/relatorio_*
 data/clones/
+data/_sim/

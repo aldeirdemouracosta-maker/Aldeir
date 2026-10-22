@@ -24,7 +24,7 @@ func open(t *testing.T) *DB {
 func TestCriacaoEMigracao(t *testing.T) {
 	db := open(t)
 	v, err := db.SchemaVersion()
-	if err != nil || v != 3 {
+	if err != nil || v != 4 {
 		t.Fatalf("versão=%d err=%v", v, err)
 	}
 	for _, tb := range append(ExportTables, "schema_migrations") {
@@ -40,17 +40,19 @@ func TestMigracaoIdempotenteEIncremental(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// simula banco antigo na v2
-	db.SQL().Exec(`DROP TABLE source_verifications`)
+	// simula banco antigo na v3
+	db.SQL().Exec(`DROP TABLE simulation_runs`)
+	db.SQL().Exec(`DROP TABLE simulation_builds`)
+	db.SQL().Exec(`DROP TABLE third_party_reviews`)
 	db.SQL().Exec(`DROP TABLE commit_findings`)
-	db.SQL().Exec(`DELETE FROM schema_migrations WHERE version=3`)
+	db.SQL().Exec(`DELETE FROM schema_migrations WHERE version=4`)
 	db.Close()
 	db, err = Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	if v, _ := db.SchemaVersion(); v != 3 {
+	if v, _ := db.SchemaVersion(); v != 4 {
 		t.Fatalf("versão=%d", v)
 	}
 	if err := db.Migrate(); err != nil {
@@ -58,10 +60,10 @@ func TestMigracaoIdempotenteEIncremental(t *testing.T) {
 	}
 	var n int
 	db.SQL().QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n)
-	if n != 3 {
+	if n != 4 {
 		t.Fatalf("linhas de migração=%d", n)
 	}
-	if v, err := Inspect(path); err != nil || v != 3 {
+	if v, err := Inspect(path); err != nil || v != 4 {
 		t.Fatalf("Inspect=%d %v", v, err)
 	}
 }

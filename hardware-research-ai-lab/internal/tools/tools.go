@@ -232,6 +232,7 @@ type AdapterMetadata struct {
 	SupportedArch      []string `json:"supported_arch"`
 	EquivalenceClaims  []string `json:"equivalence_claims"` // vazio por política: sem evidência, sem afirmação
 	ExecutesWorkloads  bool     `json:"executes_workloads"`
+	RequiresApproval   bool     `json:"requires_human_approval,omitempty"` // código de terceiros: revisão + aprovação humana
 	Phase0Capabilities []string `json:"phase0_capabilities"`
 }
 

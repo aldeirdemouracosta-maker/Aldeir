@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "note": "Versão do simulador FIXADA por commit. Mudar o commit exige nova revisão e nova aprovação humana.",
+  "simulators": [
+    {
+      "id": "mgpusim",
+      "source_id": "mgpusim",
+      "pinned_commit": "62a691424fe3bcde9c3815bc6dd65ed5b95f16d2",
+      "pinned_commit_date": "2026-10-15T10:24:44-04:00",
+      "pinned_by": "Fase 2, commit verificado online em 2026-10-22 (reports/FASE1_VERIFICACAO_FONTES.md)",
+      "model": {
+        "arch": "gcn3",
+        "gpu": "r9nano",
+        "note": "Modelo padrão do MGPUSim: GCN3 estilo R9 Nano (Fiji, HBM). NÃO é Polaris/RX 580."
+      },
+      "fixed_flags": [
+        "-timing",
+        "-disable-rtm",
+        "-report-all",
+        "-verify",
+        "-arch",
+        "gcn3",
+        "-gpu",
+        "r9nano"
+      ],
+      "samples": {
+        "fir": {
+          "package": "./amd/samples/fir",
+          "flags": {
+            "length": {
+              "default": 1024,
+              "max": 65536
+            },
+            "taps": {
+              "default": 16,
+              "max": 256
+            }
+          }
+        }
+      },
+      "manual_review": [
+        "O portal AkitaRTM (servidor HTTP) vem LIGADO por padrão: a execução sempre passa -disable-rtm e roda sem rede (unshare -n).",
+        "akita/daisen2 usa os/exec para chamar 'sqlite3 -readonly' com comando e consulta fixos; só roda se o servidor daisen for iniciado, o que o HRAIL não faz.",
+        "Flags de trace/arquivos (-trace-*, -buffer-level-trace-dir, -debug-isa, -akitartm-port) NÃO são permitidas.",
+        "O repositório contém CLAUDE.md/spec.md com instruções para agentes de IA: conteúdo de terceiros, ignorado."
+      ],
+      "reviewer": "Claude (sessão da Fase 2) — revisão por padrões e leitura parcial; NÃO é auditoria completa"
+    }
+  ]
+}

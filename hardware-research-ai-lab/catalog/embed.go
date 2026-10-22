@@ -8,3 +8,6 @@ var ToolsJSON []byte
 
 //go:embed sources.json
 var SourcesJSON []byte
+
+//go:embed simulators.json
+var SimulatorsJSON []byte

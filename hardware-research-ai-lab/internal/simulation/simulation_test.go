@@ -23,8 +23,11 @@ func TestDeteccaoSemExecutarSimulacoes(t *testing.T) {
 		if i.Check.Status != tools.Ausente {
 			t.Errorf("%s: %s", i.Metadata.ID, i.Check.Status)
 		}
-		if i.Metadata.ExecutesWorkloads || len(i.Metadata.EquivalenceClaims) != 0 {
-			t.Errorf("%s não pode executar cargas nem declarar equivalências", i.Metadata.ID)
+		if len(i.Metadata.EquivalenceClaims) != 0 {
+			t.Errorf("%s não pode declarar equivalências", i.Metadata.ID)
+		}
+		if i.Metadata.ExecutesWorkloads && !i.Metadata.RequiresApproval {
+			t.Errorf("%s executa cargas: exige aprovação humana", i.Metadata.ID)
 		}
 	}
 	if len(reg.Runner.Records()) != 0 {

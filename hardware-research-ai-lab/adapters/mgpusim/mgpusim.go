@@ -20,8 +20,9 @@ func (Adapter) Metadata() tools.AdapterMetadata {
 		SourceIDs:          []string{"mgpusim"},
 		SupportedArch:      []string{"GCN3 (documentado pelo projeto; não verificado)"},
 		EquivalenceClaims:  []string{}, // nenhuma: sem evidência não se declara equivalência
-		ExecutesWorkloads:  false,
-		Phase0Capabilities: []string{"detecção", "metadados"},
+		ExecutesWorkloads:  true,       // Fase 2: somente amostras do catálogo, após aprovação humana, em sandbox
+		RequiresApproval:   true,
+		Phase0Capabilities: []string{"detecção", "metadados", "preparo/revisão/compilação/execução controladas (Fase 2)"},
 	}
 }
 
