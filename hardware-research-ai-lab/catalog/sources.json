@@ -50,7 +50,8 @@
       "last_commit_consulted": null,
       "limitations": [
         "Foco em CPU/sistema; suporte a GPU AMD deve ser verificado separadamente.",
-        "Build pesado: não executar sem autorização."
+        "Build pesado: não executar sem autorização.",
+        "Pista NÃO verificada (fonte secundária): suporte a GPU AMD de modelos Vega, Instinct MI200 e MI300, sem reprodução exata da RX 580. Confirmar na documentação do gem5."
       ],
       "applications": [
         "Modelagem de CPU",
@@ -106,11 +107,13 @@
       "last_commit_consulted": null,
       "limitations": [
         "Não instalar versões experimentais sobre o Mesa do sistema.",
-        "Leitura de código e histórico apenas."
+        "Leitura de código e histórico apenas.",
+        "Pista NÃO verificada (fonte secundária): protótipo 'aco_dump' (março/2026) para inspecionar a compilação ACO sem GPU física, fora do Mesa oficial. URL e autoria desconhecidas: não cadastrar como fonte até localizar e verificar; se existir, tratar como código de terceiros sem execução automática."
       ],
       "applications": [
         "Análise de histórico e reversões",
-        "Estudo de ACO/NIR"
+        "Estudo de ACO/NIR",
+        "Fase 3: avaliar a pista 'aco_dump' somente após verificação"
       ],
       "trust": "referencia_publica",
       "allow_execution": false,

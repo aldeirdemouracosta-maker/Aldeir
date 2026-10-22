@@ -63,4 +63,4 @@ exigem pacote no mesmo diretório); `internal/config` e `internal/report` foram 
 ## Validação
 
 `./scripts/validar.sh` (gofmt, vet, testes, build). Resultados em `reports/VALIDACAO_FASE_0.md`.
-Documentação: `docs/`.
+Documentação: `docs/` (modelo de implantação e pen drive: `docs/IMPLANTACAO.md`).
