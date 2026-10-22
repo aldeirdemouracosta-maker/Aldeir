@@ -163,3 +163,19 @@ func TestPersistencia(t *testing.T) {
 		t.Error("hash desconhecido")
 	}
 }
+
+func TestFalsosPositivosDeReversaoEIssue(t *testing.T) {
+	squash := "\x1eaaaaaaa1\x1f2026-01-01T00:00:00Z\x1fAdd sample (#1447)\x1f* feat: x\n* Revert \"y\"\n\nThis reverts commit abcdef1234567.\n\nFixes a bug in the loader\n"
+	genuino := "\x1ebbbbbbb2\x1f2026-01-02T00:00:00Z\x1fRevert \"z\"\x1fThis reverts commit 1234567abcdef.\n"
+	prefixo := "\x1eccccccc3\x1f2026-01-03T00:00:00Z\x1ftests: Revert revert \"w\"\x1f\n"
+	cs := Parse(squash+genuino+prefixo, Options{})
+	if cs[0].IsRevert || len(cs[0].IssueRefs) != 1 || cs[0].IssueRefs[0] != "#1447" {
+		t.Errorf("squash não é reversão e 'Fixes a bug' não é issue: %+v", cs[0])
+	}
+	if !cs[1].IsRevert || cs[1].RevertedHash != "1234567abcdef" {
+		t.Errorf("genuína: %+v", cs[1])
+	}
+	if !cs[2].IsRevert {
+		t.Errorf("prefixo 'tests: Revert': %+v", cs[2])
+	}
+}

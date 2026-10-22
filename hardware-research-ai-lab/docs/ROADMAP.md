@@ -5,7 +5,7 @@ Fases futuras só começam por decisão explícita; **a Fase 0 não avança auto
 ## Fase 0 — Fundação e diagnóstico (CONCLUÍDA, ver `reports/VALIDACAO_FASE_0.md`)
 CLI, descoberta somente leitura, catálogos, SQLite com migrações, risco A/B, autoteste, testes.
 
-## Fase 1 — Analisador de histórico Git e evidências
+## Fase 1 — Analisador de histórico Git e evidências (IMPLEMENTADA — ver `reports/VALIDACAO_FASE_1.md`; verificação parcial: GitLab/Mesa e sites bloqueados no ambiente)
 - **Entrada:** Fase 0 validada; acesso à rede autorizado; lista de repositórios aprovada.
 - **Conclusão:** `verification` das 8 fontes preenchida (hash/data do último commit, licença lida do arquivo LICENSE); clones rasos em `data/` com tamanho limitado; consultas por palavra-chave em commits/reversões/issues gravando `evidences` com URL; testes com repositório Git local fictício.
 - **Dependências:** `git`; módulo `research`; tabela `evidences`.

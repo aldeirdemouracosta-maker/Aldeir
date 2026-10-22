@@ -47,11 +47,14 @@ type Options struct {
 type Scanner struct{ Runner *security.Runner }
 
 var (
-	reSince    = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
-	reRevertBy = regexp.MustCompile(`(?i)this reverts commit ([0-9a-f]{7,40})`)
-	reHash     = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
-	reIssue    = regexp.MustCompile(`(?:^|[\s(\[])([#!][0-9]{1,7})\b`)
-	reCloses   = regexp.MustCompile(`(?i)\b(?:closes|fixes|resolves)\s+(\S+)`)
+	reSince = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+	// Reversão genuína: a 1ª linha não vazia do corpo (gerada por `git revert`) começa assim.
+	// Menções a "This reverts commit" mais abaixo (ex.: corpo de squash-merge) NÃO contam.
+	reRevertBy   = regexp.MustCompile(`(?i)^this reverts commit ([0-9a-f]{7,40})`)
+	reRevertSubj = regexp.MustCompile(`(?i)^(?:[\w\-/.]+:\s*)?revert\b`)
+	reHash       = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
+	reIssue      = regexp.MustCompile(`(?:^|[\s(\[])([#!][0-9]{1,7})\b`)
+	reCloses     = regexp.MustCompile(`(?i)\b(?:closes|fixes|resolves)\s+((?:https?://\S+)|(?:[\w./-]*[#!][0-9]+))`)
 )
 
 // ValidateHash informa se s parece um hash de commit.
@@ -140,9 +143,9 @@ func Parse(out string, o Options) []Commit {
 				c.Keywords = append(c.Keywords, k)
 			}
 		}
-		if m := reRevertBy.FindStringSubmatch(body); m != nil {
+		if m := reRevertBy.FindStringSubmatch(strings.TrimSpace(body)); m != nil {
 			c.IsRevert, c.RevertedHash = true, strings.ToLower(m[1])
-		} else if strings.HasPrefix(c.Subject, "Revert \"") {
+		} else if reRevertSubj.MatchString(c.Subject) {
 			c.IsRevert = true
 		}
 		seen := map[string]bool{}

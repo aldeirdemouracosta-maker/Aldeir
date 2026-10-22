@@ -115,3 +115,36 @@ func TestRegistroEConsulta(t *testing.T) {
 		t.Errorf("evidências=%d", n)
 	}
 }
+
+func TestAddEvidenceAtualizaEstado(t *testing.T) {
+	db, _ := storage.Open(filepath.Join(t.TempDir(), "a.db"))
+	defer db.Close()
+	if err := Save(db, base(), ab); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AddEvidence(db, "EXP-1", "talvez", Evidence{Summary: "x"}); err == nil {
+		t.Fatal("postura inválida")
+	}
+	if _, err := AddEvidence(db, "NAO", "favoravel", Evidence{Summary: "x"}); err == nil {
+		t.Fatal("experimento inexistente")
+	}
+	if _, err := AddEvidence(db, "EXP-1", "favoravel", Evidence{}); err == nil {
+		t.Fatal("sem resumo")
+	}
+	st, err := AddEvidence(db, "EXP-1", "contraria", Evidence{Summary: "revertido", URL: "https://example.org/c/abc1234"})
+	if err != nil || st != EvidIncompativel {
+		t.Fatalf("%v %v", st, err)
+	}
+	st, _ = AddEvidence(db, "EXP-1", "favoravel", Evidence{Summary: "funciona em gfx8"})
+	if st != EvidConflitante {
+		t.Fatalf("%v", st)
+	}
+	e, _ := Get(db, "EXP-1")
+	var state string
+	db.SQL().QueryRow(`SELECT evidence_state FROM experiments WHERE id='EXP-1'`).Scan(&state)
+	var n int
+	db.SQL().QueryRow(`SELECT COUNT(*) FROM evidences WHERE experiment_id='EXP-1'`).Scan(&n)
+	if len(e.Contrary) != 1 || len(e.Favorable) != 1 || state != string(EvidConflitante) || n != 2 {
+		t.Errorf("estado inconsistente: %+v %s %d", e, state, n)
+	}
+}

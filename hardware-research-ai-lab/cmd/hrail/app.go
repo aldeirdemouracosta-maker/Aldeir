@@ -73,6 +73,10 @@ Comandos:
   tools check               verifica disponibilidade/versão das ferramentas
   research sources          mostra o catálogo de fontes [--tipo T] [--json]
   research validar          valida o catálogo de fontes e sincroniza com o banco
+  research verificar        confirma fontes ONLINE (--online [--clonar] [--id ID]); sem --online só mostra o já gravado
+  research historico        analisa commits/reversões/issues de um clone (--fonte ID [--palavras a,b] [--desde D] [--max N])
+  research commits          consulta achados gravados [--fonte ID] [--revertidos] [--palavra P]
+  research evidencia        registra evidência com URL num experimento (--experimento --fonte --commit --postura --resumo)
   simulation info           detecta simuladores (MGPUSim, gem5) sem simular
   compiler info             inventário Mesa/RADV/NIR/ACO e ferramentas de shader
   agents check              verifica disponibilidade de provedores de IA
@@ -485,6 +489,16 @@ func firstNonEmpty(ss ...string) string {
 }
 
 func (a *App) cmdResearch(sub string, opts []string) error {
+	switch sub {
+	case "verificar":
+		return a.cmdVerificar(opts)
+	case "historico":
+		return a.cmdHistorico(opts)
+	case "commits":
+		return a.cmdCommits(opts)
+	case "evidencia":
+		return a.cmdEvidencia(opts)
+	}
 	srcs, err := research.ParseCatalog(catalog.SourcesJSON)
 	switch sub {
 	case "sources":
@@ -498,6 +512,7 @@ func (a *App) cmdResearch(sub string, opts []string) error {
 		if e := fs.Parse(opts); e != nil {
 			return e
 		}
+		srcs = a.overlayVerifications(srcs)
 		list := research.Filter(srcs, *tipo)
 		if *asJSON {
 			return a.writeJSON(a.Out, list)
@@ -529,7 +544,7 @@ func (a *App) cmdResearch(sub string, opts []string) error {
 		a.printf("Catálogo válido: %d fontes sincronizadas com o banco.\nNota: validação estrutural; existência/autenticidade online NÃO foram verificadas.\n", len(srcs))
 		return nil
 	}
-	return fmt.Errorf("use: hrail research sources | validar")
+	return fmt.Errorf("use: hrail research sources | validar | verificar | historico | commits | evidencia")
 }
 
 func (a *App) cmdSimulation() error {

@@ -292,10 +292,28 @@ func Overlay(ss []Source, vs map[string]Result) []Source {
 				out[i].LastCommitConsulted = &lc
 			}
 		}
+		if r.Status == Verificado && r.HeadDate != "" {
+			out[i].MaintenanceState = maintenance(r.HeadDate, r.CheckedAt)
+		}
 		if r.LicenseMatches != nil && *r.LicenseMatches {
 			out[i].LicenseVerified = true
 		}
 		out[i].Verification = v
 	}
 	return out
+}
+
+// maintenance deriva um rótulo do último commit visível; é uma heurística, não um veredito.
+func maintenance(headDate, checkedAt string) string {
+	h, err1 := time.Parse(time.RFC3339, headDate)
+	c, err2 := time.Parse(time.RFC3339, checkedAt)
+	if err1 != nil || err2 != nil {
+		return "desconhecido"
+	}
+	days := int(c.Sub(h).Hours() / 24)
+	label := "ativo"
+	if days > 180 {
+		label = "possivelmente inativo"
+	}
+	return fmt.Sprintf("%s (último commit há %d dias, em %s; heurística)", label, days, h.Format("2006-01-02"))
 }

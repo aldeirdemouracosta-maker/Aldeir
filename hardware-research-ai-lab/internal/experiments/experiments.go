@@ -251,3 +251,37 @@ func Get(db *storage.DB, id string) (Experiment, error) {
 	}
 	return e, json.Unmarshal([]byte(s), &e)
 }
+
+// AddEvidence acrescenta uma evidência (decidida por uma PESSOA) a um experimento existente,
+// atualizando o estado de evidência. stance: "favoravel" ou "contraria".
+func AddEvidence(db *storage.DB, id, stance string, ev Evidence) (EvidenceState, error) {
+	if stance != "favoravel" && stance != "contraria" {
+		return "", fmt.Errorf("postura %q inválida (favoravel|contraria)", stance)
+	}
+	if strings.TrimSpace(ev.Summary) == "" {
+		return "", errors.New("evidência exige resumo")
+	}
+	e, err := Get(db, id)
+	if err != nil {
+		return "", fmt.Errorf("experimento %q não encontrado: %w", id, err)
+	}
+	if stance == "favoravel" {
+		e.Favorable = append(e.Favorable, ev)
+	} else {
+		e.Contrary = append(e.Contrary, ev)
+	}
+	b, _ := json.Marshal(e)
+	tx, err := db.SQL().Begin()
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`UPDATE experiments SET payload_json=?, evidence_state=? WHERE id=?`, string(b), string(e.State()), id); err != nil {
+		return "", err
+	}
+	if _, err := tx.Exec(`INSERT INTO evidences(experiment_id,stance,url,summary,recorded_at) VALUES(?,?,NULLIF(?,''),?,?)`,
+		id, stance, ev.URL, ev.Summary, time.Now().UTC().Format(time.RFC3339)); err != nil {
+		return "", err
+	}
+	return e.State(), tx.Commit()
+}
