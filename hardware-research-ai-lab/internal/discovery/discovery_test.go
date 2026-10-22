@@ -3,9 +3,11 @@ package discovery
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf16"
 
 	"hrail/internal/security"
 )
@@ -156,5 +158,137 @@ func TestParserComSaidaRealDoWindows(t *testing.T) {
 	}
 	if len(d.ComputeLimits) != 0 || len(d.QueueFamilies) != 0 {
 		t.Errorf("o resumo não traz limites/filas: não preencher: %+v", d)
+	}
+}
+
+// Fixture REAL (testdata/): vulkaninfo completo da RX 580 2048SP no Windows (aparado, UUIDs redigidos).
+func realVulkan(t *testing.T) *VulkanDevice {
+	t.Helper()
+	b, err := os.ReadFile("testdata/vulkaninfo_rx580_2048sp_windows.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := ParseVulkanInfo(string(b))
+	if v == nil || len(v.Devices) != 1 {
+		t.Fatalf("parser não achou o dispositivo: %+v", v)
+	}
+	return &v.Devices[0]
+}
+
+func TestParserComVulkanInfoCompletoReal(t *testing.T) {
+	d := realVulkan(t)
+	if d.Name != "AMD Radeon RX 580 2048SP" || d.APIVersion != "1.3.260" || d.DriverName != "AMD proprietary driver" || d.MesaVersion != "" {
+		t.Errorf("identificação: %+v", d)
+	}
+	want := map[string]string{
+		"maxComputeSharedMemorySize":     "32768",
+		"maxComputeWorkGroupInvocations": "1024",
+		"maxComputeWorkGroupCount":       "4294967295,65535,65535", // arrays multilinha
+		"maxComputeWorkGroupSize":        "1024,1024,1024",
+		"subgroupSize":                   "64",
+		"maxPushConstantsSize":           "128",
+	}
+	for k, v := range want {
+		if d.ComputeLimits[k] != v {
+			t.Errorf("%s = %q (esperado %q)", k, d.ComputeLimits[k], v)
+		}
+	}
+	if len(d.Extensions) != 144 {
+		t.Errorf("extensões: %d", len(d.Extensions))
+	}
+}
+
+func TestFilasReais(t *testing.T) {
+	q := realVulkan(t).QueueFamilies
+	if len(q) != 3 {
+		t.Fatalf("%+v", q)
+	}
+	if q[0].Count != "1" || !strings.Contains(q[0].Flags, "GRAPHICS") || !strings.Contains(q[0].Flags, "COMPUTE") {
+		t.Errorf("família 0: %+v", q[0])
+	}
+	if q[1].Count != "2" || strings.Contains(q[1].Flags, "GRAPHICS") || !strings.Contains(q[1].Flags, "COMPUTE") {
+		t.Errorf("família 1 (compute assíncrono): %+v", q[1])
+	}
+	if q[2].Count != "2" || strings.Contains(q[2].Flags, "COMPUTE") {
+		t.Errorf("família 2 (transferência): %+v", q[2])
+	}
+}
+
+func TestMemoriaReal(t *testing.T) {
+	d := realVulkan(t)
+	if len(d.MemoryHeaps) != 3 || d.MemoryHeaps[0].SizeBytes != 8321499136 || !d.MemoryHeaps[0].DeviceLocal || d.MemoryHeaps[1].DeviceLocal {
+		t.Fatalf("heaps: %+v", d.MemoryHeaps)
+	}
+	total, vis, ok := d.VRAMFromHeaps()
+	if !ok || total != 8<<30 {
+		t.Errorf("VRAM total deve somar exatamente 8 GiB (7,75 GiB + 256 MiB): %d", total)
+	}
+	if vis != 256<<20 {
+		t.Errorf("janela visível à CPU = 256 MiB (sem Resizable BAR): %d", vis)
+	}
+}
+
+func TestTiposNumericosReaisDaPolaris(t *testing.T) {
+	n := realVulkan(t).NumericSupport
+	for k, want := range map[string]bool{
+		"shaderFloat16": false, // sem FP16 aritmético via Vulkan: relevante para IA
+		"shaderInt8":    true, "shaderInt16": true, "shaderInt64": true, "shaderFloat64": true,
+		"storageBuffer16BitAccess": true, "storageBuffer8BitAccess": true,
+		"shaderIntegerDotProduct": true, "bufferDeviceAddress": true, "shaderSubgroupExtendedTypes": true,
+		"ext:VK_KHR_shader_integer_dot_product": true, "ext:VK_AMD_shader_core_properties": true,
+	} {
+		if got, ok := n[k]; !ok || got != want {
+			t.Errorf("%s = %v (presente=%v), esperado %v", k, got, ok, want)
+		}
+	}
+	if _, ok := n["cooperativeMatrix"]; ok {
+		t.Error("cooperativeMatrix não aparece na saída: deve ficar desconhecido")
+	}
+	for _, e := range realVulkan(t).Extensions {
+		if strings.Contains(e, "cooperative_matrix") {
+			t.Error("o driver não expõe matriz cooperativa")
+		}
+	}
+}
+
+func TestAnexaVRAMDoVulkanQuandoNaoHaSysfs(t *testing.T) {
+	b, _ := os.ReadFile("testdata/vulkaninfo_rx580_2048sp_windows.txt")
+	v := ParseVulkanInfo(string(b))
+	g := []GPUProfile{{VendorID: "0x1002", DeviceID: "0x6fdf"}}
+	attachVulkan(g, v)
+	if g[0].VRAMTotalBytes == nil || *g[0].VRAMTotalBytes != 8<<30 || !strings.Contains(g[0].VRAMSource, "derivado") {
+		t.Errorf("%+v", g[0])
+	}
+	// com sysfs, a leitura direta é preservada
+	direto := uint64(123)
+	g = []GPUProfile{{VendorID: "0x1002", DeviceID: "0x6fdf", VRAMTotalBytes: &direto}}
+	attachVulkan(g, v)
+	if *g[0].VRAMTotalBytes != 123 || g[0].VRAMSource != "" {
+		t.Error("não deve sobrescrever medida direta do sysfs")
+	}
+}
+
+func TestImportarVulkanInfoEmUTF16(t *testing.T) {
+	b, _ := os.ReadFile("testdata/vulkaninfo_rx580_2048sp_windows.txt")
+	u := utf16.Encode([]rune(string(b)))
+	raw := []byte{0xFF, 0xFE} // BOM LE, como o PowerShell do Windows grava
+	for _, c := range u {
+		raw = append(raw, byte(c), byte(c>>8))
+	}
+	txt := DecodeText(raw)
+	if txt != string(b) {
+		t.Fatal("decodificação UTF-16 não preservou o texto")
+	}
+	v := ParseVulkanInfo(txt)
+	inv := FromVulkan(v, "importado: teste")
+	g := inv.GPUs[0]
+	if inv.Source == "" || g.DeviceID != "0x6fdf" || g.KnownVariant == nil || g.VRAMTotalBytes == nil || *g.VRAMTotalBytes != 8<<30 {
+		t.Errorf("%+v", g)
+	}
+	if inv.CPU.Logical != 0 || len(inv.Unavailable) == 0 || g.Revision != "" {
+		t.Error("campos sem fonte não podem ser inventados")
+	}
+	if DecodeText([]byte("\xef\xbb\xbfabc")) != "abc" {
+		t.Error("UTF-8 com BOM")
 	}
 }

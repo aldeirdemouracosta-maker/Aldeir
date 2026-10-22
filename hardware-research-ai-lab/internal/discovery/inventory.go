@@ -26,6 +26,7 @@ const (
 type Inventory struct {
 	CollectedAt string       `json:"collected_at"`
 	Origin      string       `json:"origin"`
+	Source      string       `json:"source,omitempty"` // ex.: "importado: vulkaninfo (Windows)"
 	Kernel      string       `json:"kernel,omitempty"`
 	CPU         CPUInfo      `json:"cpu"`
 	Memory      MemoryInfo   `json:"memory"`

@@ -69,6 +69,7 @@ Comandos:
   doctor                    verifica dependências e permissões (somente leitura)
   hardware list             lista o hardware detectado
   hardware inspect          exporta o inventário técnico em JSON [--salvar] [--saida ARQ]
+  hardware importar         importa um vulkaninfo (UTF-8/UTF-16, ex.: do Windows) como perfil parcial (--vulkan ARQ [--salvar])
   tools list                lista ferramentas cadastradas (sem executá-las)
   tools check               verifica disponibilidade/versão das ferramentas
   research sources          mostra o catálogo de fontes [--tipo T] [--json]
@@ -344,6 +345,8 @@ func (a *App) cmdHardware(sub string, opts []string) error {
 		inv := a.collector().Collect(a.ctx)
 		a.printHardware(inv)
 		return nil
+	case "importar":
+		return a.cmdImportarVulkan(opts)
 	case "inspect":
 		fs := flag.NewFlagSet("hardware inspect", flag.ContinueOnError)
 		fs.SetOutput(io.Discard)

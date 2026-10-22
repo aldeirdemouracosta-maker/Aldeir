@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"hrail/catalog"
+	"hrail/internal/discovery"
 	"hrail/internal/experiments"
 	"hrail/internal/gitscan"
 	"hrail/internal/research"
@@ -262,4 +263,41 @@ func (a *App) cmdEvidencia(opts []string) error {
 	}
 	a.printf("Evidência (%s) registrada em %s: %s\nEstado de evidência do experimento: %s\n", *postura, *exp, u, st)
 	return nil
+}
+
+// cmdImportarVulkan importa um vulkaninfo coletado em outra máquina/SO (somente leitura do arquivo).
+func (a *App) cmdImportarVulkan(opts []string) error {
+	fs := newFlags("hardware importar")
+	arq := fs.String("vulkan", "", "")
+	salvar := fs.Bool("salvar", false, "")
+	if err := fs.Parse(opts); err != nil {
+		return err
+	}
+	if *arq == "" {
+		return errors.New("uso: hrail hardware importar --vulkan ARQUIVO [--salvar]")
+	}
+	b, err := os.ReadFile(*arq)
+	if err != nil {
+		return err
+	}
+	if len(b) > 8<<20 {
+		return errors.New("arquivo acima de 8 MiB")
+	}
+	v := discovery.ParseVulkanInfo(discovery.DecodeText(b))
+	if v == nil {
+		return errors.New("nenhum dispositivo reconhecido no arquivo (é a saída do vulkaninfo?)")
+	}
+	inv := discovery.FromVulkan(v, "importado: vulkaninfo ("+filepath.Base(*arq)+")")
+	if *salvar {
+		db, err := a.openDB()
+		if err != nil {
+			return err
+		}
+		id, err := db.SaveHardware(inv.Origin, inv)
+		if err != nil {
+			return err
+		}
+		a.printf("(snapshot de hardware #%d gravado; fonte: %s)\n", id, inv.Source)
+	}
+	return a.writeJSON(a.Out, inv)
 }

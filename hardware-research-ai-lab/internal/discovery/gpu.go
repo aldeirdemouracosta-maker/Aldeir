@@ -27,6 +27,7 @@ type GPUProfile struct {
 	KernelDriverVersion string  `json:"kernel_driver_version,omitempty"`
 	VRAMTotalBytes      *uint64 `json:"vram_total_bytes,omitempty"`
 	VRAMVisibleBytes    *uint64 `json:"vram_cpu_visible_bytes,omitempty"`
+	VRAMSource          string  `json:"vram_source,omitempty"` // vazio = sysfs (leitura direta)
 
 	Vulkan *VulkanDevice `json:"vulkan,omitempty"`
 
