@@ -137,3 +137,24 @@ func TestVulkanAusenteGeraAviso(t *testing.T) {
 		t.Errorf("esperava aviso de vulkaninfo ausente: %v", inv.Unavailable)
 	}
 }
+
+// Saída REAL de `vulkaninfo --summary` (Windows, driver AMD proprietário, RX 580 2048SP), 2026-10-22.
+// Valida o parser contra formato real; note que NÃO há Mesa nem RADV neste ambiente.
+const vulkanSummaryReal = "VULKANINFO\r\n==========\r\n\r\nVulkan Instance Version: 1.4.363\r\n\r\n\r\nInstance Extensions: count = 13\r\n-------------------------------\r\nVK_EXT_debug_report                    : extension revision 10\r\n\r\nDevices:\r\n========\r\nGPU0:\r\n\tapiVersion         = 1.3.260\r\n\tdriverVersion      = 2.0.279\r\n\tvendorID           = 0x1002\r\n\tdeviceID           = 0x6fdf\r\n\tdeviceType         = PHYSICAL_DEVICE_TYPE_DISCRETE_GPU\r\n\tdeviceName         = AMD Radeon RX 580 2048SP\r\n\tdriverID           = DRIVER_ID_AMD_PROPRIETARY\r\n\tdriverName         = AMD proprietary driver\r\n\tdriverInfo         = 26.5.2 (AMD proprietary shader compiler)\r\n\tconformanceVersion = 1.3.3.1\r\n"
+
+func TestParserComSaidaRealDoWindows(t *testing.T) {
+	v := ParseVulkanInfo(vulkanSummaryReal)
+	if v == nil || len(v.Devices) != 1 || v.InstanceVersion != "1.4.363" {
+		t.Fatalf("%+v", v)
+	}
+	d := v.Devices[0]
+	if d.Name != "AMD Radeon RX 580 2048SP" || d.VendorID != "0x1002" || d.DeviceID != "0x6fdf" || d.APIVersion != "1.3.260" {
+		t.Errorf("%+v", d)
+	}
+	if d.DriverName != "AMD proprietary driver" || d.MesaVersion != "" {
+		t.Errorf("driver proprietário: Mesa não pode ser inventado: %+v", d)
+	}
+	if len(d.ComputeLimits) != 0 || len(d.QueueFamilies) != 0 {
+		t.Errorf("o resumo não traz limites/filas: não preencher: %+v", d)
+	}
+}

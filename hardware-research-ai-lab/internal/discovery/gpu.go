@@ -54,7 +54,7 @@ var knownGPUs = map[string]knownGPU{
 		variant: &VariantNote{
 			Name:  "Radeon RX 580 2048SP",
 			Level: "requer_verificacao",
-			Note:  "Variante distinta da RX 580 convencional (o sufixo indica 2048 stream processors, a confirmar). Não presumir especificações, clocks, limites ou compatibilidade da RX 580 padrão; verificar contagem de CUs, memória, limites Vulkan e extensões na máquina real.",
+			Note:  "Observada em 1 máquina real (Windows, driver AMD proprietário): nome \"AMD Radeon RX 580 2048SP\", PCI 1002:6fdf rev 0xef, subsistema 1002:0b31. Variante distinta da RX 580 convencional (o sufixo indica 2048 stream processors, a confirmar). Não presumir especificações, clocks, limites ou compatibilidade da RX 580 padrão; verificar contagem de CUs, memória, limites Vulkan e extensões na máquina real.",
 		},
 	},
 	"0x1002:0x67df": {

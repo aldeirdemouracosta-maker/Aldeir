@@ -35,10 +35,24 @@ $ram = Seguro { (Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory }
 $os = Seguro { Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, OSArchitecture }
 $discos = Seguro { Get-CimInstance Win32_DiskDrive | Select-Object Model, Size, MediaType }
 
-# vulkaninfo, se existir (somente consulta)
+# VRAM real (valor de 64 bits do registro do driver; somente leitura). Pode falhar sem erro: fica nulo.
+$vramReg = Seguro {
+    $base = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}'
+    Get-ChildItem $base -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -match '^\d{4}$' } | ForEach-Object {
+        $p = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
+        if ($p.'HardwareInformation.qwMemorySize') {
+            [pscustomobject]@{ driver_desc = $p.DriverDesc; vram_bytes = [uint64]$p.'HardwareInformation.qwMemorySize' }
+        }
+    }
+}
+
+# vulkaninfo, se existir (somente consulta). stderr (avisos do loader) fica FORA do resultado.
 $vk = $null
 $vkExe = Get-Command vulkaninfo, vulkaninfoSDK -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($vkExe) { $vk = Seguro { & $vkExe.Source --summary 2>&1 | Out-String } }
+if ($vkExe) {
+    $vk = Seguro { & $vkExe.Source --summary 2>$null | Out-String }
+    Seguro { & $vkExe.Source 2>$null | Out-File -Encoding utf8 (Join-Path $saida 'vulkaninfo_windows.txt') }
+}
 
 $inv = [ordered]@{
     collected_at = (Get-Date).ToUniversalTime().ToString('s') + 'Z'
@@ -50,6 +64,7 @@ $inv = [ordered]@{
     ram_total_bytes = $ram
     storage      = $discos
     gpus         = $gpus
+    vram_registry = $vramReg
     vulkaninfo_summary = $vk
     notes        = @('Dados lidos por WMI/CIM e kernel32; nada foi alterado.',
                      'adapter_ram_bytes_wmi satura em 4 GiB: a VRAM real deve vir do vulkaninfo ou do driver.',

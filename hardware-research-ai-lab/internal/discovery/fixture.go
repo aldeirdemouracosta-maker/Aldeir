@@ -45,7 +45,8 @@ Device Extensions:
 `
 
 // WriteFixture cria sob root uma árvore sysfs/proc FICTÍCIA de uma máquina com uma
-// GPU 1002:6fdf. Todos os valores são inventados para testes de infraestrutura.
+// GPU 1002:6fdf. Todos os valores são inventados para testes de infraestrutura
+// (o PCI ID e a revisão foram escolhidos por coincidirem com o hardware de referência, mas continuam FICTÍCIOS).
 func WriteFixture(root string) error {
 	files := map[string]string{
 		"proc/cpuinfo":                                             "processor\t: 0\nvendor_id\t: GenuineIntel\nmodel name\t: FIXTURE CPU sem AVX2\nflags\t\t: fpu sse2 sse4_1 sse4_2 avx popcnt\n\nprocessor\t: 1\nmodel name\t: FIXTURE CPU sem AVX2\nflags\t\t: fpu sse2 sse4_1 sse4_2 avx popcnt\n",
