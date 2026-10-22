@@ -154,7 +154,7 @@ func (d *DB) SaveHardware(origin string, payload any) (int64, error) {
 }
 
 // TableNames lista as tabelas exportáveis.
-var ExportTables = []string{"hardware_snapshots", "sources", "tools", "experiments", "evidences", "results", "command_log"}
+var ExportTables = []string{"hardware_snapshots", "sources", "tools", "experiments", "evidences", "results", "command_log", "source_verifications", "commit_findings"}
 
 // ExportJSON escreve todas as tabelas como {tabela: [linhas]}.
 func (d *DB) ExportJSON(w io.Writer) error {

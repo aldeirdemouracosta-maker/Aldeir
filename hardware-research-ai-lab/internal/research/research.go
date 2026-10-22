@@ -15,6 +15,7 @@ import (
 // Verificação de uma fonte.
 const (
 	NaoVerificado = "nao_verificado"
+	Parcial       = "parcial" // existe e responde, mas sem histórico/licença confirmados
 	Verificado    = "verificado"
 )
 
@@ -110,11 +111,12 @@ func Validate(s Source) []string {
 		if s.Verification.CheckedAt == nil || s.LastCommitConsulted == nil && s.HostKind != "web" {
 			p = append(p, idOr(s)+": fonte 'verificado' exige checked_at e (para repositórios) last_commit_consulted")
 		}
+	case Parcial:
+		if s.Verification.CheckedAt == nil {
+			p = append(p, idOr(s)+": fonte 'parcial' exige checked_at")
+		}
 	default:
 		p = append(p, fmt.Sprintf("%s: verification.status %q inválido", idOr(s), s.Verification.Status))
-	}
-	if !s.LicenseVerified && s.Verification.Status == Verificado {
-		p = append(p, idOr(s)+": fonte verificada com licença não verificada")
 	}
 	return p
 }

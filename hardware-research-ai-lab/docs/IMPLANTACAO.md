@@ -18,3 +18,12 @@ salve `reports/` em outro pen drive.
 
 ## Integração com o Peregrinus OS
 Futura, por contrato JSON (`hardware inspect`, exportação do banco). O HRAIL permanece independente.
+
+## Windows
+O binário `hrail` e os scripts `.sh` **não funcionam no Windows** (a coleta depende de `/proc` e `/sys`).
+Opções:
+1. **Coletor PowerShell** (somente leitura, sem administrador): `powershell -ExecutionPolicy Bypass -File scripts\coletar-windows.ps1`
+   gera `reports\hardware_windows.json` (CPU/AVX2, GPU com PCI ID e revisão, driver, RAM, discos, `vulkaninfo` se existir).
+   Formato diferente do inventário Linux; serve para validar o perfil da RX 580 2048SP. **Não foi testado em Windows real** (sem PowerShell no ambiente de criação).
+2. **Ubuntu Live no pen drive** (recomendado para o laboratório completo): inicia o Linux sem instalar, com amdgpu/Mesa, e roda o HRAIL de verdade.
+3. WSL2 **não serve** para inspecionar a GPU: expõe uma GPU virtual (`/dev/dxg`), sem PCI/sysfs reais do amdgpu.

@@ -86,6 +86,11 @@ func (r *Runner) LookPath(name string) (string, error) {
 // diferente de zero NÃO é erro de Go: fica em Result.ExitCode.
 // Erro é retornado apenas se o processo não pôde ser iniciado.
 func (r *Runner) Run(ctx context.Context, name string, args ...string) (Result, error) {
+	return r.RunWith(ctx, r.Timeout, name, args...)
+}
+
+// RunWith é como Run, mas com timeout específico (ex.: operações de rede explícitas).
+func (r *Runner) RunWith(ctx context.Context, timeout time.Duration, name string, args ...string) (Result, error) {
 	rec := CommandRecord{Time: time.Now().UTC(), Command: name, Args: args, ExitCode: -1}
 	finish := func(res Result, err error) (Result, error) {
 		if err != nil {
@@ -114,7 +119,6 @@ func (r *Runner) Run(ctx context.Context, name string, args ...string) (Result, 
 		setDur()
 		return finish(Result{ExitCode: -1}, err)
 	}
-	timeout := r.Timeout
 	if timeout <= 0 {
 		timeout = 10 * time.Second
 	}
@@ -122,7 +126,7 @@ func (r *Runner) Run(ctx context.Context, name string, args ...string) (Result, 
 	defer cancel()
 
 	cmd := exec.CommandContext(cctx, path, args...)
-	cmd.Env = append(os.Environ(), "LC_ALL=C", "LANG=C")
+	cmd.Env = append(os.Environ(), "LC_ALL=C", "LANG=C", "GIT_TERMINAL_PROMPT=0")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.WaitDelay = 500 * time.Millisecond

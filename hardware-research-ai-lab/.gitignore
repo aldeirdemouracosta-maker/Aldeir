@@ -2,3 +2,4 @@ bin/
 data/*.db
 data/*.db-*
 reports/relatorio_*
+data/clones/
