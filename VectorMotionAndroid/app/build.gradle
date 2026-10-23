@@ -13,8 +13,8 @@ android {
         applicationId 'app.vectormotion.studio'
         minSdk 29        // Android 10
         targetSdk 36     // Android 16; continua instalando a partir do Android 10
-        versionCode 1
-        versionName '0.1.0'
+        versionCode 2
+        versionName '0.1.1'
         ndk { abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64' }
         externalNativeBuild { cmake { arguments '-DANDROID_STL=c++_static' } }
     }

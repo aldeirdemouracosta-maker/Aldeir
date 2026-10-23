@@ -15,6 +15,7 @@ import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 /**
@@ -33,11 +34,18 @@ public class MainActivity extends Activity {
     private boolean splashDone;
     private boolean asked;
     private boolean pending;   // diálogo de permissão aberto
+    private boolean reportMode;   // mostrando o relatório de travamento
 
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         Theme.init(this);
+        // Se a última execução travou, mostra o motivo em vez de abrir (e travar de novo)
+        final String report = CrashReporter.pending(this);
+        if (report != null) {
+            showReport("O app travou na última vez", report);
+            return;
+        }
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         immersive();
         asked = b != null && b.getBoolean(KEY_ASKED, false);
@@ -85,20 +93,88 @@ public class MainActivity extends Activity {
     }
 
     private void enterIfReady() {
-        if (!splashDone || studio != null || pending) return;   // espera o resultado do diálogo
+        if (reportMode || !splashDone || studio != null || pending) return;   // espera o resultado do diálogo
         if (hasCamera()) {
             if (denied != null) {
                 root.removeView(denied);
                 denied = null;
             }
-            studio = new StudioView(this);
-            root.addView(studio, 0, new FrameLayout.LayoutParams(-1, -1));
-            root.removeView(splash);
-            studio.onResume();
-            studio.requestApplyInsets();
+            if (!NativeCore.LOADED) {
+                showReport("A biblioteca nativa não carregou", CrashReporter.device() + "\n" + NativeCore.LOAD_ERROR);
+                return;
+            }
+            try {
+                studio = new StudioView(this);
+                root.addView(studio, 0, new FrameLayout.LayoutParams(-1, -1));
+                root.removeView(splash);
+                studio.onResume();
+                studio.requestApplyInsets();
+            } catch (Throwable t) {
+                studio = null;
+                final java.io.StringWriter sw = new java.io.StringWriter();
+                t.printStackTrace(new java.io.PrintWriter(sw));
+                showReport("Falha ao abrir o estúdio", CrashReporter.device() + "\n" + sw);
+            }
         } else if (denied == null) {
             showDenied();
         }
+    }
+
+    /** Tela de diagnóstico: texto selecionável + botão de compartilhar, para o usuário me enviar o erro sem computador. */
+    private void showReport(String title, String text) {
+        reportMode = true;
+        final LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        col.setBackgroundColor(Theme.BG);
+        col.setOnApplyWindowInsetsListener((v, insets) -> {
+            int t = 0, bt = 0;
+            if (Build.VERSION.SDK_INT >= 30) {
+                final android.graphics.Insets i = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+                t = i.top;
+                bt = i.bottom;
+            }
+            v.setPadding(Theme.dpi(16), Theme.dpi(16) + t, Theme.dpi(16), Theme.dpi(16) + bt);
+            return insets;
+        });
+        col.setPadding(Theme.dpi(16), Theme.dpi(48), Theme.dpi(16), Theme.dpi(16));
+        final TextView h = Theme.label(this, title, 20, Theme.RED);
+        h.setTypeface(Theme.display());
+        h.setGravity(Gravity.START);
+        col.addView(h, new LinearLayout.LayoutParams(-1, -2));
+        final TextView hint = Theme.label(this, "Compartilhe este texto com quem está corrigindo o app.", 11, Theme.GOLD);
+        hint.setAllCaps(false);
+        hint.setGravity(Gravity.START);
+        final LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(-1, -2);
+        hp.topMargin = Theme.dpi(6);
+        col.addView(hint, hp);
+        final ScrollView sv = new ScrollView(this);
+        final TextView body = new TextView(this);
+        body.setText(text);
+        body.setTextColor(Theme.TEXT);
+        body.setTextSize(11);
+        body.setTypeface(android.graphics.Typeface.MONOSPACE);
+        body.setTextIsSelectable(true);
+        sv.addView(body);
+        final LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, 0, 1f);
+        sp.topMargin = Theme.dpi(12);
+        col.addView(sv, sp);
+        final PillButton share = new PillButton(this, "Compartilhar relatório", true);
+        share.setOnClickListener(v -> {
+            final Intent i = new Intent(Intent.ACTION_SEND);
+            i.setType("text/plain");
+            i.putExtra(Intent.EXTRA_TEXT, text);
+            startActivity(Intent.createChooser(i, "Enviar relatório"));
+        });
+        final LinearLayout.LayoutParams a = new LinearLayout.LayoutParams(-1, -2);
+        a.topMargin = Theme.dpi(10);
+        col.addView(share, a);
+        final PillButton retry = new PillButton(this, "Tentar abrir de novo", false);
+        retry.setOnClickListener(v -> {
+            CrashReporter.clear(this);
+            recreate();
+        });
+        col.addView(retry, a);
+        setContentView(col);
     }
 
     private void showDenied() {
@@ -129,6 +205,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (reportMode) return;
         immersive();
         if (studio != null) studio.onResume();
         else enterIfReady();   // voltou das configurações com a permissão liberada
@@ -170,7 +247,7 @@ public class MainActivity extends Activity {
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        if (hasFocus) immersive();
+        if (hasFocus && !reportMode) immersive();
     }
 
     @SuppressWarnings("deprecation")

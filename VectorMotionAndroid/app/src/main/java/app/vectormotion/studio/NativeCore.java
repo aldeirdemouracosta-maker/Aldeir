@@ -6,8 +6,21 @@ import java.nio.ByteBuffer;
 
 /** Ponte JNI para o núcleo C++ (linha do tempo, efeitos CGI, conversão YUV). */
 final class NativeCore {
+    /** false se a biblioteca nativa não carregou (ex.: processador sem build); o motivo fica em LOAD_ERROR. */
+    static final boolean LOADED;
+    static final String LOAD_ERROR;
+
     static {
-        System.loadLibrary("vmcore");
+        boolean ok = false;
+        String err = null;
+        try {
+            System.loadLibrary("vmcore");
+            ok = true;
+        } catch (Throwable t) {
+            err = t.toString();
+        }
+        LOADED = ok;
+        LOAD_ERROR = err;
     }
 
     static final int FX_NONE = 0, FX_HERO = 1, FX_ENERGY = 2, FX_COSMIC = 3, FX_NOIR = 4;

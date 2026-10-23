@@ -2,7 +2,7 @@
 """Gera a arte de herói do app a partir de UMA descrição vetorial:
 
   * docs/mockup/hero_scene.svg                      (usada no mockup HTML)
-  * app/src/main/res/drawable/hero_scene.xml        (VectorDrawable usado na abertura do app)
+  * (o app usa app/src/main/res/drawable-nodpi/hero_scene.webp, gerado por tools/render_hero_webp.py)
 
 Cena: pistoleiro de sobretudo e óculos escuros, de cabeça para baixo em "bullet time", atirando com duas
 submetralhadoras contra um ciborgue de jaqueta e óculos escuros com uma escopeta calibre 12; chuva, cidade
@@ -443,5 +443,5 @@ if __name__ == "__main__":
     build()
     os.makedirs(os.path.join(ROOT, "docs/mockup"), exist_ok=True)
     write_svg(os.path.join(ROOT, "docs/mockup/hero_scene.svg"))
-    write_vd(os.path.join(ROOT, "app/src/main/res/drawable/hero_scene.xml"))
+    # o app usa o WebP gerado por tools/render_hero_webp.py (um VectorDrawable de 485 formas é pesado e arriscado)
     print("paths:", len(nodes), "gradientes:", len(defs))

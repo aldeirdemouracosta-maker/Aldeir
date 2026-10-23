@@ -10,7 +10,6 @@ import android.graphics.LinearGradient;
 import android.graphics.RadialGradient;
 import android.graphics.RectF;
 import android.graphics.Shader;
-import android.graphics.drawable.Drawable;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.animation.DecelerateInterpolator;
@@ -54,18 +53,18 @@ final class SplashView extends View {
         final Context ctx = getContext();
         new Thread(() -> {
             try {
-                final Drawable d = ctx.getDrawable(R.drawable.hero_scene);
-                if (d == null) return;
+                final Bitmap src = android.graphics.BitmapFactory.decodeResource(ctx.getResources(), R.drawable.hero_scene);
+                if (src == null) return;
                 final Bitmap b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
                 final Canvas c = new Canvas(b);
-                final float k = Math.max(w / 540f, h / 960f);
-                c.translate((w - 540 * k) / 2f, (h - 960 * k) / 2f);
+                final float k = Math.max(w / (float) src.getWidth(), h / (float) src.getHeight());
+                c.translate((w - src.getWidth() * k) / 2f, (h - src.getHeight() * k) / 2f);
                 c.scale(k, k);
-                d.setBounds(0, 0, 540, 960);
-                d.draw(c);
+                c.drawBitmap(src, 0, 0, new Paint(Paint.FILTER_BITMAP_FLAG));
+                src.recycle();
                 art = b;
                 postInvalidate();
-            } catch (RuntimeException | OutOfMemoryError e) {
+            } catch (Throwable e) {
                 // sem arte: a abertura segue só com os efeitos
             }
         }, "hero-art").start();

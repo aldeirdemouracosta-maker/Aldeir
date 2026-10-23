@@ -185,7 +185,11 @@ final class StudioView extends FrameLayout implements TextureView.SurfaceTexture
         panel = new Panel(a);
         final ImageView placeholder = new ImageView(a);   // arte de herói até a câmera entregar o 1º frame
         placeholder.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        placeholder.setImageDrawable(a.getDrawable(R.drawable.hero_scene));
+        try {
+            placeholder.setImageResource(R.drawable.hero_scene);
+        } catch (Throwable ignored) {
+            // sem a arte: fica o fundo escuro até a câmera abrir
+        }
         placeholder.setAlpha(0.55f);
         panel.addView(placeholder, new LayoutParams(-1, -1));
         texture = new TextureView(a);
