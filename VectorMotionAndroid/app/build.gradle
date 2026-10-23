@@ -7,12 +7,12 @@ def faceSwap = (project.findProperty('faceSwap') ?: 'false') != 'false'
 
 android {
     namespace 'app.vectormotion.studio'
-    compileSdk 35
+    compileSdk 36
 
     defaultConfig {
         applicationId 'app.vectormotion.studio'
         minSdk 29        // Android 10
-        targetSdk 29     // alvo único: Android 10
+        targetSdk 36     // Android 16; continua instalando a partir do Android 10
         versionCode 1
         versionName '0.1.0'
         ndk { abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64' }

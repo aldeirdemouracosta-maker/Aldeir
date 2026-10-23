@@ -9,6 +9,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Insets;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Rect;
@@ -380,7 +381,18 @@ final class StudioView extends FrameLayout implements TextureView.SurfaceTexture
         addView(bottom, new LayoutParams(-1, -2, Gravity.BOTTOM));
 
         setOnApplyWindowInsetsListener((v, insets) -> {
-            applyInsets(insets.getSystemWindowInsetTop(), insets.getSystemWindowInsetBottom());
+            int top, bot;
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                // ignora se as barras estão visíveis agora: a tela não "pula" quando o usuário puxa a barra
+                final Insets bars = insets.getInsetsIgnoringVisibility(WindowInsets.Type.systemBars());
+                final Insets cut = insets.getInsets(WindowInsets.Type.displayCutout());
+                top = Math.max(bars.top, cut.top);
+                bot = Math.max(bars.bottom, cut.bottom);
+            } else {
+                top = insets.getSystemWindowInsetTop();
+                bot = insets.getSystemWindowInsetBottom();
+            }
+            applyInsets(top, bot);
             return insets;
         });
         applyInsets(0, 0);

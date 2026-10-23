@@ -1,4 +1,4 @@
-# Vector Motion — estúdio de stop-motion/CGI para Shorts e TikTok (Android 10)
+# Vector Motion — estúdio de stop-motion/CGI para Shorts e TikTok (Android 10 a 16)
 
 Derivado do *VectorMotion OS v1.0-rc1* (C++ embarcado). Aqui só ficou o que faz sentido num celular:
 o núcleo C++ portátil e um app Android nativo, **sem nenhuma dependência de terceiros** (nem AndroidX).
@@ -37,6 +37,12 @@ emite o SVG do mockup e o `VectorDrawable` do app a partir da mesma descrição.
 ## Próximos marcos
 
 - Trilha musical de fundo e transições de áudio.
+
+## Versões do Android
+
+Funciona do **Android 10 ao 16**. O app declara `targetSdk 36` (Android 16): aparelhos novos, como Poco/HyperOS com Android 16, rejeitam ou avisam sobre
+apps que miram versões antigas. Por isso o botão voltar usa o callback preditivo (`OnBackInvokedCallback`, API 33+) e as margens vêm dos *insets* da janela
+(tela cheia sob as barras do sistema). Nos Androids 10 a 12 continuam valendo `onBackPressed` e as bandeiras de tela cheia antigas.
 
 ## Permissões
 
