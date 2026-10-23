@@ -47,18 +47,21 @@ public class MainActivity extends Activity {
             return;
         }
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        immersive();
         asked = b != null && b.getBoolean(KEY_ASKED, false);
 
         root = new FrameLayout(this);
         root.setBackgroundColor(Theme.BG);
         setContentView(root);
         immersive();
-        if (Build.VERSION.SDK_INT >= 29) getWindow().setNavigationBarContrastEnforced(false);
-        if (Build.VERSION.SDK_INT >= 33) {
-            // Alvo API 36: o sistema não chama mais onBackPressed; o voltar chega por este callback
-            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
-                    android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBack);
+        try {
+            if (Build.VERSION.SDK_INT >= 29) getWindow().setNavigationBarContrastEnforced(false);
+            if (Build.VERSION.SDK_INT >= 33) {
+                // Alvo API 36: o sistema não chama mais onBackPressed; o voltar chega por este callback
+                getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                        android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBack);
+            }
+        } catch (RuntimeException ignored) {
+            // detalhe visual/de navegação: nunca vale travar o app por isso
         }
 
         splash = new SplashView(this);
@@ -252,21 +255,29 @@ public class MainActivity extends Activity {
 
     @SuppressWarnings("deprecation")
     private void immersive() {
-        if (Build.VERSION.SDK_INT >= 30) {
-            getWindow().setDecorFitsSystemWindows(false);
-            final WindowInsetsController c = getWindow().getInsetsController();
-            if (c != null) {   // null até a janela existir; é chamado de novo em onResume/foco
-                c.hide(WindowInsets.Type.systemBars());
-                c.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        try {
+            if (Build.VERSION.SDK_INT >= 30) {
+                final android.view.Window w = getWindow();
+                w.setDecorFitsSystemWindows(false);
+                // Instala a janela antes: no Android 16 getInsetsController() não faz isso mais e devolvia NPE
+                // (era o travamento ao abrir no Poco).
+                w.getDecorView();
+                final WindowInsetsController c = w.getInsetsController();
+                if (c != null) {
+                    c.hide(WindowInsets.Type.systemBars());
+                    c.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                }
+            } else {
+                getWindow().getDecorView().setSystemUiVisibility(
+                        View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                                | View.SYSTEM_UI_FLAG_FULLSCREEN
+                                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
             }
-        } else {
-            getWindow().getDecorView().setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                            | View.SYSTEM_UI_FLAG_FULLSCREEN
-                            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+        } catch (RuntimeException ignored) {
+            // as barras do sistema ficam visíveis; o app continua funcionando
         }
     }
 }

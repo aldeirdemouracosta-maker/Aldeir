@@ -34,6 +34,16 @@ jobs:
         with:
           gradle-version: '8.11.1'
 
+      # Abre o app com o framework real do Android 16 e do 10 (Robolectric). Não bloqueia o APK enquanto o teste amadurece:
+      # o resultado aparece no log e no resumo da execução.
+      - name: Teste de abertura (Android 10 e 16)
+        id: launch
+        continue-on-error: true
+        run: gradle --no-daemon :app:testDebugUnitTest --stacktrace
+
+      - name: Resultado do teste de abertura
+        run: echo "teste de abertura -> ${{ steps.launch.outcome }}" | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Compilar APKs (NDK + CMake)
         run: gradle --no-daemon :app:assembleDebug :app:assembleRelease --stacktrace
 
