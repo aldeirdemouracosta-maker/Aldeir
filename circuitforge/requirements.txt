@@ -1,0 +1,26 @@
+# CircuitForge – EWB 2.0
+# Core simulation
+PySpice>=1.5
+# ngspice: pacote de SISTEMA (sudo apt install ngspice), não é instalado via pip
+matplotlib>=3.8
+numpy>=1.26
+pandas>=2.1
+scipy>=1.11
+
+# Interface
+streamlit>=1.50
+plotly>=5.22
+
+# LLM local leve
+ollama>=0.4.0
+
+# Utilidades
+pillow>=10.0
+pydantic>=2.0
+python-dotenv>=1.0
+rich>=13.0
+
+# Testes
+pytest>=8.0
+
+# Relatórios (opcional): pip install weasyprint markdown

@@ -1,0 +1,18 @@
+# Dependências extras só para fine-tune (não necessárias para rodar o CircuitForge)
+# Escolha UMA das duas abordagens:
+
+# --- Opção A: Unsloth (recomendado para GPU única e modelos leves) ---
+# unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git
+# trl<0.9.0
+# peft
+# accelerate
+# bitsandbytes
+# datasets
+
+# --- Opção B: LLaMA-Factory (WebUI + muitos modelos) ---
+# llamafactory[torch,metrics]
+
+# Comum
+datasets
+transformers
+torch
