@@ -1,0 +1,23 @@
+#!/bin/bash
+# Ajustes finais: PySide6 (se o apt nao instalou), locale, servicos e limpeza.
+set -euo pipefail
+
+if ! python3 -c "import PySide6.QtWidgets" 2>/dev/null; then
+    echo "[rea] PySide6 nao veio pelo apt; instalando em /opt/rea/venv via pip..."
+    python3 -m venv /opt/rea/venv
+    /opt/rea/venv/bin/pip install --no-cache-dir PySide6-Essentials
+fi
+
+sed -i 's/^# *pt_BR.UTF-8/pt_BR.UTF-8/' /etc/locale.gen
+locale-gen
+update-locale LANG=pt_BR.UTF-8
+
+mkdir -p /modelos
+chmod +x /usr/local/bin/rea-* 2>/dev/null || true
+
+# pasta de modelos: monta a particao com rotulo MODELOS se existir (unidade modelos.mount, nofail)
+systemctl enable modelos.mount || echo "[rea] AVISO: nao habilitei modelos.mount"
+systemctl enable rea-modelos-dir.service || echo "[rea] AVISO: nao habilitei rea-modelos-dir.service"
+
+apt-get clean
+rm -rf /var/lib/apt/lists/* /tmp/* /root/.cache

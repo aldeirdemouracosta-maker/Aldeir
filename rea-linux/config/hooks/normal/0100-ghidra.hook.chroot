@@ -1,0 +1,39 @@
+#!/bin/bash
+# Ghidra 12.1.4 + GhidraMCP 2.0 (versoes fixas: o GhidraMCP 2.0 e feito para o 12.1.4).
+set -euo pipefail
+
+GHIDRA_VER="12.1.4"
+GHIDRA_URL="https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1.4_build/ghidra_12.1.4_PUBLIC_20260921.zip"
+GHIDRA_SHA256="ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db"
+MCP_SHA256="ebf904fd6782e429e95a60a24fe0724b20c0acb2dedb304135a5281f6b5f2e72"
+MCP_URL="https://github.com/LaurieWired/GhidraMCP/releases/download/2.0/GhidraMCP-release-2-0.zip"
+
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+
+echo "[rea] Baixando Ghidra ${GHIDRA_VER}..."
+curl -fL --retry 3 -o "$TMP/ghidra.zip" "$GHIDRA_URL"
+echo "$GHIDRA_SHA256  $TMP/ghidra.zip" | sha256sum -c -
+mkdir -p /opt/ghidra
+unzip -q "$TMP/ghidra.zip" -d /opt/ghidra
+ln -sfn "/opt/ghidra/ghidra_${GHIDRA_VER}_PUBLIC" /opt/ghidra/atual
+test -f /opt/ghidra/atual/support/launch.properties
+ln -sf /opt/ghidra/atual/ghidraRun /usr/local/bin/ghidra
+
+echo "[rea] Baixando GhidraMCP 2.0..."
+curl -fL --retry 3 -o "$TMP/mcp.zip" "$MCP_URL"
+echo "$MCP_SHA256  $TMP/mcp.zip" | sha256sum -c -
+mkdir -p /opt/ghidra-mcp
+unzip -q -j "$TMP/mcp.zip" -d /opt/ghidra-mcp
+
+EXT_ZIP="$(ls /opt/ghidra-mcp/ghidra_${GHIDRA_VER}_PUBLIC_*_GhidraMCP.zip)"
+# extensao pronta para o modo headless (--extension-jar)
+mkdir -p /opt/ghidra-mcp/ext
+unzip -q "$EXT_ZIP" -d /opt/ghidra-mcp/ext
+# extensao instalada no perfil padrao de todo usuario novo (modo com janela)
+SKEL_EXT="/etc/skel/.config/ghidra/ghidra_${GHIDRA_VER}_PUBLIC/Extensions"
+mkdir -p "$SKEL_EXT"
+unzip -q "$EXT_ZIP" -d "$SKEL_EXT"
+test -f "$SKEL_EXT/GhidraMCP/extension.properties"
+
+echo "[rea] Ghidra + GhidraMCP instalados."

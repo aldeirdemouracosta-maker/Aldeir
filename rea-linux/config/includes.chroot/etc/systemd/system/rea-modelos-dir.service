@@ -1,0 +1,13 @@
+[Unit]
+Description=Prepara /modelos/ollama para o Ollama
+After=modelos.mount local-fs.target
+Wants=modelos.mount
+Before=ollama.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/install -d -o ollama -g ollama -m 0755 /modelos/ollama
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

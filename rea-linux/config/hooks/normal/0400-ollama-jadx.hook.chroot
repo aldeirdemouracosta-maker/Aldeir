@@ -1,0 +1,36 @@
+#!/bin/bash
+# Ollama (binario oficial, sem o script que tenta detectar a GPU da maquina de build) + JADX.
+set -euo pipefail
+
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+
+echo "[rea] Baixando Ollama para Linux..."
+if curl -fL --retry 3 -o "$TMP/ollama.tar.zst" "https://ollama.com/download/ollama-linux-amd64.tar.zst"; then
+    tar --zstd -xf "$TMP/ollama.tar.zst" -C /usr/local
+else
+    curl -fL --retry 3 -o "$TMP/ollama.tgz" "https://ollama.com/download/ollama-linux-amd64.tgz"
+    tar -xzf "$TMP/ollama.tgz" -C /usr/local
+fi
+# a RX 580 usa Vulkan: as bibliotecas CUDA so aumentam a ISO
+rm -rf /usr/local/lib/ollama/cuda_* /usr/local/lib/ollama/mlx_* 2>/dev/null || true
+ls /usr/local/lib/ollama | grep -qi vulkan || echo "[rea] AVISO: backend Vulkan do Ollama nao encontrado em /usr/local/lib/ollama"
+/usr/local/bin/ollama --version || true
+
+# usuario de servico do Ollama, com acesso a GPU
+if ! id ollama >/dev/null 2>&1; then
+    useradd -r -s /usr/sbin/nologin -U -m -d /usr/share/ollama ollama
+fi
+usermod -a -G render,video ollama || true
+systemctl enable ollama.service || echo "[rea] AVISO: nao habilitei ollama.service"
+
+echo "[rea] Baixando JADX (ultima versao)..."
+URL_JADX="$(curl -fsSL https://api.github.com/repos/skylot/jadx/releases/latest \
+    | grep -oE '"browser_download_url": *"[^"]*/jadx-[0-9.]+\.zip"' | head -n1 | cut -d'"' -f4)"
+test -n "$URL_JADX"
+curl -fL --retry 3 -o "$TMP/jadx.zip" "$URL_JADX"
+mkdir -p /opt/jadx
+unzip -q "$TMP/jadx.zip" -d /opt/jadx
+chmod +x /opt/jadx/bin/*
+ln -sf /opt/jadx/bin/jadx /usr/local/bin/jadx
+ln -sf /opt/jadx/bin/jadx-gui /usr/local/bin/jadx-gui

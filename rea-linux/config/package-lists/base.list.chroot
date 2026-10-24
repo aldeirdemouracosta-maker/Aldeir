@@ -1,0 +1,72 @@
+# ---- Sistema live / base ----
+live-boot
+live-config
+live-config-systemd
+systemd-sysv
+sudo
+locales
+console-setup
+keyboard-configuration
+tzdata
+network-manager
+ca-certificates
+curl
+wget
+git
+unzip
+zstd
+xz-utils
+file
+less
+nano
+htop
+pciutils
+polkitd
+
+# ---- GPU: RX 580 (computacao via Vulkan) + GT 210 (video) ----
+firmware-amd-graphics
+firmware-misc-nonfree
+firmware-linux-free
+mesa-vulkan-drivers
+libvulkan1
+vulkan-tools
+
+# ---- Interface minima: Xorg + Openbox ----
+xserver-xorg-core
+xserver-xorg-input-libinput
+xserver-xorg-video-amdgpu
+xserver-xorg-video-nouveau
+xserver-xorg-video-fbdev
+xinit
+x11-xserver-utils
+openbox
+xterm
+fonts-dejavu-core
+
+# ---- Java e Python ----
+openjdk-21-jdk
+python3
+python3-venv
+python3-pip
+
+# ---- Ferramentas de engenharia reversa do Debian ----
+binwalk
+adb
+apktool
+gdb
+binutils
+
+# ---- Rede, microcodigo e fontes (melhorias) ----
+network-manager-gnome
+firmware-realtek
+firmware-iwlwifi
+firmware-atheros
+intel-microcode
+amd64-microcode
+fonts-liberation
+fonts-noto-core
+zram-tools
+dbus-x11
+xdg-utils
+qemu-guest-agent
+spice-vdagent

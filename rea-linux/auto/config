@@ -1,0 +1,22 @@
+#!/bin/sh
+# Configuracao do live-build para o REA Linux (Debian 13 "trixie", amd64).
+# Executado automaticamente por "lb config".
+set -e
+
+lb config noauto \
+    --distribution trixie \
+    --architectures amd64 \
+    --archive-areas "main contrib non-free non-free-firmware" \
+    --apt-recommends false \
+    --binary-images iso-hybrid \
+    --iso-application "REA Linux" \
+    --iso-volume "REA_LINUX" \
+    --iso-publisher "REA-Laboratorio" \
+    --memtest none \
+    --chroot-squashfs-compression-type xz \
+    --firmware-binary true \
+    --firmware-chroot true \
+    --debian-installer live \
+    --debian-installer-gui false \
+    --bootappend-live "boot=live components persistence console=ttyS0,115200 console=tty0 username=rea hostname=rea-linux locales=pt_BR.UTF-8 keyboard-layouts=br timezone=America/Sao_Paulo" \
+    "${@}"

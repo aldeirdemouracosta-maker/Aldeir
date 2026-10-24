@@ -1,0 +1,41 @@
+#!/bin/bash
+# Atualiza as ferramentas que mudam rapido (REA, Codex, ghidra-mcp do Python, pwntools, Ollama).
+# Ghidra e a extensao GhidraMCP ficam FIXOS (12.1.4 + 2.0) de proposito.
+set -uo pipefail
+
+pausa() { echo; read -r -p "Enter para fechar." _ || true; }
+
+if [ "$(id -u)" -ne 0 ]; then
+    exec sudo "$0" "$@"
+fi
+
+export UV_TOOL_DIR=/opt/uv-tools UV_TOOL_BIN_DIR=/usr/local/bin UV_PYTHON_PREFERENCE=only-system
+
+echo "== Sistema (apt) =="
+apt-get update && apt-get -y upgrade
+
+echo "== REA =="
+npm install -g rea-agents --allow-scripts=frida 2>/dev/null || npm install -g rea-agents
+rea --version || true
+
+if [ -e /opt/node/bin/codex ]; then
+    echo "== Codex CLI =="
+    npm install -g @openai/codex
+fi
+
+echo "== Ferramentas Python (uv) =="
+uv tool upgrade --all || true
+
+echo "== Ollama =="
+TMP="$(mktemp -d)"
+if curl -fL --retry 3 -o "$TMP/o.tar.zst" https://ollama.com/download/ollama-linux-amd64.tar.zst; then
+    systemctl stop ollama
+    tar --zstd -xf "$TMP/o.tar.zst" -C /usr/local
+    systemctl start ollama
+fi
+rm -rf "$TMP"
+/usr/local/bin/ollama --version || true
+
+echo
+echo "Atualizacao concluida."
+pausa

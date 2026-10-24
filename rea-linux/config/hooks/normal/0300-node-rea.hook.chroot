@@ -1,0 +1,34 @@
+#!/bin/bash
+# Node.js 24 (tarball oficial) + rea-agents (com Frida) + Codex CLI.
+set -euo pipefail
+
+NODE_BASE="https://nodejs.org/dist/latest-v24.x"
+INSTALAR_CODEX="${INSTALAR_CODEX:-1}"
+
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+
+echo "[rea] Descobrindo versao mais recente do Node 24..."
+ARQ="$(curl -fsSL "$NODE_BASE/SHASUMS256.txt" | awk '/linux-x64\.tar\.xz$/ {print $2; exit}')"
+SHA="$(curl -fsSL "$NODE_BASE/SHASUMS256.txt" | awk -v f="$ARQ" '$2==f {print $1}')"
+test -n "$ARQ"
+curl -fL --retry 3 -o "$TMP/$ARQ" "$NODE_BASE/$ARQ"
+echo "$SHA  $TMP/$ARQ" | sha256sum -c -
+
+mkdir -p /opt/node
+tar -xJf "$TMP/$ARQ" -C /opt/node --strip-components=1
+for b in node npm npx; do ln -sf "/opt/node/bin/$b" "/usr/local/bin/$b"; done
+node --version
+
+echo "[rea] Instalando rea-agents (com script de instalacao do Frida liberado)..."
+npm install -g rea-agents --allow-scripts=frida 2>/dev/null || npm install -g rea-agents
+ln -sf /opt/node/bin/rea /usr/local/bin/rea
+rea --version || true
+
+if [ "$INSTALAR_CODEX" = "1" ]; then
+    echo "[rea] Instalando Codex CLI..."
+    npm install -g @openai/codex || echo "[rea] AVISO: Codex CLI falhou; instale depois com: npm install -g @openai/codex"
+    [ -e /opt/node/bin/codex ] && ln -sf /opt/node/bin/codex /usr/local/bin/codex
+fi
+
+npm cache clean --force

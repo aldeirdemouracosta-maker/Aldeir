@@ -1,0 +1,4 @@
+#!/bin/bash
+# Abre o Painel REA com o Python que tem PySide6 (apt ou venv de reserva).
+[ -f /etc/profile.d/rea.sh ] && . /etc/profile.d/rea.sh
+exec "${REA_PYTHON:-/usr/bin/python3}" /usr/local/lib/rea/painel.py "$@"

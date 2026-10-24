@@ -1,0 +1,11 @@
+#!/bin/bash
+# Abre o Codex leve: modelo local (Qwen na RX 580) + so as ferramentas do ~/.codex/config.toml
+MODELO="${1:-qwen3-8b-gpu:latest}"
+mkdir -p "$HOME/rea-projetos"
+cd "$HOME/rea-projetos" || exit 1
+echo "Codex leve com $MODELO. Digite os pedidos aqui. Para sair: /quit"
+echo "Exemplo: Chame a ferramenta MCP ghidra.list_functions com offset 0 e limit 10."
+echo
+codex --oss -m "$MODELO"
+echo
+read -r -p "Codex encerrado. Enter para fechar." _

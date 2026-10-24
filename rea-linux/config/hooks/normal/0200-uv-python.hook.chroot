@@ -1,0 +1,29 @@
+#!/bin/bash
+# uv + ferramentas Python isoladas: ghidra-mcp (com modo headless) e pwntools.
+set -euo pipefail
+
+UV_URL="https://github.com/astral-sh/uv/releases/latest/download/uv-x86_64-unknown-linux-gnu.tar.gz"
+
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+
+echo "[rea] Instalando uv..."
+curl -fL --retry 3 -o "$TMP/uv.tgz" "$UV_URL"
+tar -xzf "$TMP/uv.tgz" -C "$TMP"
+install -m 0755 "$TMP"/uv-x86_64-unknown-linux-gnu/uv  /usr/local/bin/uv
+install -m 0755 "$TMP"/uv-x86_64-unknown-linux-gnu/uvx /usr/local/bin/uvx
+
+# ferramentas em /opt/uv-tools, comandos em /usr/local/bin (para todos os usuarios)
+export UV_TOOL_DIR=/opt/uv-tools
+export UV_TOOL_BIN_DIR=/usr/local/bin
+export UV_PYTHON_PREFERENCE=only-system
+
+WHEEL="$(ls /opt/ghidra-mcp/ghidra_mcp-*.whl | head -n1)"
+echo "[rea] Instalando servidor ghidra-mcp a partir de $WHEEL ..."
+uv tool install --force "ghidra-mcp[headless] @ file://${WHEEL}"
+
+echo "[rea] Instalando pwntools..."
+uv tool install --force pwntools || echo "[rea] AVISO: pwntools falhou; instale depois com: uv tool install pwntools"
+
+chmod -R a+rX /opt/uv-tools
+command -v ghidra-mcp

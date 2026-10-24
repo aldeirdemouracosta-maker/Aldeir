@@ -1,0 +1,20 @@
+# Codex enxuto do REA Linux: so as ferramentas necessarias, para caber no contexto do modelo local.
+# O bloco entre as marcas rea-painel e reescrito pelo Painel REA (modo janela / modo headless).
+model = "qwen3-8b-gpu:latest"
+
+# >>> rea-painel
+# modo: janela
+[mcp_servers.ghidra]
+command = "/usr/local/bin/ghidra-mcp"
+args = ["--ghidra-server", "http://127.0.0.1:8080/"]
+enabled_tools = ["get_program_info", "list_functions", "search_functions_by_name", "decompile_function", "decompile_function_by_address", "get_xrefs_to", "list_strings", "list_imports", "rename_function", "set_decompiler_comment"]
+startup_timeout_sec = 60
+tool_timeout_sec = 180
+
+[mcp_servers.rea]
+command = "/usr/local/bin/rea"
+args = ["mcp"]
+enabled_tools = ["binary_session"]
+startup_timeout_sec = 30
+tool_timeout_sec = 120
+# <<< rea-painel

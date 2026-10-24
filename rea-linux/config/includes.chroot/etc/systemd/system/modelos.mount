@@ -1,0 +1,13 @@
+[Unit]
+Description=Particao de modelos de IA (rotulo MODELOS), se existir
+# Sem a particao, nada acontece: os modelos ficam em /modelos no proprio sistema.
+ConditionPathExists=/dev/disk/by-label/MODELOS
+
+[Mount]
+What=/dev/disk/by-label/MODELOS
+Where=/modelos
+Type=ext4
+Options=defaults,nofail
+
+[Install]
+WantedBy=multi-user.target

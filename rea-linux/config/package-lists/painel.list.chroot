@@ -1,0 +1,16 @@
+# PySide6 pelo apt (mais leve que o pip). Se o build falhar aqui,
+# apague este arquivo: o hook 0500 instala o PySide6 via pip como alternativa.
+python3-pyside6.qtcore
+python3-pyside6.qtgui
+python3-pyside6.qtwidgets
+# libs que o Qt xcb exige (sem elas o painel nao abre com --apt-recommends false)
+libxcb-cursor0
+libxkbcommon-x11-0
+libxcb-icccm4
+libxcb-image0
+libxcb-keysyms1
+libxcb-render-util0
+libxcb-shape0
+libxcb-xkb1
+libxtst6
+libxrender1

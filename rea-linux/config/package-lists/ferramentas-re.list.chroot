@@ -1,0 +1,21 @@
+# Ferramentas de engenharia reversa extras (Debian trixie)
+radare2
+strace
+ltrace
+valgrind
+yara
+upx-ucl
+nasm
+build-essential
+xxd
+hexedit
+ripgrep
+jq
+tmux
+p7zip-full
+squashfs-tools
+qemu-user
+tshark
+smali
+apksigner
+scrcpy
