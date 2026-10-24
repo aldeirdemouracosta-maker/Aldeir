@@ -1,0 +1,6 @@
+pypdf>=6.0
+pypdfium2>=4.30
+Pillow>=10.0
+reportlab>=4.0
+# Janela nativa (Edge WebView2 no Windows). Sem ele o app abre no navegador.
+pywebview>=5.0; sys_platform == "win32"

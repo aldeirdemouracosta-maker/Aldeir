@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LumePDF</title>
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--text:#1d2233;--muted:#667;--line:#e2e5ef;--brand:#e5322d;--brand2:#c22420;--ok:#16794a}
+@media (prefers-color-scheme:dark){:root{--bg:#15171f;--card:#1f222d;--text:#eceef6;--muted:#9aa1b8;--line:#33384a;--brand:#ff5a54;--brand2:#e5322d;--ok:#4cc38a}}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.5 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--text)}
+header{display:flex;align-items:center;gap:12px;padding:14px 24px;background:var(--card);border-bottom:1px solid var(--line)}
+header h1{margin:0;font-size:20px;cursor:pointer}header h1 span{color:var(--brand)}
+header small{color:var(--muted)}
+main{max-width:1040px;margin:0 auto;padding:24px 16px 60px}
+.hero{text-align:center;margin:12px 0 28px}.hero h2{margin:0 0 6px;font-size:28px}.hero p{margin:0;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+.tool{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;text-align:left;cursor:pointer;color:inherit;font:inherit;transition:.15s}
+.tool:hover{border-color:var(--brand);transform:translateY(-2px)}
+.tool .ic{font-size:28px;display:block;margin-bottom:6px}.tool b{display:block}.tool span.d{color:var(--muted);font-size:13px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px}
+.back{background:none;border:0;color:var(--muted);cursor:pointer;font:inherit;margin-bottom:10px}
+.drop{border:2px dashed var(--line);border-radius:12px;padding:34px;text-align:center;color:var(--muted);cursor:pointer}
+.drop.over{border-color:var(--brand);background:rgba(229,50,45,.06)}
+.files{list-style:none;padding:0;margin:16px 0;display:grid;gap:8px}
+.files li{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.files img{width:40px;height:52px;object-fit:cover;border-radius:4px;background:var(--line)}
+.files .n{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.files .m{color:var(--muted);font-size:12px}
+.files button{border:0;background:none;cursor:pointer;color:var(--muted);font-size:16px}
+.opts{display:grid;gap:12px;margin:16px 0}
+.opts label{display:grid;gap:4px;font-weight:600;font-size:13px}
+.opts input,.opts select{padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font:inherit}
+.opts .hint{font-weight:400;color:var(--muted)}
+.go{background:var(--brand);color:#fff;border:0;border-radius:10px;padding:13px 26px;font:inherit;font-weight:700;cursor:pointer}
+.go:hover{background:var(--brand2)}.go:disabled{opacity:.5;cursor:default}
+.msg{margin-top:14px;padding:12px 14px;border-radius:10px}
+.msg.err{background:rgba(229,50,45,.12);color:var(--brand)}.msg.ok{background:rgba(22,121,74,.12);color:var(--ok)}
+.msg a{color:inherit;font-weight:700}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<header><h1 id="logo">Lume<span>PDF</span></h1><small>Todas as ferramentas de PDF, no seu computador. Nada é enviado para a internet.</small></header>
+<main>
+  <section id="home">
+    <div class="hero"><h2>Ferramentas de PDF</h2><p>Escolha uma ferramenta para começar.</p></div>
+    <div class="grid" id="grid"></div>
+  </section>
+  <section id="work" class="hidden">
+    <button class="back" id="back">← Todas as ferramentas</button>
+    <div class="panel">
+      <h2 id="tt" style="margin-top:0"></h2><p id="td" style="color:var(--muted)"></p>
+      <div class="drop" id="drop">Arraste os arquivos aqui ou <u>clique para escolher</u></div>
+      <input type="file" id="pick" class="hidden">
+      <ul class="files" id="files"></ul>
+      <div class="opts" id="opts"></div>
+      <button class="go" id="go" disabled>Processar</button>
+      <div id="out"></div>
+    </div>
+  </section>
+</main>
+<script>
+const $=s=>document.querySelector(s);
+const R={l:"Páginas",ph:"ex.: 1-3,5,8-",hint:"Vazio = todas. Use vírgulas e intervalos."};
+const TOOLS=[
+ {id:"merge",ic:"🧩",n:"Juntar PDF",d:"Combine vários PDFs em um só.",multi:1,min:2,pdf:1},
+ {id:"split",ic:"✂️",n:"Dividir PDF",d:"Uma página por arquivo ou por intervalos.",pdf:1,o:[{k:"ranges",l:"Intervalos (opcional)",ph:"ex.: 1-3,4-6",hint:"Vazio = uma página por arquivo. Cada trecho vira um PDF."}]},
+ {id:"extract",ic:"📄",n:"Extrair páginas",d:"Crie um PDF só com as páginas escolhidas.",pdf:1,o:[{k:"ranges",l:"Páginas",ph:"ex.: 1-3,5",req:1}]},
+ {id:"delete",ic:"🗑️",n:"Remover páginas",d:"Exclua páginas indesejadas.",pdf:1,o:[{k:"ranges",l:"Páginas a remover",ph:"ex.: 2,4-6",req:1}]},
+ {id:"reorder",ic:"🔀",n:"Reordenar páginas",d:"Defina a nova sequência das páginas.",pdf:1,o:[{k:"order",l:"Nova ordem",ph:"ex.: 3,1,2",hint:"Páginas não listadas são removidas.",req:1}]},
+ {id:"rotate",ic:"🔄",n:"Girar PDF",d:"Gire todas ou algumas páginas.",pdf:1,o:[{k:"angle",l:"Ângulo",t:"select",v:[["90","90° (direita)"],["180","180°"],["270","270° (esquerda)"]]},{k:"ranges",l:"Páginas (opcional)",ph:"ex.: 1-3"}]},
+ {id:"compress",ic:"🗜️",n:"Comprimir PDF",d:"Reduza o tamanho do arquivo.",pdf:1,o:[{k:"level",l:"Nível",t:"select",v:[["leve","Leve (mantém o texto)"],["media","Média (imagem 150 dpi)"],["forte","Forte (imagem 110 dpi)"]],hint:"Média e forte transformam as páginas em imagens: menor, mas sem texto selecionável."}]},
+ {id:"img2pdf",ic:"🖼️",n:"Imagem para PDF",d:"Converta JPG/PNG em PDF.",multi:1,img:1},
+ {id:"pdf2img",ic:"📸",n:"PDF para imagem",d:"Salve cada página como JPG ou PNG (ZIP).",pdf:1,o:[{k:"format",l:"Formato",t:"select",v:[["jpg","JPG"],["png","PNG"]]},{k:"dpi",l:"Resolução (dpi)",val:"150"},{k:"ranges",l:"Páginas (opcional)",ph:"ex.: 1-3"}]},
+ {id:"text",ic:"🔤",n:"PDF para texto",d:"Extraia o texto para um arquivo .txt.",pdf:1},
+ {id:"watermark",ic:"💧",n:"Marca d'água",d:"Carimbe um texto em todas as páginas.",pdf:1,o:[{k:"text",l:"Texto",ph:"ex.: CONFIDENCIAL",req:1},{k:"opacity",l:"Opacidade (0.05 a 1)",val:"0.2"},{k:"size",l:"Tamanho da fonte",val:"60"}]},
+ {id:"numbers",ic:"🔢",n:"Numerar páginas",d:"Adicione “1 / N” no rodapé.",pdf:1},
+ {id:"protect",ic:"🔒",n:"Proteger PDF",d:"Defina uma senha de abertura.",pdf:1,o:[{k:"new_password",l:"Nova senha",t:"password",req:1}]},
+ {id:"unlock",ic:"🔓",n:"Desbloquear PDF",d:"Remova a senha de um PDF.",pdf:1,pw:1},
+];
+let tool=null,files=[];
+const grid=$("#grid");
+TOOLS.forEach(t=>{const b=document.createElement("button");b.className="tool";b.innerHTML=`<span class="ic">${t.ic}</span><b>${t.n}</b><span class="d">${t.d}</span>`;b.onclick=()=>open(t);grid.append(b)});
+$("#back").onclick=$("#logo").onclick=()=>{$("#work").classList.add("hidden");$("#home").classList.remove("hidden")};
+function open(t){tool=t;files=[];$("#home").classList.add("hidden");$("#work").classList.remove("hidden");
+ $("#tt").textContent=t.n;$("#td").textContent=t.d;$("#out").innerHTML="";$("#pick").multiple=!!t.multi;
+ $("#pick").accept=t.img?"image/*":".pdf,application/pdf";
+ const o=$("#opts");o.innerHTML="";
+ const spec=[...(t.o||[])];if(t.pdf&&!t.pw)spec.push({k:"password",l:"Senha do PDF (se houver)",t:"password"});if(t.pw)spec.push({k:"password",l:"Senha atual",t:"password",req:1});
+ spec.forEach(f=>{const l=document.createElement("label");l.append(f.l);let i;
+  if(f.t==="select"){i=document.createElement("select");f.v.forEach(([v,x])=>i.add(new Option(x,v)))}
+  else{i=document.createElement("input");i.type=f.t||"text";if(f.ph)i.placeholder=f.ph;if(f.val)i.value=f.val}
+  i.dataset.k=f.k;if(f.req)i.dataset.req=1;i.oninput=refresh;l.append(i);
+  if(f.hint){const h=document.createElement("span");h.className="hint";h.textContent=f.hint;l.append(h)}o.append(l)});
+ render()}
+$("#drop").onclick=()=>$("#pick").click();
+$("#pick").onchange=e=>{add([...e.target.files]);e.target.value=""};
+["dragover","dragenter"].forEach(ev=>$("#drop").addEventListener(ev,e=>{e.preventDefault();$("#drop").classList.add("over")}));
+["dragleave","drop"].forEach(ev=>$("#drop").addEventListener(ev,e=>{e.preventDefault();$("#drop").classList.remove("over")}));
+$("#drop").addEventListener("drop",e=>add([...e.dataTransfer.files]));
+async function add(list){
+ if(!tool.multi)files=[];
+ for(const f of list){
+  const ok=tool.img?f.type.startsWith("image/"):/\.pdf$/i.test(f.name);
+  if(!ok){msg("err",`“${f.name}” não é um arquivo válido para esta ferramenta.`);continue}
+  try{const r=await fetch("/api/upload?name="+encodeURIComponent(f.name),{method:"POST",body:f});
+   const j=await r.json();if(!r.ok)throw Error(j.error);files.push({...j,blob:f})}catch(e){msg("err",e.message)}}
+ render()}
+function render(){const ul=$("#files");ul.innerHTML="";
+ files.forEach((f,i)=>{const li=document.createElement("li");
+  const th=tool.img?URL.createObjectURL(f.blob):(f.pdf&&!f.encrypted?`/api/thumb/${f.id}/0?w=80`:"");
+  li.innerHTML=`<img src="${th}" alt=""><div class="n">${esc(f.name)}<div class="m">${tool.img?"":f.encrypted?"🔒 protegido por senha":f.pages+" página(s)"} · ${(f.blob.size/1048576).toFixed(2)} MB</div></div>`;
+  if(tool.multi&&files.length>1){[["▲",-1],["▼",1]].forEach(([s,d])=>{const b=document.createElement("button");b.textContent=s;b.onclick=()=>{const j=i+d;if(j<0||j>=files.length)return;[files[i],files[j]]=[files[j],files[i]];render()};li.append(b)})}
+  const x=document.createElement("button");x.textContent="✕";x.onclick=()=>{files.splice(i,1);render()};li.append(x);ul.append(li)});
+ refresh()}
+function refresh(){const need=tool.min||1;let ok=files.length>=need;
+ document.querySelectorAll("#opts [data-req]").forEach(i=>{if(!i.value.trim())ok=false});$("#go").disabled=!ok}
+function esc(s){return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+function msg(c,h){$("#out").innerHTML=`<div class="msg ${c}">${h}</div>`}
+$("#go").onclick=async()=>{const params={};document.querySelectorAll("#opts [data-k]").forEach(i=>params[i.dataset.k]=i.value);
+ $("#go").disabled=true;msg("ok","Processando…");
+ try{const r=await fetch("/api/tool/"+tool.id,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({files:files.map(f=>f.id),params})});
+  const j=await r.json();if(!r.ok)throw Error(j.error);
+  msg("ok",`Pronto! <a href="${j.download}" download="${esc(j.name)}">Baixar ${esc(j.name)}</a> (${(j.size/1048576).toFixed(2)} MB)`)}
+ catch(e){msg("err",esc(e.message))}finally{refresh()}};
+</script>
+</body>
+</html>
