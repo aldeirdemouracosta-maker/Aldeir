@@ -44,15 +44,15 @@ func TestCatalogoNaoContemBinariosProibidos(t *testing.T) {
 	}
 }
 
-func TestExecutarFileRealELF(t *testing.T) {
+func TestExecutarFileNoProprioBinario(t *testing.T) {
 	bin, err := exec.LookPath("file")
 	if err != nil {
 		t.Skip("file ausente")
 	}
-	self, _ := os.Executable() // binário de teste: ELF real
+	self, _ := os.Executable() // binário de teste: ELF (Linux) ou PE (Windows)
 	f, _ := Procurar("file")
 	_, r := Executar(context.Background(), guardian.Policy{}, f, bin, self)
-	if r.Erro != "" || !strings.Contains(r.Saida, "ELF") {
+	if r.Erro != "" || !strings.Contains(r.Saida, "executable") {
 		t.Fatalf("%+v", r)
 	}
 }
