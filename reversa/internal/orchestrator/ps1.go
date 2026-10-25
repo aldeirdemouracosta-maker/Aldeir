@@ -34,7 +34,7 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 	// Estágio 1: fatos.
 	header := fmt.Sprintf("entrada=0x%08x carga=0x%08x gp=0x%08x sp=0x%08x região=%q tamanho=%d bytes",
 		exe.PC, exe.Load, exe.GP, exe.SP, exe.Region, len(exe.Text))
-	hdr := p.Evidence.Add("ps1_header", "", header, "Lido do cabeçalho PS-X EXE; o conteúdo não é validado.")
+	hdr := p.Evidence.AddAs(evidence.Observed, "ps1_header", "", header, "Lido do cabeçalho PS-X EXE; o conteúdo não é validado.")
 
 	funcs := exe.FindFunctions()
 	if p.TopN > 0 && len(funcs) > p.TopN {
@@ -48,7 +48,7 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 	jobs := make([]job, len(funcs))
 	for i, f := range funcs {
 		dis := exe.DisasmRange(f.Addr, p.MaxInsns)
-		rec := p.Evidence.Add("ps1_disasm", fmt.Sprintf("0x%08x (chamada %dx)", f.Addr, f.Calls), dis,
+		rec := p.Evidence.AddAs(evidence.Derived, "ps1_disasm", fmt.Sprintf("0x%08x (chamada %dx)", f.Addr, f.Calls), dis,
 			"Desmontagem linear; chamadas indiretas (jalr) e dados no meio do código não são resolvidos.")
 		jobs[i] = job{f, dis, rec.ID}
 	}
@@ -70,7 +70,7 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 			fmt.Fprintf(&sum, "- 0x%08x [E%d]: (falhou: %v)\n", j.fn.Addr, j.ev, r.Err)
 			continue
 		}
-		hyp := p.Evidence.Add("llm_hipotese", fmt.Sprintf("0x%08x", j.fn.Addr), r.Val, "Hipótese do modelo; não verificada.")
+		hyp := p.Evidence.AddAs(evidence.Inferred, "llm_hipotese", fmt.Sprintf("0x%08x", j.fn.Addr), r.Val, "Hipótese do modelo; não verificada.")
 		fmt.Fprintf(&sum, "- 0x%08x, chamada %dx, desmontagem [E%d], hipótese [E%d]: %s\n", j.fn.Addr, j.fn.Calls, j.ev, hyp.ID, r.Val)
 	}
 

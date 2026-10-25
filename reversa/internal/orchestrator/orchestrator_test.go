@@ -81,8 +81,11 @@ func TestPipelinePS1(t *testing.T) {
 		t.Fatalf("evidências inesperadas: %v", tools)
 	}
 	for _, r := range log.All() {
-		if r.Tool == "llm_hipotese" && !strings.Contains(r.Limits, "não verificada") {
-			t.Fatal("hipótese sem aviso de limite")
+		if r.Tool == "llm_hipotese" && (r.Confidence != evidence.Inferred || !strings.Contains(r.Limits, "não verificada")) {
+			t.Fatal("hipótese deve ser 'inferred' e trazer aviso de limite")
+		}
+		if r.Tool == "ps1_header" && r.Confidence != evidence.Observed {
+			t.Fatal("cabeçalho deve ser 'observed'")
 		}
 	}
 }

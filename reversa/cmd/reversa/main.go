@@ -3,6 +3,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -118,7 +120,8 @@ func analyzePS1(args []string) {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	log := &evidence.Log{}
+	sum := sha256.Sum256(raw)
+	log := &evidence.Log{Subject: hex.EncodeToString(sum[:])}
 	p := &orchestrator.PS1{Worker: mk(*workerModel), Synthesizer: mk(*synthModel), Evidence: log,
 		Workers: *workers, TopN: *top, MaxInsns: *insns}
 	report, err := p.Run(ctx, exe)
