@@ -1,0 +1,36 @@
+{
+  "id": "lab.tvbox",
+  "nome": "TV Box",
+  "versao": "0.1.0",
+  "local": "externo",
+  "tamanho_mb": 0,
+  "descricao": "",
+  "implementado": false,
+  "fase": 3,
+  "dependencias": {
+    "modulos": [
+      "core"
+    ],
+    "pacotes_debian": [],
+    "binarios": [
+      "binwalk",
+      "dtc",
+      "simg2img",
+      "file"
+    ]
+  },
+  "permissoes": {
+    "leitura": [
+      "/evidencias"
+    ],
+    "escrita": [
+      "/workspace"
+    ],
+    "rede": false,
+    "executa_amostras": false,
+    "grava_firmware": false
+  },
+  "testes": [
+    "smoke"
+  ]
+}

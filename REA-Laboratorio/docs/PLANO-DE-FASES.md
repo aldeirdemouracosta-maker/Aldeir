@@ -4,6 +4,7 @@
 |---|---|---|
 | **0** (esta) | Auditoria, escolha de base, documentação, scripts não destrutivos | auditoria local executada e anexada (pendente); documentos revisados |
 | **1** | ISO mínima Debian Live (Fluxbox, terminal) reproduzível | Gate G1 (BIOS, UEFI, sem AVX2, offline, tamanho, disco intocado) |
+| **1.5** (iniciada) | REA Core em Go (`core/`, ver `docs/CORE-GO.md`): manifestos, Guardian, Evidence, formatos, ZIP, AI Bridge (detecção) | **cumprido nesta sessão:** testes Go aprovados e execução real; pendente: Windows/ISO |
 | **2** | REA Core + Guardian + Evidence; formato de manifesto; verificador de disponibilidade | testes unitários; relatório SHA-256 de um arquivo de exemplo; Guardian bloqueia operação proibida |
 | **3** | REA Shell (GTK) com mascote, botões ligados a verificadores reais | teste de teclado; nenhum botão habilitado sem módulo disponível; RAM medida |
 | **4** | AI Bridge: Ollama e OpenAI-compatível primeiro, depois llama.cpp e LM Studio | adaptadores contra servidores simulados; detecção CPU/Vulkan/CUDA real; sistema inicia sem modelo |

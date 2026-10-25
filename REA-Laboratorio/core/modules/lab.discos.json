@@ -1,0 +1,35 @@
+{
+  "id": "lab.discos",
+  "nome": "Discos",
+  "versao": "0.1.0",
+  "local": "externo",
+  "tamanho_mb": 0,
+  "descricao": "",
+  "implementado": false,
+  "fase": 3,
+  "dependencias": {
+    "modulos": [
+      "core"
+    ],
+    "pacotes_debian": [],
+    "binarios": [
+      "lsblk",
+      "smartctl",
+      "mmls"
+    ]
+  },
+  "permissoes": {
+    "leitura": [
+      "/evidencias"
+    ],
+    "escrita": [
+      "/workspace"
+    ],
+    "rede": false,
+    "executa_amostras": false,
+    "grava_firmware": false
+  },
+  "testes": [
+    "smoke"
+  ]
+}

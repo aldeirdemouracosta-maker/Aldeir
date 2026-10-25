@@ -1,0 +1,35 @@
+{
+  "id": "lab.iso",
+  "nome": "ISO e sistemas operacionais",
+  "versao": "0.1.0",
+  "local": "iso",
+  "tamanho_mb": 0,
+  "descricao": "",
+  "implementado": false,
+  "fase": 2,
+  "dependencias": {
+    "modulos": [
+      "core"
+    ],
+    "pacotes_debian": [],
+    "binarios": [
+      "xorriso",
+      "7z",
+      "file"
+    ]
+  },
+  "permissoes": {
+    "leitura": [
+      "/evidencias"
+    ],
+    "escrita": [
+      "/workspace"
+    ],
+    "rede": false,
+    "executa_amostras": false,
+    "grava_firmware": false
+  },
+  "testes": [
+    "smoke"
+  ]
+}

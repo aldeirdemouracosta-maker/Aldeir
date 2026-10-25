@@ -1,0 +1,34 @@
+{
+  "id": "lab.ia",
+  "nome": "Modelos de IA",
+  "versao": "0.1.0",
+  "local": "externo",
+  "tamanho_mb": 0,
+  "descricao": "",
+  "implementado": false,
+  "fase": 4,
+  "dependencias": {
+    "modulos": [
+      "core"
+    ],
+    "pacotes_debian": [],
+    "binarios": [
+      "ollama",
+      "llama-server"
+    ]
+  },
+  "permissoes": {
+    "leitura": [
+      "/evidencias"
+    ],
+    "escrita": [
+      "/workspace"
+    ],
+    "rede": false,
+    "executa_amostras": false,
+    "grava_firmware": false
+  },
+  "testes": [
+    "smoke"
+  ]
+}

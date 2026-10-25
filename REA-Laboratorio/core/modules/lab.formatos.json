@@ -1,0 +1,31 @@
+{
+  "id": "lab.formatos",
+  "nome": "Formatos binários",
+  "versao": "0.1.0",
+  "local": "iso",
+  "tamanho_mb": 0,
+  "descricao": "PE/ELF/ZIP/ISO/PDF/GGUF... por assinatura (embutido em Go)",
+  "implementado": true,
+  "fase": 1,
+  "dependencias": {
+    "modulos": [
+      "core"
+    ],
+    "pacotes_debian": [],
+    "binarios": []
+  },
+  "permissoes": {
+    "leitura": [
+      "/evidencias"
+    ],
+    "escrita": [
+      "/workspace"
+    ],
+    "rede": false,
+    "executa_amostras": false,
+    "grava_firmware": false
+  },
+  "testes": [
+    "smoke"
+  ]
+}

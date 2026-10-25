@@ -1,0 +1,33 @@
+{
+  "id": "lab.links",
+  "nome": "Links da internet",
+  "versao": "0.1.0",
+  "local": "externo",
+  "tamanho_mb": 0,
+  "descricao": "",
+  "implementado": false,
+  "fase": 3,
+  "dependencias": {
+    "modulos": [
+      "core"
+    ],
+    "pacotes_debian": [],
+    "binarios": [
+      "curl"
+    ]
+  },
+  "permissoes": {
+    "leitura": [
+      "/evidencias"
+    ],
+    "escrita": [
+      "/workspace"
+    ],
+    "rede": true,
+    "executa_amostras": false,
+    "grava_firmware": false
+  },
+  "testes": [
+    "smoke"
+  ]
+}
