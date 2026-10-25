@@ -1,0 +1,107 @@
+package ps1
+
+import (
+	"fmt"
+	"strings"
+)
+
+var reg = [32]string{"zero", "at", "v0", "v1", "a0", "a1", "a2", "a3", "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7",
+	"s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "t8", "t9", "k0", "k1", "gp", "sp", "fp", "ra"}
+
+var rtype = map[uint32]string{0x20: "add", 0x21: "addu", 0x22: "sub", 0x23: "subu", 0x24: "and", 0x25: "or",
+	0x26: "xor", 0x27: "nor", 0x2A: "slt", 0x2B: "sltu", 0x04: "sllv", 0x06: "srlv", 0x07: "srav"}
+
+var itype = map[uint32]string{0x08: "addi", 0x09: "addiu", 0x0A: "slti", 0x0B: "sltiu", 0x0C: "andi", 0x0D: "ori", 0x0E: "xori"}
+
+var mem = map[uint32]string{0x20: "lb", 0x21: "lh", 0x22: "lwl", 0x23: "lw", 0x24: "lbu", 0x25: "lhu", 0x26: "lwr",
+	0x28: "sb", 0x29: "sh", 0x2A: "swl", 0x2B: "sw", 0x2E: "swr", 0x32: "lwc2", 0x3A: "swc2"}
+
+// Disasm devolve uma instrução MIPS R3000 em texto. pc é o endereço da instrução.
+func Disasm(w, pc uint32) string {
+	op, rs, rt, rd := w>>26, w>>21&31, w>>16&31, w>>11&31
+	sh, fn := w>>6&31, w&63
+	imm := int16(w)
+	br := pc + 4 + uint32(int32(imm)<<2)
+	switch {
+	case w == 0:
+		return "nop"
+	case op == 0:
+		if n, ok := rtype[fn]; ok {
+			if fn >= 0x04 && fn <= 0x07 {
+				return fmt.Sprintf("%s $%s,$%s,$%s", n, reg[rd], reg[rt], reg[rs])
+			}
+			return fmt.Sprintf("%s $%s,$%s,$%s", n, reg[rd], reg[rs], reg[rt])
+		}
+		switch fn {
+		case 0x00, 0x02, 0x03:
+			return fmt.Sprintf("%s $%s,$%s,%d", map[uint32]string{0: "sll", 2: "srl", 3: "sra"}[fn], reg[rd], reg[rt], sh)
+		case 0x08:
+			return "jr $" + reg[rs]
+		case 0x09:
+			return fmt.Sprintf("jalr $%s,$%s", reg[rd], reg[rs])
+		case 0x0C:
+			return fmt.Sprintf("syscall 0x%x", w>>6&0xFFFFF)
+		case 0x0D:
+			return fmt.Sprintf("break 0x%x", w>>6&0xFFFFF)
+		case 0x10, 0x12:
+			return fmt.Sprintf("%s $%s", map[uint32]string{0x10: "mfhi", 0x12: "mflo"}[fn], reg[rd])
+		case 0x11, 0x13:
+			return fmt.Sprintf("%s $%s", map[uint32]string{0x11: "mthi", 0x13: "mtlo"}[fn], reg[rs])
+		case 0x18, 0x19, 0x1A, 0x1B:
+			return fmt.Sprintf("%s $%s,$%s", map[uint32]string{0x18: "mult", 0x19: "multu", 0x1A: "div", 0x1B: "divu"}[fn], reg[rs], reg[rt])
+		}
+	case op == 1:
+		n := map[uint32]string{0: "bltz", 1: "bgez", 16: "bltzal", 17: "bgezal"}[rt]
+		if n != "" {
+			return fmt.Sprintf("%s $%s,0x%08x", n, reg[rs], br)
+		}
+	case op == 2 || op == 3:
+		return fmt.Sprintf("%s 0x%08x", map[uint32]string{2: "j", 3: "jal"}[op], (pc+4)&0xF0000000|(w&0x03FFFFFF)<<2)
+	case op == 4 || op == 5:
+		return fmt.Sprintf("%s $%s,$%s,0x%08x", map[uint32]string{4: "beq", 5: "bne"}[op], reg[rs], reg[rt], br)
+	case op == 6 || op == 7:
+		return fmt.Sprintf("%s $%s,0x%08x", map[uint32]string{6: "blez", 7: "bgtz"}[op], reg[rs], br)
+	case itype[op] != "":
+		if op == 0x0C || op == 0x0D || op == 0x0E {
+			return fmt.Sprintf("%s $%s,$%s,0x%x", itype[op], reg[rt], reg[rs], uint16(w))
+		}
+		return fmt.Sprintf("%s $%s,$%s,%d", itype[op], reg[rt], reg[rs], imm)
+	case op == 0x0F:
+		return fmt.Sprintf("lui $%s,0x%x", reg[rt], uint16(w))
+	case mem[op] != "":
+		return fmt.Sprintf("%s $%s,%d($%s)", mem[op], reg[rt], imm, reg[rs])
+	case op == 0x10:
+		switch rs {
+		case 0:
+			return fmt.Sprintf("mfc0 $%s,$%d", reg[rt], rd)
+		case 4:
+			return fmt.Sprintf("mtc0 $%s,$%d", reg[rt], rd)
+		case 16:
+			return "rfe"
+		}
+	case op == 0x12:
+		return fmt.Sprintf("cop2 0x%07x ; GTE", w&0x1FFFFFF)
+	}
+	return fmt.Sprintf(".word 0x%08x", w)
+}
+
+// DisasmRange desmonta até n instruções a partir de addr, parando após 'jr $ra' e seu delay slot.
+func (e *Exe) DisasmRange(addr uint32, n int) string {
+	var b strings.Builder
+	afterRet := -1
+	for i := 0; i < n; i++ {
+		pc := addr + uint32(i)*4
+		w, ok := e.Word(pc)
+		if !ok {
+			break
+		}
+		fmt.Fprintf(&b, "%08x  %08x  %s\n", pc, w, Disasm(w, pc))
+		if afterRet >= 0 {
+			break
+		}
+		if w == 0x03E00008 { // jr $ra
+			afterRet = i
+		}
+	}
+	return b.String()
+}
