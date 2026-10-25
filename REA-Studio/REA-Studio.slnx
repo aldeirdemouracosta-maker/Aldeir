@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="src/ReaStudio.Core/ReaStudio.Core.csproj" />
+  <Project Path="src/ReaStudio.App/ReaStudio.App.csproj" />
+  <Project Path="tests/ReaStudio.Tests/ReaStudio.Tests.csproj" />
+</Solution>
