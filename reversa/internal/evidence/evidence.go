@@ -15,6 +15,7 @@ const (
 	Observed Confidence = "observed" // lido direto do alvo ou da ferramenta (cabeçalho, bytes)
 	Derived  Confidence = "derived"  // calculado de forma determinística a partir de observações
 	Inferred Confidence = "inferred" // suposição, por exemplo texto de um modelo; nunca é fato
+	Unknown  Confidence = "unknown"  // o que a análise não consegue resolver; nunca vira "ausente"
 )
 
 // Record é uma afirmação rastreável: qual ferramenta, com quais argumentos, o que retornou

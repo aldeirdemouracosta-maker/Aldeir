@@ -10,3 +10,13 @@ ollama pull qwen2.5-coder:14b
 ```
 
 Para usar o Ghidra: `export GHIDRA_INSTALL_DIR=/opt/ghidra` e rode a partir da pasta `reversa/` (os scripts ficam em `scripts/ghidra`).
+
+## PS1 e MCP
+
+```
+./reversa disc jogo.cue                 # volume, boot e arquivos da raiz
+./reversa ps1 -evidence ev.json jogo.cue # pipeline com modelos locais (exe, cue, bin ou iso)
+./reversa mcp -root ~/jogos             # servidor MCP por stdio; só lê dentro da pasta
+```
+
+Registro no Claude Code: `claude mcp add reversa -- /caminho/reversa mcp -root ~/jogos`.

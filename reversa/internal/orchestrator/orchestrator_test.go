@@ -58,7 +58,7 @@ func TestPipelinePS1(t *testing.T) {
 	copy(b, "PS-X EXE")
 	binary.LittleEndian.PutUint32(b[0x10:], 0x80010000)
 	binary.LittleEndian.PutUint32(b[0x18:], 0x80010000)
-	code := []uint32{0x0C004004, 0, 0x24020001, 0x03E00008, 0}
+	code := []uint32{0x0C004004, 0, 0x0100F809, 0, 0x24020001, 0x03E00008, 0} // a função tem um jalr
 	binary.LittleEndian.PutUint32(b[0x1C:], uint32(len(code)*4))
 	for _, w := range code {
 		b = binary.LittleEndian.AppendUint32(b, w)
@@ -76,6 +76,9 @@ func TestPipelinePS1(t *testing.T) {
 	tools := map[string]int{}
 	for _, r := range log.All() {
 		tools[r.Tool]++
+	}
+	if tools["ps1_indirect"] != 1 {
+		t.Fatalf("esperava 1 registro de salto indireto: %v", tools)
 	}
 	if tools["ps1_header"] != 1 || tools["ps1_disasm"] < 1 || tools["llm_hipotese"] != tools["ps1_disasm"] {
 		t.Fatalf("evidências inesperadas: %v", tools)

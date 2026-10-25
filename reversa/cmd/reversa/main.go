@@ -13,10 +13,14 @@ import (
 
 	"reversa/internal/agent"
 	"reversa/internal/backend"
+	"reversa/internal/disc"
 	"reversa/internal/evidence"
 	"reversa/internal/llm"
+	"reversa/internal/mcp"
 	"reversa/internal/orchestrator"
 	"reversa/internal/ps1"
+	"reversa/internal/target"
+	"reversa/internal/tools"
 )
 
 func backends() []backend.Backend {
@@ -36,13 +40,17 @@ func main() {
 		analyze(os.Args[2:])
 	case "ps1":
 		analyzePS1(os.Args[2:])
+	case "disc":
+		discInfo(os.Args[2:])
+	case "mcp":
+		serveMCP(os.Args[2:])
 	default:
 		usage()
 	}
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "uso: reversa doctor | reversa ps1 [opções] <arquivo.exe> | reversa analyze [-model m] [-steps n] [-evidence arq.json] <binário>")
+	fmt.Fprintln(os.Stderr, "uso: reversa doctor | reversa mcp -root <pasta> | reversa disc <imagem> | reversa ps1 [opções] <exe|cue|bin|iso> | reversa analyze [-model m] [-steps n] [-evidence arq.json] <binário>")
 	os.Exit(2)
 }
 
@@ -103,7 +111,7 @@ func analyzePS1(args []string) {
 	if fs.NArg() != 1 {
 		usage()
 	}
-	raw, err := os.ReadFile(fs.Arg(0))
+	raw, err := loadPS1(fs.Arg(0))
 	if err != nil {
 		fatal(err)
 	}
@@ -133,4 +141,52 @@ func analyzePS1(args []string) {
 		fatal(err)
 	}
 	fmt.Println(report)
+}
+
+func loadPS1(path string) ([]byte, error) {
+	raw, origem, err := target.LoadPS1(path)
+	if err == nil {
+		fmt.Fprintln(os.Stderr, "alvo:", origem)
+	}
+	return raw, err
+}
+
+func discInfo(args []string) {
+	if len(args) != 1 {
+		usage()
+	}
+	img, err := disc.Open(args[0])
+	if err != nil {
+		fatal(err)
+	}
+	defer img.Close()
+	fmt.Println("volume:", img.VolumeID)
+	if boot, err := img.BootPath(); err == nil {
+		fmt.Println("boot:", boot)
+	}
+	files, err := img.List("/")
+	if err != nil {
+		fatal(err)
+	}
+	for _, f := range files {
+		kind := "arq"
+		if f.IsDir {
+			kind = "dir"
+		}
+		fmt.Printf("%s %10d  %s\n", kind, f.Size, f.Name)
+	}
+}
+
+// serveMCP expõe as ferramentas do PS1 por stdio. Só lê arquivos dentro de -root.
+func serveMCP(args []string) {
+	fs := flag.NewFlagSet("mcp", flag.ExitOnError)
+	root := fs.String("root", ".", "única pasta de onde as ferramentas podem ler arquivos")
+	_ = fs.Parse(args)
+	set := &tools.Set{Root: *root, Log: &evidence.Log{}}
+	srv := mcp.NewServer("reversa", "0.1.0", set.MCP())
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	if err := srv.Serve(ctx, os.Stdin, os.Stdout); err != nil {
+		fatal(err)
+	}
 }

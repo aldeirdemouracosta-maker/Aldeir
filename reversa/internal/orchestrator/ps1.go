@@ -41,16 +41,26 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 		funcs = funcs[:p.TopN]
 	}
 	type job struct {
-		fn  ps1.Func
-		dis string
-		ev  int
+		fn      ps1.Func
+		dis     string
+		ev      int
+		unknown int // id da evidência de saltos indiretos, 0 se não houver
 	}
 	jobs := make([]job, len(funcs))
 	for i, f := range funcs {
 		dis := exe.DisasmRange(f.Addr, p.MaxInsns)
 		rec := p.Evidence.AddAs(evidence.Derived, "ps1_disasm", fmt.Sprintf("0x%08x (chamada %dx)", f.Addr, f.Calls), dis,
 			"Desmontagem linear; chamadas indiretas (jalr) e dados no meio do código não são resolvidos.")
-		jobs[i] = job{f, dis, rec.ID}
+		jobs[i] = job{fn: f, dis: dis, ev: rec.ID}
+		if ind := exe.Indirects(f.Addr, p.MaxInsns); len(ind) > 0 {
+			var list strings.Builder
+			for _, pc := range ind {
+				fmt.Fprintf(&list, "0x%08x ", pc)
+			}
+			u := p.Evidence.AddAs(evidence.Unknown, "ps1_indirect", fmt.Sprintf("0x%08x", f.Addr), strings.TrimSpace(list.String()),
+				"Destino de jr/jalr não é estático; a análise não sabe para onde esses saltos vão.")
+			jobs[i].unknown = u.ID
+		}
 	}
 
 	// Estágio 2: hipóteses em paralelo.
@@ -72,6 +82,9 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 		}
 		hyp := p.Evidence.AddAs(evidence.Inferred, "llm_hipotese", fmt.Sprintf("0x%08x", j.fn.Addr), r.Val, "Hipótese do modelo; não verificada.")
 		fmt.Fprintf(&sum, "- 0x%08x, chamada %dx, desmontagem [E%d], hipótese [E%d]: %s\n", j.fn.Addr, j.fn.Calls, j.ev, hyp.ID, r.Val)
+		if j.unknown != 0 {
+			fmt.Fprintf(&sum, "  Atenção: saltos indiretos não resolvidos [E%d]; não afirme para onde vão.\n", j.unknown)
+		}
 	}
 
 	// Estágio 3: síntese.

@@ -88,6 +88,7 @@ func Disasm(w, pc uint32) string {
 // DisasmRange desmonta até n instruções a partir de addr, parando após 'jr $ra' e seu delay slot.
 func (e *Exe) DisasmRange(addr uint32, n int) string {
 	var b strings.Builder
+	var c consts
 	afterRet := -1
 	for i := 0; i < n; i++ {
 		pc := addr + uint32(i)*4
@@ -95,7 +96,11 @@ func (e *Exe) DisasmRange(addr uint32, n int) string {
 		if !ok {
 			break
 		}
-		fmt.Fprintf(&b, "%08x  %08x  %s\n", pc, w, Disasm(w, pc))
+		line := fmt.Sprintf("%08x  %08x  %s", pc, w, Disasm(w, pc))
+		if note := c.step(w); note != "" {
+			line += "  ; " + note
+		}
+		b.WriteString(line + "\n")
 		if afterRet >= 0 {
 			break
 		}

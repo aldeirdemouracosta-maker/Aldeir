@@ -60,3 +60,44 @@ func TestParseEFuncoes(t *testing.T) {
 		t.Error("esperava erro para arquivo inválido")
 	}
 }
+
+func TestHWName(t *testing.T) {
+	cases := map[uint32]string{
+		0x1F801810: "GPU_GP0", 0xBF801814: "GPU_GP1", 0x9F801070: "I_STAT",
+		0x1F8010A8: "DMA2_GPU_CHCR", 0x1F801108: "TIMER0_TARGET", 0x1F801C10: "SPU_VOICE1_+0x0",
+		0x80010000: "", 0x1F800000: "",
+	}
+	for a, want := range cases {
+		if got := HWName(a); got != want {
+			t.Errorf("%08x: %q, esperado %q", a, got, want)
+		}
+	}
+}
+
+func TestAnotacaoDeHardware(t *testing.T) {
+	// lui t0,0x1f80 ; sw v0,0x1810(t0) ; lui t1,0x1f80 ; addiu t1,t1,0x1814 ; lw v1,0(t1) ; jr ra ; nop
+	code := []uint32{0x3C081F80, 0xAD021810, 0x3C091F80, 0x25291814, 0x8D230000, 0x03E00008, 0}
+	e := &Exe{Load: 0x80010000, Text: make([]byte, len(code)*4)}
+	for i, w := range code {
+		le.PutUint32(e.Text[i*4:], w)
+	}
+	out := e.DisasmRange(0x80010000, 16)
+	if !strings.Contains(out, "sw $v0,6160($t0)  ; GPU_GP0") {
+		t.Errorf("faltou GP0:\n%s", out)
+	}
+	if !strings.Contains(out, "lw $v1,0($t1)  ; GPU_GP1") {
+		t.Errorf("faltou GP1 via addiu:\n%s", out)
+	}
+}
+
+func TestIndirects(t *testing.T) {
+	code := []uint32{0x0100F809, 0, 0x01000008, 0, 0x03E00008, 0} // jalr t0 ; jr t0 ; jr ra
+	e := &Exe{Load: 0x80010000, Text: make([]byte, len(code)*4)}
+	for i, w := range code {
+		le.PutUint32(e.Text[i*4:], w)
+	}
+	got := e.Indirects(0x80010000, 6)
+	if len(got) != 2 || got[0] != 0x80010000 || got[1] != 0x80010008 {
+		t.Fatalf("indiretos: %x", got)
+	}
+}

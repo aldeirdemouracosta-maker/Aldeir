@@ -35,9 +35,14 @@ Aviso: ROMs e firmware têm direitos autorais. Use ROMs que você mesmo extraiu,
 
 ## Roteiro
 
-- [x] Núcleo: agente, evidências, cliente Ollama, backends objdump e Ghidra (headless), CLI `doctor` e `analyze`
-- [ ] Ghidra persistente (processo único, API HTTP) e tools de xrefs, strings, renomear
-- [ ] Backends: rizin, jadx/apktool (APK), GoReSym (binários Go), capstone
-- [ ] Modo servidor MCP (para usar o `reversa` também no Claude Code)
-- [ ] Backend de emulador (ROMs) e análise dinâmica (Frida)
-- [ ] Testes de integração com um binário de exemplo e um modelo real
+- [x] Núcleo: agente, evidências (observed/derived/inferred/unknown), cliente Ollama, backends objdump e Ghidra (headless)
+- [x] PS1: PS-X EXE, desmontador MIPS R3000 (testado contra llvm-mc), anotação de registradores de hardware, saltos indiretos como "desconhecido"
+- [x] Discos: `.bin/.cue` (2352) e `.iso` (2048), ISO 9660, SYSTEM.CNF, extração do executável de boot
+- [x] Orquestração: operários em paralelo com limite, cache em disco, três estágios
+- [x] Supervisão de processos: grupo próprio, prazo, saída limitada, erros tipados
+- [x] Servidor MCP por stdio (`reversa mcp -root <pasta>`) com restrição de pasta
+- [ ] Ghidra persistente com loader PS1 e idioma MIPS LE 32 fixado
+- [ ] Backend PCSX-Redux (dinâmico) e rizin/radare2
+- [ ] CHD, Joliet, overlays, executáveis compactados, tabelas de salto
+- [ ] Resumo primeiro com paginação da desmontagem; grafo de chamadas de baixo para cima
+- [ ] Teste de ponta a ponta com disco real e modelo real (nunca feito)
