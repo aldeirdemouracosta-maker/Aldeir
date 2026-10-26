@@ -58,7 +58,7 @@ func (a *Agent) Run(ctx context.Context, goal string) (string, error) {
 			return reply.Content, nil
 		}
 		for _, call := range reply.ToolCalls {
-			msgs = append(msgs, llm.Message{Role: "tool", Content: a.exec(ctx, call)})
+			msgs = append(msgs, llm.Message{Role: "tool", ToolName: call.Function.Name, Content: a.exec(ctx, call)})
 		}
 	}
 	return "", fmt.Errorf("limite de %d passos atingido sem relatório final", a.MaxSteps)

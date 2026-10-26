@@ -103,15 +103,12 @@ func (c *consts) access(base uint32, off int32) string {
 }
 
 // Indirects devolve os endereços de saltos cujo destino não é estático (jr que não seja $ra, e jalr)
-// no trecho [addr, addr+n instruções). Ficam como "desconhecidos" na análise.
+// da função em addr (até n instruções, como em DisasmRange). Ficam como "desconhecidos" na análise.
 func (e *Exe) Indirects(addr uint32, n int) []uint32 {
 	var out []uint32
-	for i := 0; i < n; i++ {
+	for i, end := 0, e.span(addr, n); i < end; i++ {
 		pc := addr + uint32(i)*4
-		w, ok := e.Word(pc)
-		if !ok {
-			break
-		}
+		w, _ := e.Word(pc)
 		if w>>26 == 0 && ((w&0x3F == 0x08 && w>>21&31 != 31) || w&0x3F == 0x09) {
 			out = append(out, pc)
 		}

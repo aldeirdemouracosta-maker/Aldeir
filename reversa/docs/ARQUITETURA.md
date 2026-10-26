@@ -45,4 +45,5 @@ Aviso: ROMs e firmware têm direitos autorais. Use ROMs que você mesmo extraiu,
 - [ ] Backend PCSX-Redux (dinâmico) e rizin/radare2
 - [ ] CHD, Joliet, overlays, executáveis compactados, tabelas de salto
 - [ ] Resumo primeiro com paginação da desmontagem; grafo de chamadas de baixo para cima
-- [ ] Teste de ponta a ponta com disco real e modelo real (nunca feito)
+- [x] Ponta a ponta sem modelo real: programa MIPS montado pelo clang, comparado instrução a instrução com o llvm-objdump; pipeline pela CLI contra servidor Ollama falso
+- [ ] Teste com **disco real** e **modelo real** (o container não alcança ollama.com nem huggingface.co; não existe gravador ISO independente aqui)

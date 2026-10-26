@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 
 	"reversa/internal/agent"
 	"reversa/internal/backend"
@@ -105,6 +106,7 @@ func analyzePS1(args []string) {
 	workers := fs.Int("workers", 2, "chamadas simultâneas ao Ollama (igual a OLLAMA_NUM_PARALLEL)")
 	top := fs.Int("top", 24, "quantas funções analisar")
 	insns := fs.Int("insns", 96, "instruções por função enviadas ao modelo")
+	host := fs.String("ollama", os.Getenv("OLLAMA_HOST"), "endereço do Ollama (padrão http://127.0.0.1:11434)")
 	cache := fs.String("cache", ".reversa-cache", "pasta do cache de respostas ('' desliga)")
 	evOut := fs.String("evidence", "", "grava o log de evidências neste arquivo JSON")
 	_ = fs.Parse(args)
@@ -120,7 +122,14 @@ func analyzePS1(args []string) {
 		fatal(err)
 	}
 	mk := func(model string) llm.Chatter {
-		var c llm.Chatter = llm.NewOllama(model)
+		o := llm.NewOllama(model)
+		if h := *host; h != "" {
+			if !strings.Contains(h, "://") {
+				h = "http://" + h
+			}
+			o.BaseURL = h
+		}
+		var c llm.Chatter = o
 		if *cache != "" {
 			c = llm.Cached{Inner: c, Model: model, Dir: *cache}
 		}

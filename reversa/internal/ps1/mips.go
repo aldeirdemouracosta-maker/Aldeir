@@ -85,28 +85,32 @@ func Disasm(w, pc uint32) string {
 	return fmt.Sprintf(".word 0x%08x", w)
 }
 
-// DisasmRange desmonta até n instruções a partir de addr, parando após 'jr $ra' e seu delay slot.
+// span devolve quantas instruções (no máximo n) vão de addr até o fim da função: 'jr $ra' e seu delay slot.
+func (e *Exe) span(addr uint32, n int) int {
+	for i := 0; i < n; i++ {
+		w, ok := e.Word(addr + uint32(i)*4)
+		if !ok {
+			return i
+		}
+		if w == 0x03E00008 { // jr $ra
+			return min(i+2, n)
+		}
+	}
+	return n
+}
+
+// DisasmRange desmonta a função em addr, até n instruções, parando após 'jr $ra' e seu delay slot.
 func (e *Exe) DisasmRange(addr uint32, n int) string {
 	var b strings.Builder
 	var c consts
-	afterRet := -1
-	for i := 0; i < n; i++ {
+	for i, end := 0, e.span(addr, n); i < end; i++ {
 		pc := addr + uint32(i)*4
-		w, ok := e.Word(pc)
-		if !ok {
-			break
-		}
+		w, _ := e.Word(pc)
 		line := fmt.Sprintf("%08x  %08x  %s", pc, w, Disasm(w, pc))
 		if note := c.step(w); note != "" {
 			line += "  ; " + note
 		}
 		b.WriteString(line + "\n")
-		if afterRet >= 0 {
-			break
-		}
-		if w == 0x03E00008 { // jr $ra
-			afterRet = i
-		}
 	}
 	return b.String()
 }

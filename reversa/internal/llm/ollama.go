@@ -15,6 +15,7 @@ type Message struct {
 	Role      string     `json:"role"`
 	Content   string     `json:"content"`
 	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
+	ToolName  string     `json:"tool_name,omitempty"` // em mensagens role "tool": qual ferramenta respondeu
 }
 
 type ToolCall struct {
@@ -55,6 +56,8 @@ type Ollama struct {
 	BaseURL string // padrão http://127.0.0.1:11434
 	Model   string
 	Client  *http.Client
+	// Seed fixa a amostragem. Com temperature 0 e seed fixa a resposta é repetível, o que o cache exige.
+	Seed int
 }
 
 func NewOllama(model string) *Ollama {
@@ -62,7 +65,12 @@ func NewOllama(model string) *Ollama {
 }
 
 func (o *Ollama) Chat(ctx context.Context, msgs []Message, tools []ToolDef) (Message, error) {
-	body, _ := json.Marshal(map[string]any{"model": o.Model, "messages": msgs, "tools": tools, "stream": false})
+	payload := map[string]any{"model": o.Model, "messages": msgs, "stream": false,
+		"options": map[string]any{"temperature": 0, "seed": o.Seed}}
+	if len(tools) > 0 { // sem ferramentas o campo é omitido, não enviado como null
+		payload["tools"] = tools
+	}
+	body, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, o.BaseURL+"/api/chat", bytes.NewReader(body))
 	if err != nil {
 		return Message{}, err
