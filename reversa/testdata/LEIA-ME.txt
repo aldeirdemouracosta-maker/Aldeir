@@ -1,5 +1,15 @@
-exemplo.exe: programa MIPS-I de 24 instruções, escrito e montado para testar o reversa.
-Código-fonte: exemplo.s (montado com clang, ligado em 0x80010000, embrulhado em cabeçalho PS-X EXE).
-Não contém nenhum código de jogo. Pode ser usado e redistribuído livremente (MIT).
+Programas de teste do reversa. Escritos e montados aqui; não contêm código de jogo (MIT).
 
-  reversa ps1 -evidence ev.json testdata\exemplo.exe
+exemplo.exe / exemplo.s    24 instruções: GPU, interrupções e um salto indireto.
+exemplo2.exe / exemplo2.s  91 instruções: laços, chamadas encadeadas, DMA, timers, CD-ROM,
+                           espera de VBlank e um salto por tabela (dispatch).
+
+Uso:
+  reversa ps1 -evidence ev.json testdata\exemplo2.exe
+
+Limitação conhecida de exemplo2: handler_a e handler_b só são alcançados pela tabela de salto de
+dispatch (que não está no arquivo), nunca por jal. O reversa não os encontra e registra o jr de
+dispatch como "desconhecido". É o comportamento esperado.
+
+Para regerar: montar com clang --target=mipsel-none-elf -march=mips1, ligar com ld.lld em 0x80010000,
+extrair .text com llvm-objcopy e embrulhar em cabeçalho PS-X EXE (veja internal/ps1/e2e_test.go).

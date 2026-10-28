@@ -66,10 +66,12 @@ func sh(t *testing.T, dir, name string, args ...string) string {
 }
 
 // buildExe monta, liga em 0x80010000 e embrulha em PS-X EXE. Devolve o EXE e o ELF.
-func buildExe(t *testing.T) (exe []byte, elf string) {
+func buildExe(t *testing.T) (exe []byte, elf string) { return buildFrom(t, asmProg) }
+
+func buildFrom(t *testing.T, src string) (exe []byte, elf string) {
 	need(t, "clang", "ld.lld", "llvm-objcopy")
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "p.s"), []byte(asmProg), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "p.s"), []byte(src), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	sh(t, dir, "clang", "--target=mipsel-none-elf", "-march=mips1", "-mno-abicalls", "-c", "p.s", "-o", "p.o")
@@ -131,12 +133,25 @@ func TestPontaAPonta(t *testing.T) {
 	}
 }
 
+// aliasOf lista os apelidos que o llvm imprime no lugar do mnemônico real, e só aceita o mnemônico esperado.
+var aliasOf = map[string]map[string]bool{
+	"move": {"addu": true, "or": true}, "beqz": {"beq": true}, "bnez": {"bne": true}, "b": {"beq": true},
+	"negu": {"subu": true}, "not": {"nor": true},
+}
+
 var objdumpLine = regexp.MustCompile(`^\s*([0-9a-f]{8}):\s+(?:[0-9a-f]{2} ){4}\s*(\S+)`)
 
 // TestProgramaInteiroContraLLVM compara o mnemônico de cada instrução do programa com o llvm-objdump.
 func TestProgramaInteiroContraLLVM(t *testing.T) {
 	need(t, "llvm-objdump")
 	raw, elf := buildExe(t)
+	if n := compareAll(t, raw, elf); n != 24 {
+		t.Fatalf("comparou %d instruções, esperava 24", n)
+	}
+}
+
+// compareAll compara o mnemônico de toda instrução do EXE com o llvm-objdump do ELF e devolve quantas comparou.
+func compareAll(t *testing.T, raw []byte, elf string) int {
 	e, err := ParseExe(raw)
 	if err != nil {
 		t.Fatal(err)
@@ -154,12 +169,11 @@ func TestProgramaInteiroContraLLVM(t *testing.T) {
 		if !ok {
 			t.Fatalf("endereço %08x fora do EXE", pc)
 		}
-		if ours := strings.Fields(Disasm(w, pc))[0]; ours != m[2] {
+		ours := strings.Fields(Disasm(w, pc))[0]
+		if ok := ours == m[2] || aliasOf[m[2]][ours]; !ok {
 			t.Errorf("%08x: nosso=%q llvm=%q", pc, Disasm(w, pc), m[2])
 		}
 		compared++
 	}
-	if compared != 24 {
-		t.Fatalf("comparou %d instruções, esperava 24", compared)
-	}
+	return compared
 }

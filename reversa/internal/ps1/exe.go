@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"sort"
+	"sync"
 )
 
 const headerSize = 0x800
@@ -14,6 +15,9 @@ type Exe struct {
 	PC, GP, Load, SP uint32
 	Region           string
 	Text             []byte // segmento de código/dados, começa em Load
+
+	once  sync.Once
+	calls map[uint32]int // alvo de jal -> número de chamadas; inclui a entrada
 }
 
 var le = binary.LittleEndian
@@ -56,21 +60,29 @@ type Func struct {
 	Calls int
 }
 
-// FindFunctions varre o código atrás de 'jal' (alvos de chamada são confiáveis, ao contrário de
-// prólogos) e devolve os candidatos mais chamados primeiro. O ponto de entrada sempre entra.
+// callTargets varre o código uma vez atrás de 'jal' (alvos de chamada são confiáveis, ao contrário de prólogos).
+func (e *Exe) callTargets() map[uint32]int {
+	e.once.Do(func() {
+		e.calls = map[uint32]int{e.PC: 0}
+		for off := 0; off+4 <= len(e.Text); off += 4 {
+			w := le.Uint32(e.Text[off:])
+			if w>>26 != 3 {
+				continue
+			}
+			pc := e.Load + uint32(off)
+			t := (pc+4)&0xF0000000 | (w&0x03FFFFFF)<<2
+			if t >= e.Load && t < e.Load+uint32(len(e.Text)) {
+				e.calls[t]++
+			}
+		}
+	})
+	return e.calls
+}
+
+// FindFunctions devolve os candidatos a função, os mais chamados primeiro. O ponto de entrada sempre entra.
+// Funções só alcançadas por jalr ou tabelas de salto não aparecem.
 func (e *Exe) FindFunctions() []Func {
-	counts := map[uint32]int{e.PC: 0}
-	for off := 0; off+4 <= len(e.Text); off += 4 {
-		w := le.Uint32(e.Text[off:])
-		if w>>26 != 3 {
-			continue
-		}
-		pc := e.Load + uint32(off)
-		t := (pc+4)&0xF0000000 | (w&0x03FFFFFF)<<2
-		if t >= e.Load && t < e.Load+uint32(len(e.Text)) {
-			counts[t]++
-		}
-	}
+	counts := e.callTargets()
 	out := make([]Func, 0, len(counts))
 	for a, c := range counts {
 		out = append(out, Func{a, c})

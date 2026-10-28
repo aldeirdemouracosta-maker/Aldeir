@@ -25,8 +25,10 @@ type PS1 struct {
 	MaxInsns    int // instruções por função enviadas ao modelo
 }
 
-const workerPrompt = `Código MIPS R3000 (PlayStation 1) de uma função. Em no máximo 3 linhas em português, diga o que ela
-provavelmente faz. Se não der para saber, diga "indeterminado". Não invente nomes de símbolos.
+const workerPrompt = `Código MIPS R3000 (PlayStation 1) de uma função.%s
+Responda em no máximo 3 linhas, em português: (1) o propósito provável; (2) que registradores de hardware
+(os nomes após ';' na desmontagem) e constantes ela usa. Cite os endereços e nomes que aparecem no código.
+Não invente símbolos. Se não der para saber, diga "indeterminado".
 
 %s`
 
@@ -41,6 +43,7 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 		funcs = funcs[:p.TopN]
 	}
 	type job struct {
+		context string
 		fn      ps1.Func
 		dis     string
 		ev      int
@@ -49,9 +52,9 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 	jobs := make([]job, len(funcs))
 	for i, f := range funcs {
 		dis := exe.DisasmRange(f.Addr, p.MaxInsns)
-		rec := p.Evidence.AddAs(evidence.Derived, "ps1_disasm", fmt.Sprintf("0x%08x (chamada %dx)", f.Addr, f.Calls), dis,
+		rec := p.Evidence.AddAs(evidence.Derived, "ps1_disasm", fmt.Sprintf("0x%08x (%s)", f.Addr, role(exe, f)), dis,
 			"Desmontagem linear; chamadas indiretas (jalr) e dados no meio do código não são resolvidos.")
-		jobs[i] = job{fn: f, dis: dis, ev: rec.ID}
+		jobs[i] = job{fn: f, dis: dis, ev: rec.ID, context: funcContext(exe, f, p.MaxInsns)}
 		if ind := exe.Indirects(f.Addr, p.MaxInsns); len(ind) > 0 {
 			var list strings.Builder
 			for _, pc := range ind {
@@ -65,7 +68,7 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 
 	// Estágio 2: hipóteses em paralelo.
 	res := Map(ctx, jobs, p.Workers, func(ctx context.Context, j job) (string, error) {
-		m, err := p.Worker.Chat(ctx, []llm.Message{{Role: "user", Content: fmt.Sprintf(workerPrompt, j.dis)}}, nil)
+		m, err := p.Worker.Chat(ctx, []llm.Message{{Role: "user", Content: fmt.Sprintf(workerPrompt, j.context, j.dis)}}, nil)
 		if err != nil {
 			return "", err
 		}
@@ -81,7 +84,7 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 			continue
 		}
 		hyp := p.Evidence.AddAs(evidence.Inferred, "llm_hipotese", fmt.Sprintf("0x%08x", j.fn.Addr), r.Val, "Hipótese do modelo; não verificada.")
-		fmt.Fprintf(&sum, "- 0x%08x, chamada %dx, desmontagem [E%d], hipótese [E%d]: %s\n", j.fn.Addr, j.fn.Calls, j.ev, hyp.ID, r.Val)
+		fmt.Fprintf(&sum, "- 0x%08x, %s, desmontagem [E%d], hipótese [E%d]: %s\n", j.fn.Addr, role(exe, j.fn), j.ev, hyp.ID, r.Val)
 		if j.unknown != 0 {
 			fmt.Fprintf(&sum, "  Atenção: saltos indiretos não resolvidos [E%d]; não afirme para onde vão.\n", j.unknown)
 		}
@@ -96,4 +99,31 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 		return "", err
 	}
 	return m.Content, nil
+}
+
+// role descreve como a função foi achada: o ponto de entrada não é chamado por jal.
+func role(exe *ps1.Exe, f ps1.Func) string {
+	if f.Addr == exe.PC {
+		if f.Calls > 0 {
+			return fmt.Sprintf("ponto de entrada, também chamada %dx", f.Calls)
+		}
+		return "ponto de entrada"
+	}
+	return fmt.Sprintf("chamada %dx", f.Calls)
+}
+
+// funcContext reúne fatos determinísticos que ajudam o modelo: papel da função e o que ela chama.
+func funcContext(exe *ps1.Exe, f ps1.Func, maxInsns int) string {
+	var b strings.Builder
+	if f.Addr == exe.PC {
+		b.WriteString(" É o ponto de entrada do programa.")
+	}
+	if cs := exe.Callees(f.Addr, maxInsns); len(cs) > 0 {
+		b.WriteString(" Ela chama:")
+		for _, c := range cs {
+			fmt.Fprintf(&b, " 0x%08x", c)
+		}
+		b.WriteString(".")
+	}
+	return b.String()
 }

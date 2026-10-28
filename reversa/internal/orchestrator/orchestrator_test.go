@@ -3,7 +3,9 @@ package orchestrator
 import (
 	"context"
 	"encoding/binary"
+	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -90,5 +92,56 @@ func TestPipelinePS1(t *testing.T) {
 		if r.Tool == "ps1_header" && r.Confidence != evidence.Observed {
 			t.Fatal("cabeçalho deve ser 'observed'")
 		}
+	}
+}
+
+// capture guarda o texto de cada pedido recebido, com segurança para uso concorrente.
+type capture struct {
+	mu   sync.Mutex
+	seen []string
+}
+
+func (c *capture) Chat(_ context.Context, msgs []llm.Message, _ []llm.ToolDef) (llm.Message, error) {
+	c.mu.Lock()
+	c.seen = append(c.seen, msgs[len(msgs)-1].Content)
+	c.mu.Unlock()
+	return llm.Message{Role: "assistant", Content: "ok"}, nil
+}
+
+func TestPromptDoOperarioTemContexto(t *testing.T) {
+	raw, err := os.ReadFile("../../testdata/exemplo2.exe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	exe, err := ps1.ParseExe(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := &capture{}
+	p := &PS1{Worker: w, Synthesizer: stub{"fim"}, Evidence: &evidence.Log{}, Workers: 2, TopN: 20, MaxInsns: 96}
+	if _, err := p.Run(context.Background(), exe); err != nil {
+		t.Fatal(err)
+	}
+	var entry, waitVblank string
+	for _, s := range w.seen {
+		switch {
+		case strings.Contains(s, "ponto de entrada do programa"):
+			entry = s
+		case strings.Contains(s, "; I_STAT") && strings.Contains(s, "andi"):
+			waitVblank = s
+		}
+	}
+	if entry == "" || !strings.Contains(entry, "Ela chama: 0x80010058 0x80010074") {
+		t.Errorf("prompt da entrada sem papel ou sem callees:\n%s", entry)
+	}
+	if waitVblank == "" || strings.Contains(waitVblank, "Ela chama") {
+		t.Errorf("wait_vblank não chama ninguém e não deve listar callees:\n%s", waitVblank)
+	}
+	var sawLabel bool
+	for _, r := range p.Evidence.All() {
+		sawLabel = sawLabel || (r.Tool == "ps1_disasm" && strings.Contains(r.Args, "ponto de entrada"))
+	}
+	if !sawLabel {
+		t.Error("evidência da entrada deveria dizer 'ponto de entrada', não 'chamada 0x'")
 	}
 }

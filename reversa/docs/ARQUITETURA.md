@@ -41,6 +41,7 @@ Aviso: ROMs e firmware têm direitos autorais. Use ROMs que você mesmo extraiu,
 - [x] Orquestração: operários em paralelo com limite, cache em disco, três estágios
 - [x] Supervisão de processos: grupo próprio, prazo, saída limitada, erros tipados
 - [x] Servidor MCP por stdio (`reversa mcp -root <pasta>`) com restrição de pasta
+- [x] Fim de função por heurística (jr/j/b incondicional sem desvio pendente, ou início de outra função), lista de funções chamadas no prompt, entrada rotulada
 - [ ] Ghidra persistente com loader PS1 e idioma MIPS LE 32 fixado
 - [ ] Backend PCSX-Redux (dinâmico) e rizin/radare2
 - [ ] CHD, Joliet, overlays, executáveis compactados, tabelas de salto

@@ -85,18 +85,62 @@ func Disasm(w, pc uint32) string {
 	return fmt.Sprintf(".word 0x%08x", w)
 }
 
-// span devolve quantas instruções (no máximo n) vão de addr até o fim da função: 'jr $ra' e seu delay slot.
+// span devolve quantas instruções (no máximo n) vão de addr até o fim provável da função.
+//
+// A função termina após um salto incondicional (jr, j ou b) e seu delay slot, a menos que algum desvio
+// anterior aponte para depois dele (retorno antecipado, if/else). Também termina onde começa outra função
+// (alvo de jal). É uma heurística: tabelas de salto e funções sem retorno podem enganá-la.
 func (e *Exe) span(addr uint32, n int) int {
+	starts := e.callTargets()
+	var pending uint32 // maior alvo de desvio para frente visto até aqui
 	for i := 0; i < n; i++ {
-		w, ok := e.Word(addr + uint32(i)*4)
+		pc := addr + uint32(i)*4
+		w, ok := e.Word(pc)
 		if !ok {
 			return i
 		}
-		if w == 0x03E00008 { // jr $ra
-			return min(i+2, n)
+		if _, isStart := starts[pc]; isStart && i > 0 {
+			return i
+		}
+		op := w >> 26
+		unconditional := false
+		switch {
+		case op == 4 || op == 5 || op == 6 || op == 7 || op == 1: // beq bne blez bgtz regimm
+			if t := pc + 4 + uint32(int32(int16(w))<<2); t > pending {
+				pending = t
+			}
+			unconditional = op == 4 && w>>21&31 == w>>16&31 // beq rX,rX: desvio incondicional
+		case op == 2: // j
+			if t := (pc+4)&0xF0000000 | (w&0x03FFFFFF)<<2; t > pc && t > pending {
+				pending = t
+			}
+			unconditional = true
+		case op == 0 && w&0x3F == 0x08: // jr
+			unconditional = true
+		}
+		if unconditional && pending < pc+8 {
+			return min(i+2, n) // inclui o delay slot
 		}
 	}
 	return n
+}
+
+// Callees devolve, em ordem de aparição e sem repetição, os alvos de jal dentro da função em addr.
+func (e *Exe) Callees(addr uint32, n int) []uint32 {
+	var out []uint32
+	seen := map[uint32]bool{}
+	for i, end := 0, e.span(addr, n); i < end; i++ {
+		pc := addr + uint32(i)*4
+		w, _ := e.Word(pc)
+		if w>>26 != 3 {
+			continue
+		}
+		if t := (pc+4)&0xF0000000 | (w&0x03FFFFFF)<<2; !seen[t] {
+			seen[t] = true
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 // DisasmRange desmonta a função em addr, até n instruções, parando após 'jr $ra' e seu delay slot.
