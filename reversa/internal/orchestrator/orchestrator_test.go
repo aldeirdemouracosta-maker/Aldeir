@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -143,5 +144,29 @@ func TestPromptDoOperarioTemContexto(t *testing.T) {
 	}
 	if !sawLabel {
 		t.Error("evidência da entrada deveria dizer 'ponto de entrada', não 'chamada 0x'")
+	}
+}
+
+func TestProgressoPorEstagio(t *testing.T) {
+	raw, err := os.ReadFile("../../testdata/exemplo2.exe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	exe, err := ps1.ParseExe(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	var lines []string
+	p := &PS1{Worker: stub{"ok"}, Synthesizer: stub{"fim"}, Evidence: &evidence.Log{}, Workers: 2, TopN: 5, MaxInsns: 96,
+		Progress: func(f string, a ...any) { mu.Lock(); lines = append(lines, fmt.Sprintf(f, a...)); mu.Unlock() }}
+	if _, err := p.Run(context.Background(), exe); err != nil {
+		t.Fatal(err)
+	}
+	all := strings.Join(lines, "\n")
+	for _, want := range []string{"estágio 1/3", "estágio 2/3: 5/5", "estágio 3/3"} {
+		if !strings.Contains(all, want) {
+			t.Errorf("progresso sem %q:\n%s", want, all)
+		}
 	}
 }

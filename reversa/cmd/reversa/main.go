@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"time"
 
 	"reversa/internal/agent"
 	"reversa/internal/backend"
@@ -141,6 +142,10 @@ func analyzePS1(args []string) {
 	log := &evidence.Log{Subject: hex.EncodeToString(sum[:])}
 	p := &orchestrator.PS1{Worker: mk(*workerModel), Synthesizer: mk(*synthModel), Evidence: log,
 		Workers: *workers, TopN: *top, MaxInsns: *insns}
+	start := time.Now()
+	p.Progress = func(format string, args ...any) {
+		fmt.Fprintf(os.Stderr, "[%s] %s\n", time.Since(start).Round(time.Second), fmt.Sprintf(format, args...))
+	}
 	report, err := p.Run(ctx, exe)
 	if *evOut != "" {
 		data, _ := json.MarshalIndent(log.All(), "", "  ")

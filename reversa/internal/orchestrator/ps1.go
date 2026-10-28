@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 
 	"reversa/internal/evidence"
 	"reversa/internal/llm"
@@ -23,6 +24,14 @@ type PS1 struct {
 	Workers     int
 	TopN        int // quantas funções analisar
 	MaxInsns    int // instruções por função enviadas ao modelo
+	// Progress, se definido, recebe uma linha a cada marco (estágios e funções concluídas).
+	Progress func(format string, args ...any)
+}
+
+func (p *PS1) logf(format string, args ...any) {
+	if p.Progress != nil {
+		p.Progress(format, args...)
+	}
 }
 
 const workerPrompt = `Código MIPS R3000 (PlayStation 1) de uma função.%s
@@ -67,8 +76,11 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 	}
 
 	// Estágio 2: hipóteses em paralelo.
+	p.logf("estágio 1/3 concluído: %d funções; resumindo com o modelo pequeno (%d em paralelo)", len(jobs), max(p.Workers, 1))
+	var done atomic.Int32
 	res := Map(ctx, jobs, p.Workers, func(ctx context.Context, j job) (string, error) {
 		m, err := p.Worker.Chat(ctx, []llm.Message{{Role: "user", Content: fmt.Sprintf(workerPrompt, j.context, j.dis)}}, nil)
+		p.logf("estágio 2/3: %d/%d funções resumidas (0x%08x)", done.Add(1), len(jobs), j.fn.Addr)
 		if err != nil {
 			return "", err
 		}
@@ -91,6 +103,7 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 	}
 
 	// Estágio 3: síntese.
+	p.logf("estágio 3/3: escrevendo o relatório com o modelo grande (a primeira resposta pode demorar)")
 	m, err := p.Synthesizer.Chat(ctx, []llm.Message{
 		{Role: "system", Content: "Você é analista de engenharia reversa de PS1. Escreva um relatório em português. Cite [E#] em cada afirmação e separe fatos de hipóteses."},
 		{Role: "user", Content: sum.String()},
