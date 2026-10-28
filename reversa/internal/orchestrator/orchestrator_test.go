@@ -207,7 +207,8 @@ func TestRelatorioTemCitacoesCorretas(t *testing.T) {
 	for _, want := range []string{
 		"### 0x80010074 (chamada 2x)", "lê I_STAT (0x1f801070); escreve 0x00000000 em I_STAT (0x1f801070)",
 		"escreve valor variável em DMA2_GPU_MADR (0x1f8010a0)", "escreve 0x01000201 em DMA2_GPU_CHCR (0x1f8010a8)", "lê TIMER0_COUNT (0x1f801100)",
-		"escreve 0x03000001 em GPU_GP1 (0x1f801814)", "desvio em 0x80010084 volta para 0x80010078 (condicional; espera ativa: só sai quando a leitura de I_STAT (0x1f801070) muda)",
+		"escreve 0x03000001 em GPU_GP1 (0x1f801814)", "desvio em 0x80010084 volta para 0x80010078 (condicional; espera ativa em I_STAT (0x1f801070): repete enquanto (I_STAT & 0x1) == 0; sai quando (I_STAT & 0x1) != 0)",
+		"desvio em 0x80010050 volta para 0x80010040 (incondicional; chama dentro do laço: 0x80010074, 0x800100e8)",
 		"Cobertura: 8 de 8 funções",
 		"Saltos indiretos sem destino conhecido: 0x80010124", "## Resumo geral (hipótese do modelo, não verificada)", "resumo inventado [E77]",
 	} {
@@ -238,7 +239,7 @@ func TestPromptDoOperarioTemFatosVerificados(t *testing.T) {
 			vblank = s
 		}
 	}
-	for _, want := range []string{"Fatos verificados (não contradiga): lê I_STAT", "espera ativa: só sai quando a leitura de I_STAT"} {
+	for _, want := range []string{"Fatos verificados (não contradiga): lê I_STAT", "repete enquanto (I_STAT & 0x1) == 0; sai quando (I_STAT & 0x1) != 0"} {
 		if !strings.Contains(vblank, want) {
 			t.Errorf("prompt de wait_vblank sem %q:\n%s", want, vblank)
 		}

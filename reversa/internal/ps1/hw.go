@@ -44,6 +44,10 @@ func HWName(addr uint32) string {
 type consts struct {
 	val [32]uint32
 	ok  [32]bool
+	// origem de um valor lido de hardware: registrador, máscara já aplicada (andi) e se o rastreio vale
+	src     [32]HWAccess
+	srcMask [32]uint32
+	srcOK   [32]bool
 }
 
 // newConsts começa com $zero conhecido (0): sem isso 'sw $zero' e 'addiu rt,$zero,k' perderiam o valor.
@@ -56,13 +60,13 @@ func newConsts() *consts {
 // Escritas em $zero são descartadas pelo hardware, então nunca mudam o estado.
 func (c *consts) set(r, v uint32) {
 	if r != 0 {
-		c.val[r], c.ok[r] = v, true
+		c.val[r], c.ok[r], c.srcOK[r] = v, true, false
 	}
 }
 
 func (c *consts) kill(r uint32) {
 	if r != 0 {
-		c.ok[r] = false
+		c.ok[r], c.srcOK[r] = false, false
 	}
 }
 
@@ -79,6 +83,9 @@ func (c *consts) step(w uint32) (HWAccess, bool) {
 		} else {
 			c.kill(rt)
 		}
+	case op == 0x0C && c.srcOK[rs]: // andi sobre valor lido de hardware: guarda a máscara
+		c.src[rt], c.srcMask[rt], c.srcOK[rt] = c.src[rs], c.srcMask[rs]&uint32(uint16(w)), rt != 0
+		c.ok[rt] = false
 	case op == 0x0D: // ori
 		if c.ok[rs] {
 			c.set(rt, c.val[rs]|uint32(uint16(w)))
@@ -88,6 +95,9 @@ func (c *consts) step(w uint32) (HWAccess, bool) {
 	case op >= 0x20 && op <= 0x26: // loads: escrevem rt, usam rs
 		acc, ok := c.access(rs, imm)
 		c.kill(rt)
+		if mask, sized := map[uint32]uint32{0x20: 0xFF, 0x21: 0xFFFF, 0x23: 0xFFFFFFFF, 0x24: 0xFF, 0x25: 0xFFFF}[op]; ok && sized && rt != 0 {
+			c.src[rt], c.srcMask[rt], c.srcOK[rt] = acc, mask, true // valor de hardware: rastreia até o desvio
+		}
 		return acc, ok
 	case op >= 0x28 && op <= 0x2E: // stores: só usam rs; o valor vem de rt
 		acc, ok := c.access(rs, imm)
@@ -163,19 +173,53 @@ type Loop struct {
 	PC, Target    uint32
 	Unconditional bool       // j ou beq rX,rX
 	Reads         []HWAccess // leituras de hardware dentro do corpo do laço
+	Calls         []uint32   // alvos de jal dentro do corpo do laço, sem repetição
+	// While e Until descrevem a condição quando o desvio testa um valor lido de hardware, por exemplo
+	// "(I_STAT & 0x1) == 0" (repete enquanto) e "(I_STAT & 0x1) != 0" (sai quando). Vazios se não der para saber.
+	While, Until string
 }
 
 // Polling diz se é um laço condicional que lê hardware: espera ativa por uma mudança de estado.
 func (l Loop) Polling() bool { return !l.Unconditional && len(l.Reads) > 0 }
+
+// branchCond descreve a condição de um beq/bne contra $zero que testa um valor lido de hardware.
+// Devolve {condição de desvio tomado, negação}, por exemplo {"(I_STAT & 0x1) == 0", "(I_STAT & 0x1) != 0"}.
+func (c *consts) branchCond(w uint32) ([2]string, bool) {
+	op, rs, rt := w>>26, w>>21&31, w>>16&31
+	if op != 4 && op != 5 {
+		return [2]string{}, false
+	}
+	r := rs
+	if rs == 0 {
+		r = rt
+	} else if rt != 0 {
+		return [2]string{}, false
+	}
+	if !c.srcOK[r] {
+		return [2]string{}, false
+	}
+	expr := c.src[r].Name
+	if m := c.srcMask[r]; m != 0xFFFFFFFF {
+		expr = fmt.Sprintf("(%s & 0x%x)", expr, m)
+	}
+	taken, other := expr+" == 0", expr+" != 0" // beq desvia quando zero
+	if op == 5 {
+		taken, other = other, taken
+	}
+	return [2]string{taken, other}, true
+}
 
 // Loops devolve os desvios para trás da função em addr. Um laço condicional que lê um registrador de
 // hardware é uma espera ativa: o código só sai quando o registrador muda.
 func (e *Exe) Loops(addr uint32, n int) []Loop {
 	acc := e.HWAccesses(addr, n)
 	var out []Loop
+	c := newConsts()
 	for i, end := 0, e.span(addr, n); i < end; i++ {
 		pc := addr + uint32(i)*4
 		w, _ := e.Word(pc)
+		cond, haveCond := c.branchCond(w) // avalia antes de step: o desvio não escreve registradores
+		c.step(w)
 		op := w >> 26
 		var t uint32
 		uncond := false
@@ -193,6 +237,18 @@ func (e *Exe) Loops(addr uint32, n int) []Loop {
 			continue
 		}
 		l := Loop{PC: pc, Target: t, Unconditional: uncond}
+		if haveCond && !uncond {
+			l.While, l.Until = cond[0], cond[1]
+		}
+		seen := map[uint32]bool{}
+		for off := t; off <= pc; off += 4 {
+			if cw, _ := e.Word(off); cw>>26 == 3 {
+				if tg := (off+4)&0xF0000000 | (cw&0x03FFFFFF)<<2; !seen[tg] {
+					seen[tg] = true
+					l.Calls = append(l.Calls, tg)
+				}
+			}
+		}
 		for _, a := range acc {
 			if !a.Store && a.PC >= t && a.PC <= pc {
 				l.Reads = append(l.Reads, a)

@@ -163,7 +163,8 @@ func hwFacts(acc []ps1.HWAccess) string {
 	return strings.Join(order, "; ")
 }
 
-// loopFacts descreve os desvios para trás; um laço condicional que lê hardware é uma espera ativa (polling).
+// loopFacts descreve os desvios para trás. Um laço condicional que lê hardware é uma espera ativa (polling);
+// quando o programa consegue derivar a condição, ela vai explícita para o modelo não inverter a lógica.
 func loopFacts(loops []ps1.Loop) string {
 	parts := make([]string, len(loops))
 	for i, l := range loops {
@@ -173,7 +174,16 @@ func loopFacts(loops []ps1.Loop) string {
 		}
 		parts[i] = fmt.Sprintf("desvio em 0x%08x volta para 0x%08x (%s", l.PC, l.Target, kind)
 		if l.Polling() {
-			parts[i] += fmt.Sprintf("; espera ativa: só sai quando a leitura de %s (0x%08x) muda", l.Reads[0].Name, l.Reads[0].Addr&0x1FFFFFFF)
+			r := l.Reads[0]
+			where := fmt.Sprintf("%s (0x%08x)", r.Name, r.Addr&0x1FFFFFFF)
+			if l.While != "" {
+				parts[i] += fmt.Sprintf("; espera ativa em %s: repete enquanto %s; sai quando %s", where, l.While, l.Until)
+			} else {
+				parts[i] += fmt.Sprintf("; espera ativa lendo %s, condição de saída não determinada", where)
+			}
+		}
+		if len(l.Calls) > 0 {
+			parts[i] += "; chama dentro do laço: " + hexList(l.Calls)
 		}
 		parts[i] += ")"
 	}

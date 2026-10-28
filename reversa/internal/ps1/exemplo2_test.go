@@ -185,6 +185,10 @@ func TestExemplo2LacosEEsperaAtiva(t *testing.T) {
 		loops[0].Reads[0].Name != "I_STAT" {
 		t.Fatalf("wait_vblank: %+v", loops)
 	}
+	// condição exata: repete enquanto o bit 0 é 0; sai quando vira 1 (o modelo já inverteu isto)
+	if loops[0].While != "(I_STAT & 0x1) == 0" || loops[0].Until != "(I_STAT & 0x1) != 0" {
+		t.Errorf("condição do laço: while=%q until=%q", loops[0].While, loops[0].Until)
+	}
 	cs := e.Loops(e2Checksum, 96)
 	if len(cs) != 1 || cs[0].PC != 0x800100b0 || cs[0].Target != 0x8001009c || !cs[0].Unconditional || cs[0].Polling() {
 		t.Errorf("checksum deveria ter um laço incondicional sem polling: %+v", cs)
@@ -192,6 +196,12 @@ func TestExemplo2LacosEEsperaAtiva(t *testing.T) {
 	st := e.Loops(e2Start, 96)
 	if len(st) != 1 || st[0].PC != 0x80010050 || st[0].Target != e2MainLoop || !st[0].Unconditional {
 		t.Errorf("_start: laço principal 'j main_loop': %+v", st)
+	}
+	if got := st[0].Calls; len(got) != 2 || got[0] != e2WaitVblank || got[1] != e2ReadTimer {
+		t.Errorf("chamadas dentro do laço principal: %x", got)
+	}
+	if cs[0].While != "" {
+		t.Errorf("laço incondicional não tem condição: %q", cs[0].While)
 	}
 	for _, a := range []uint32{e2GPUReset, e2DMA, e2ReadTimer, e2CDCommand} {
 		if l := e.Loops(a, 96); len(l) != 0 {
