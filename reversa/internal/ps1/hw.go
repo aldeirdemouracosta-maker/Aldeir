@@ -49,8 +49,8 @@ type consts struct {
 func (c *consts) set(r, v uint32) { c.val[r], c.ok[r] = v, true }
 func (c *consts) kill(r uint32)   { c.ok[r] = false }
 
-// step atualiza o estado e devolve um comentário se a instrução acessa um registrador de hardware.
-func (c *consts) step(w uint32) string {
+// step atualiza o estado e devolve o acesso, se a instrução lê ou escreve um registrador de hardware.
+func (c *consts) step(w uint32) (HWAccess, bool) {
 	op, rs, rt, rd := w>>26, w>>21&31, w>>16&31, w>>11&31
 	imm := int32(int16(w))
 	switch {
@@ -69,9 +69,9 @@ func (c *consts) step(w uint32) string {
 			c.kill(rt)
 		}
 	case op >= 0x20 && op <= 0x26: // loads: escrevem rt, usam rs
-		note := c.access(rs, imm)
+		acc, ok := c.access(rs, imm)
 		c.kill(rt)
-		return note
+		return acc, ok
 	case op >= 0x28 && op <= 0x2E: // stores: só usam rs
 		return c.access(rs, imm)
 	case op == 0 && w != 0 && w&0x3F != 0x08 && w&0x3F != 0x18 && w&0x3F != 0x19 && w&0x3F != 0x1A && w&0x3F != 0x1B:
@@ -89,17 +89,41 @@ func (c *consts) step(w uint32) string {
 			c.kill(rt)
 		}
 	}
-	return ""
+	return HWAccess{}, false
 }
 
-func (c *consts) access(base uint32, off int32) string {
+func (c *consts) access(base uint32, off int32) (HWAccess, bool) {
 	if !c.ok[base] {
-		return ""
+		return HWAccess{}, false
 	}
-	if n := HWName(c.val[base] + uint32(off)); n != "" {
-		return n
+	addr := c.val[base] + uint32(off)
+	if n := HWName(addr); n != "" {
+		return HWAccess{Name: n, Addr: addr}, true
 	}
-	return ""
+	return HWAccess{}, false
+}
+
+// HWAccess é um acesso a registrador de hardware achado por propagação linear de constantes.
+type HWAccess struct {
+	Name string
+	Addr uint32
+	PC   uint32
+}
+
+// HWAccesses lista, em ordem, os acessos a registradores de hardware da função em addr (até n instruções).
+// É determinístico: serve de fato para o relatório, ao contrário da interpretação do modelo.
+func (e *Exe) HWAccesses(addr uint32, n int) []HWAccess {
+	var out []HWAccess
+	var c consts
+	for i, end := 0, e.span(addr, n); i < end; i++ {
+		pc := addr + uint32(i)*4
+		w, _ := e.Word(pc)
+		if acc, ok := c.step(w); ok {
+			acc.PC = pc
+			out = append(out, acc)
+		}
+	}
+	return out
 }
 
 // Indirects devolve os endereços de saltos cujo destino não é estático (jr que não seja $ra, e jalr)

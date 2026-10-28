@@ -35,9 +35,9 @@ func (p *PS1) logf(format string, args ...any) {
 }
 
 const workerPrompt = `Código MIPS R3000 (PlayStation 1) de uma função.%s
-Responda em no máximo 3 linhas, em português: (1) o propósito provável; (2) que registradores de hardware
-(os nomes após ';' na desmontagem) e constantes ela usa. Cite os endereços e nomes que aparecem no código.
-Não invente símbolos. Se não der para saber, diga "indeterminado".
+Responda em no máximo 3 linhas, em português, dizendo o propósito provável da função. Use os nomes de
+registradores de hardware e os endereços como aparecem no código (após ';'); não recalcule nem converta números.
+Não liste instruções. Não invente símbolos. Se não der para saber, diga "indeterminado".
 
 %s`
 
@@ -87,32 +87,83 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 		return strings.TrimSpace(m.Content), nil
 	})
 
-	var sum strings.Builder
-	fmt.Fprintf(&sum, "Fatos [E%d]: %s\n\nFunções:\n", hdr.ID, header)
+	// Os fatos de cada função vêm do programa; o modelo só escreve o resumo geral. Assim as citações [E#] e os
+	// registradores de hardware nunca dependem de o modelo copiar números corretamente.
+	var body, forModel strings.Builder
+	fmt.Fprintf(&body, "## Fatos\n\n- Cabeçalho [E%d] (observado): %s\n\n## Funções\n", hdr.ID, header)
+	fmt.Fprintf(&forModel, "Cabeçalho: %s\n\nFunções analisadas:\n", header)
 	for i, r := range res {
 		j := jobs[i]
+		fmt.Fprintf(&body, "\n### 0x%08x (%s)\n\n- Desmontagem: [E%d] (derivada)\n", j.fn.Addr, role(exe, j.fn), j.ev)
+		if hw := groupHW(exe.HWAccesses(j.fn.Addr, p.MaxInsns)); hw != "" {
+			fmt.Fprintf(&body, "- Hardware tocado (derivado): %s\n", hw)
+		}
+		if cs := exe.Callees(j.fn.Addr, p.MaxInsns); len(cs) > 0 {
+			fmt.Fprintf(&body, "- Chama: %s\n", hexList(cs))
+		}
+		if j.unknown != 0 {
+			fmt.Fprintf(&body, "- Saltos indiretos sem destino conhecido: %s [E%d] (desconhecido)\n", hexList(exe.Indirects(j.fn.Addr, p.MaxInsns)), j.unknown)
+		}
 		if r.Err != nil {
-			fmt.Fprintf(&sum, "- 0x%08x [E%d]: (falhou: %v)\n", j.fn.Addr, j.ev, r.Err)
+			fmt.Fprintf(&body, "- Hipótese do modelo: falhou (%v)\n", r.Err)
 			continue
 		}
 		hyp := p.Evidence.AddAs(evidence.Inferred, "llm_hipotese", fmt.Sprintf("0x%08x", j.fn.Addr), r.Val, "Hipótese do modelo; não verificada.")
-		fmt.Fprintf(&sum, "- 0x%08x, %s, desmontagem [E%d], hipótese [E%d]: %s\n", j.fn.Addr, role(exe, j.fn), j.ev, hyp.ID, r.Val)
+		fmt.Fprintf(&body, "- Hipótese do modelo [E%d] (inferida, não verificada): %s\n", hyp.ID, oneLine(r.Val))
+		fmt.Fprintf(&forModel, "- 0x%08x (%s): %s\n", j.fn.Addr, role(exe, j.fn), oneLine(r.Val))
 		if j.unknown != 0 {
-			fmt.Fprintf(&sum, "  Atenção: saltos indiretos não resolvidos [E%d]; não afirme para onde vão.\n", j.unknown)
+			fmt.Fprintf(&forModel, "  Atenção: há saltos indiretos não resolvidos; não afirme para onde vão.\n")
 		}
 	}
 
-	// Estágio 3: síntese.
-	p.logf("estágio 3/3: escrevendo o relatório com o modelo grande (a primeira resposta pode demorar)")
+	// Estágio 3: resumo geral.
+	p.logf("estágio 3/3: escrevendo o resumo geral com o modelo grande (a primeira resposta pode demorar)")
 	m, err := p.Synthesizer.Chat(ctx, []llm.Message{
-		{Role: "system", Content: "Você é analista de engenharia reversa de PS1. Escreva um relatório em português. Cite [E#] em cada afirmação e separe fatos de hipóteses."},
-		{Role: "user", Content: sum.String()},
+		{Role: "system", Content: "Você é analista de engenharia reversa de PS1. Escreva em português um resumo geral de 4 a 6 linhas sobre o que o programa parece fazer, com base nos resumos das funções. Não cite números de evidência, não liste instruções e não invente endereços ou nomes. Diga o que for incerto."},
+		{Role: "user", Content: forModel.String()},
 	}, nil)
 	if err != nil {
 		return "", err
 	}
-	return m.Content, nil
+	return "# Relatório de engenharia reversa (PS1)\n\n" + body.String() +
+		"\n## Resumo geral (hipótese do modelo, não verificada)\n\n" + strings.TrimSpace(m.Content) + "\n", nil
 }
+
+// groupHW agrupa acessos repetidos: "I_STAT (0x1f801070) ×2, GPU_GP1 (0x1f801814)".
+func groupHW(acc []ps1.HWAccess) string {
+	type key struct {
+		name string
+		addr uint32
+	}
+	var order []key
+	count := map[key]int{}
+	for _, a := range acc {
+		k := key{a.Name, a.Addr & 0x1FFFFFFF}
+		if count[k] == 0 {
+			order = append(order, k)
+		}
+		count[k]++
+	}
+	parts := make([]string, len(order))
+	for i, k := range order {
+		parts[i] = fmt.Sprintf("%s (0x%08x)", k.name, k.addr)
+		if n := count[k]; n > 1 {
+			parts[i] += fmt.Sprintf(" ×%d", n)
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+func hexList(addrs []uint32) string {
+	parts := make([]string, len(addrs))
+	for i, a := range addrs {
+		parts[i] = fmt.Sprintf("0x%08x", a)
+	}
+	return strings.Join(parts, ", ")
+}
+
+// oneLine junta a resposta do modelo numa linha para não quebrar a lista do relatório.
+func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // role descreve como a função foi achada: o ponto de entrada não é chamado por jal.
 func role(exe *ps1.Exe, f ps1.Func) string {

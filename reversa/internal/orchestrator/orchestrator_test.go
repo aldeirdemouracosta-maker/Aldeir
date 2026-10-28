@@ -73,7 +73,7 @@ func TestPipelinePS1(t *testing.T) {
 	log := &evidence.Log{}
 	p := &PS1{Worker: stub{"retorna 1"}, Synthesizer: stub{"relatório final"}, Evidence: log, Workers: 2, TopN: 4, MaxInsns: 32}
 	out, err := p.Run(context.Background(), exe)
-	if err != nil || out != "relatório final" {
+	if err != nil || !strings.Contains(out, "relatório final") {
 		t.Fatalf("saída %q err %v", out, err)
 	}
 	tools := map[string]int{}
@@ -167,6 +167,49 @@ func TestProgressoPorEstagio(t *testing.T) {
 	for _, want := range []string{"estágio 1/3", "estágio 2/3: 5/5", "estágio 3/3"} {
 		if !strings.Contains(all, want) {
 			t.Errorf("progresso sem %q:\n%s", want, all)
+		}
+	}
+}
+
+// O modelo pode escrever qualquer coisa no resumo geral; as citações e o hardware vêm do programa.
+func TestRelatorioTemCitacoesCorretas(t *testing.T) {
+	raw, err := os.ReadFile("../../testdata/exemplo2.exe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	exe, err := ps1.ParseExe(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log := &evidence.Log{}
+	p := &PS1{Worker: stub{"faz algo [E99] em 0x4256"}, Synthesizer: stub{"resumo inventado [E77]"}, Evidence: log, Workers: 2, TopN: 20, MaxInsns: 96}
+	out, err := p.Run(context.Background(), exe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// seção de cada função: o [E#] de "Desmontagem" tem de ser a evidência ps1_disasm daquele endereço
+	secs := strings.Split(out, "\n### ")[1:]
+	if len(secs) < 8 {
+		t.Fatalf("esperava 8 seções, veio %d:\n%s", len(secs), out)
+	}
+	for _, sec := range secs {
+		addr := sec[:10]
+		var want int
+		for _, r := range log.All() {
+			if r.Tool == "ps1_disasm" && strings.HasPrefix(r.Args, addr) {
+				want = r.ID
+			}
+		}
+		if want == 0 || !strings.Contains(sec, fmt.Sprintf("- Desmontagem: [E%d] (derivada)", want)) {
+			t.Errorf("citação errada na seção %s (esperava E%d):\n%s", addr, want, sec)
+		}
+	}
+	for _, want := range []string{
+		"### 0x80010074 (chamada 2x)", "I_STAT (0x1f801070) ×2", "DMA2_GPU_MADR (0x1f8010a0)", "TIMER0_COUNT (0x1f801100)",
+		"Saltos indiretos sem destino conhecido: 0x80010124", "## Resumo geral (hipótese do modelo, não verificada)", "resumo inventado [E77]",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("relatório sem %q", want)
 		}
 	}
 }

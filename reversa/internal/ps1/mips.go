@@ -16,6 +16,15 @@ var itype = map[uint32]string{0x08: "addi", 0x09: "addiu", 0x0A: "slti", 0x0B: "
 var mem = map[uint32]string{0x20: "lb", 0x21: "lh", 0x22: "lwl", 0x23: "lw", 0x24: "lbu", 0x25: "lhu", 0x26: "lwr",
 	0x28: "sb", 0x29: "sh", 0x2A: "swl", 0x2B: "sw", 0x2E: "swr", 0x32: "lwc2", 0x3A: "swc2"}
 
+// hex16 imprime um deslocamento ou imediato com sinal em hexadecimal (0x1070, -0x8). Decimal confunde
+// quem lê (e os modelos): 4256 é 0x10a0, não "0x4256".
+func hex16(v int32) string {
+	if v < 0 {
+		return fmt.Sprintf("-0x%x", -v)
+	}
+	return fmt.Sprintf("0x%x", v)
+}
+
 // Disasm devolve uma instrução MIPS R3000 em texto. pc é o endereço da instrução.
 func Disasm(w, pc uint32) string {
 	op, rs, rt, rd := w>>26, w>>21&31, w>>16&31, w>>11&31
@@ -65,11 +74,11 @@ func Disasm(w, pc uint32) string {
 		if op == 0x0C || op == 0x0D || op == 0x0E {
 			return fmt.Sprintf("%s $%s,$%s,0x%x", itype[op], reg[rt], reg[rs], uint16(w))
 		}
-		return fmt.Sprintf("%s $%s,$%s,%d", itype[op], reg[rt], reg[rs], imm)
+		return fmt.Sprintf("%s $%s,$%s,%s", itype[op], reg[rt], reg[rs], hex16(int32(imm)))
 	case op == 0x0F:
 		return fmt.Sprintf("lui $%s,0x%x", reg[rt], uint16(w))
 	case mem[op] != "":
-		return fmt.Sprintf("%s $%s,%d($%s)", mem[op], reg[rt], imm, reg[rs])
+		return fmt.Sprintf("%s $%s,%s($%s)", mem[op], reg[rt], hex16(int32(imm)), reg[rs])
 	case op == 0x10:
 		switch rs {
 		case 0:
@@ -151,8 +160,8 @@ func (e *Exe) DisasmRange(addr uint32, n int) string {
 		pc := addr + uint32(i)*4
 		w, _ := e.Word(pc)
 		line := fmt.Sprintf("%08x  %08x  %s", pc, w, Disasm(w, pc))
-		if note := c.step(w); note != "" {
-			line += "  ; " + note
+		if hw, ok := c.step(w); ok {
+			line += fmt.Sprintf("  ; %s (0x%08x)", hw.Name, hw.Addr&0x1FFFFFFF) // endereço físico: iguala KSEG0/KSEG1
 		}
 		b.WriteString(line + "\n")
 	}

@@ -2,6 +2,7 @@ package ps1
 
 import (
 	"encoding/binary"
+	"os"
 	"strings"
 	"testing"
 )
@@ -9,9 +10,9 @@ import (
 func TestDisasm(t *testing.T) {
 	cases := map[uint32]string{
 		0x3C08A001: "lui $t0,0xa001",
-		0x24020001: "addiu $v0,$zero,1",
+		0x24020001: "addiu $v0,$zero,0x1",
 		0x03E00008: "jr $ra",
-		0x8FBF0010: "lw $ra,16($sp)",
+		0x8FBF0010: "lw $ra,0x10($sp)",
 		0x00000000: "nop",
 		0x00851021: "addu $v0,$a0,$a1",
 	}
@@ -53,7 +54,7 @@ func TestParseEFuncoes(t *testing.T) {
 	if fs[0].Addr != 0x80010010 || fs[0].Calls != 2 {
 		t.Errorf("função mais chamada: %+v", fs[0])
 	}
-	if out := e.DisasmRange(0x80010010, 16); !strings.Contains(out, "addiu $v0,$zero,1") {
+	if out := e.DisasmRange(0x80010010, 16); !strings.Contains(out, "addiu $v0,$zero,0x1") {
 		t.Errorf("desmontagem: %s", out)
 	}
 	if _, err := ParseExe([]byte("lixo")); err == nil {
@@ -82,10 +83,10 @@ func TestAnotacaoDeHardware(t *testing.T) {
 		le.PutUint32(e.Text[i*4:], w)
 	}
 	out := e.DisasmRange(0x80010000, 16)
-	if !strings.Contains(out, "sw $v0,6160($t0)  ; GPU_GP0") {
+	if !strings.Contains(out, "sw $v0,0x1810($t0)  ; GPU_GP0 (0x1f801810)") {
 		t.Errorf("faltou GP0:\n%s", out)
 	}
-	if !strings.Contains(out, "lw $v1,0($t1)  ; GPU_GP1") {
+	if !strings.Contains(out, "lw $v1,0x0($t1)  ; GPU_GP1 (0x1f801814)") {
 		t.Errorf("faltou GP1 via addiu:\n%s", out)
 	}
 }
@@ -100,4 +101,38 @@ func TestIndirects(t *testing.T) {
 	if len(got) != 2 || got[0] != 0x80010000 || got[1] != 0x80010008 {
 		t.Fatalf("indiretos: %x", got)
 	}
+}
+
+// Regressão: deslocamentos em decimal levaram o modelo a escrever "0x4256" para 0x10a0.
+func TestDeslocamentosEmHexadecimal(t *testing.T) {
+	e := &Exe{Load: 0x80010000, Text: make([]byte, 8)}
+	le.PutUint32(e.Text, 0x3C081F80)     // lui $t0,0x1f80
+	le.PutUint32(e.Text[4:], 0xAD0410A0) // sw $a0,0x10a0($t0)
+	out := e.DisasmRange(0x80010000, 8)
+	if !strings.Contains(out, "sw $a0,0x10a0($t0)  ; DMA2_GPU_MADR (0x1f8010a0)") || strings.Contains(out, "4256") {
+		t.Errorf("deslocamento deveria estar em hexadecimal:\n%s", out)
+	}
+	if got := Disasm(0x27BDFFF8, 0x80010000); got != "addiu $sp,$sp,-0x8" {
+		t.Errorf("imediato negativo: %q", got)
+	}
+}
+
+func TestHWAccesses(t *testing.T) {
+	e := loadExemplo2ParaHW(t)
+	acc := e.HWAccesses(0x80010074, 96) // wait_vblank
+	if len(acc) != 2 || acc[0].Name != "I_STAT" || acc[0].Addr != 0x1F801070 || acc[1].PC != 0x8001008c {
+		t.Errorf("acessos de wait_vblank: %+v", acc)
+	}
+}
+
+func loadExemplo2ParaHW(t *testing.T) *Exe {
+	raw, err := os.ReadFile("../../testdata/exemplo2.exe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := ParseExe(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return e
 }
