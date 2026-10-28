@@ -153,3 +153,49 @@ func TestExemplo2ContraFonteELLVM(t *testing.T) {
 		t.Fatalf("comparou %d instruções, esperava 91", n)
 	}
 }
+
+func TestExemplo2ValoresEscritos(t *testing.T) {
+	e := loadExemplo2(t)
+	// gpu_reset: escreve 0 e depois 0x03000001 em GP1 (lui 0x0300; ori 0x1)
+	gp := e.HWAccesses(e2GPUReset, 96)
+	if len(gp) != 2 || !gp[0].Store || !gp[0].Known || gp[0].Value != 0 || !gp[1].Known || gp[1].Value != 0x03000001 || gp[1].Width != 4 {
+		t.Errorf("gpu_reset: %+v", gp)
+	}
+	// dma_to_gpu: MADR e BCR dependem dos argumentos; CHCR é constante 0x01000201
+	dma := e.HWAccesses(e2DMA, 96)
+	if len(dma) != 3 || dma[0].Known || dma[1].Known || !dma[2].Known || dma[2].Value != 0x01000201 || dma[2].Name != "DMA2_GPU_CHCR" {
+		t.Errorf("dma: %+v", dma)
+	}
+	// cd_command: índice recebe o byte 0; o comando vem de $a0 (desconhecido)
+	cd := e.HWAccesses(e2CDCommand, 96)
+	if len(cd) != 2 || !cd[0].Known || cd[0].Value != 0 || cd[0].Width != 1 || cd[1].Known {
+		t.Errorf("cd_command: %+v", cd)
+	}
+	// read_timer só lê
+	if rt := e.HWAccesses(e2ReadTimer, 96); len(rt) != 1 || rt[0].Store || rt[0].Name != "TIMER0_COUNT" {
+		t.Errorf("read_timer: %+v", rt)
+	}
+}
+
+// Regressão: o modelo inverteu a lógica de wait_vblank. O laço de espera precisa ser um fato do programa.
+func TestExemplo2LacosEEsperaAtiva(t *testing.T) {
+	e := loadExemplo2(t)
+	loops := e.Loops(e2WaitVblank, 96)
+	if len(loops) != 1 || loops[0].PC != 0x80010084 || loops[0].Target != 0x80010078 || !loops[0].Polling() ||
+		loops[0].Reads[0].Name != "I_STAT" {
+		t.Fatalf("wait_vblank: %+v", loops)
+	}
+	cs := e.Loops(e2Checksum, 96)
+	if len(cs) != 1 || cs[0].PC != 0x800100b0 || cs[0].Target != 0x8001009c || !cs[0].Unconditional || cs[0].Polling() {
+		t.Errorf("checksum deveria ter um laço incondicional sem polling: %+v", cs)
+	}
+	st := e.Loops(e2Start, 96)
+	if len(st) != 1 || st[0].PC != 0x80010050 || st[0].Target != e2MainLoop || !st[0].Unconditional {
+		t.Errorf("_start: laço principal 'j main_loop': %+v", st)
+	}
+	for _, a := range []uint32{e2GPUReset, e2DMA, e2ReadTimer, e2CDCommand} {
+		if l := e.Loops(a, 96); len(l) != 0 {
+			t.Errorf("%08x não tem laço: %+v", a, l)
+		}
+	}
+}

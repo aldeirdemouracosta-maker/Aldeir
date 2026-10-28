@@ -48,6 +48,7 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 	hdr := p.Evidence.AddAs(evidence.Observed, "ps1_header", "", header, "Lido do cabeçalho PS-X EXE; o conteúdo não é validado.")
 
 	funcs := exe.FindFunctions()
+	totalFuncs := len(funcs)
 	if p.TopN > 0 && len(funcs) > p.TopN {
 		funcs = funcs[:p.TopN]
 	}
@@ -90,13 +91,17 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 	// Os fatos de cada função vêm do programa; o modelo só escreve o resumo geral. Assim as citações [E#] e os
 	// registradores de hardware nunca dependem de o modelo copiar números corretamente.
 	var body, forModel strings.Builder
-	fmt.Fprintf(&body, "## Fatos\n\n- Cabeçalho [E%d] (observado): %s\n\n## Funções\n", hdr.ID, header)
+	fmt.Fprintf(&body, "## Fatos\n\n- Cabeçalho [E%d] (observado): %s\n", hdr.ID, header)
+	fmt.Fprintf(&body, "- Cobertura: %d de %d funções achadas por chamada direta (jal) foram analisadas. Funções chamadas só por jalr ou por tabela de salto não são achadas.\n\n## Funções\n", len(jobs), totalFuncs)
 	fmt.Fprintf(&forModel, "Cabeçalho: %s\n\nFunções analisadas:\n", header)
 	for i, r := range res {
 		j := jobs[i]
 		fmt.Fprintf(&body, "\n### 0x%08x (%s)\n\n- Desmontagem: [E%d] (derivada)\n", j.fn.Addr, role(exe, j.fn), j.ev)
-		if hw := groupHW(exe.HWAccesses(j.fn.Addr, p.MaxInsns)); hw != "" {
+		if hw := hwFacts(exe.HWAccesses(j.fn.Addr, p.MaxInsns)); hw != "" {
 			fmt.Fprintf(&body, "- Hardware tocado (derivado): %s\n", hw)
+		}
+		if lp := loopFacts(exe.Loops(j.fn.Addr, p.MaxInsns)); lp != "" {
+			fmt.Fprintf(&body, "- Laços (derivado): %s\n", lp)
 		}
 		if cs := exe.Callees(j.fn.Addr, p.MaxInsns); len(cs) > 0 {
 			fmt.Fprintf(&body, "- Chama: %s\n", hexList(cs))
@@ -125,33 +130,54 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	p.logf("concluído")
 	return "# Relatório de engenharia reversa (PS1)\n\n" + body.String() +
 		"\n## Resumo geral (hipótese do modelo, não verificada)\n\n" + strings.TrimSpace(m.Content) + "\n", nil
 }
 
-// groupHW agrupa acessos repetidos: "I_STAT (0x1f801070) ×2, GPU_GP1 (0x1f801814)".
-func groupHW(acc []ps1.HWAccess) string {
-	type key struct {
-		name string
-		addr uint32
-	}
-	var order []key
-	count := map[key]int{}
+// hwFacts descreve cada acesso a hardware como ação ("lê X", "escreve 0x.. em X"), agrupando repetições.
+func hwFacts(acc []ps1.HWAccess) string {
+	var order []string
+	count := map[string]int{}
 	for _, a := range acc {
-		k := key{a.Name, a.Addr & 0x1FFFFFFF}
-		if count[k] == 0 {
-			order = append(order, k)
+		where := fmt.Sprintf("%s (0x%08x)", a.Name, a.Addr&0x1FFFFFFF)
+		var phrase string
+		switch {
+		case !a.Store:
+			phrase = "lê " + where
+		case a.Known:
+			phrase = fmt.Sprintf("escreve 0x%0*x em %s", a.Width*2, a.Value, where)
+		default:
+			phrase = "escreve valor variável em " + where
 		}
-		count[k]++
+		if count[phrase] == 0 {
+			order = append(order, phrase)
+		}
+		count[phrase]++
 	}
-	parts := make([]string, len(order))
-	for i, k := range order {
-		parts[i] = fmt.Sprintf("%s (0x%08x)", k.name, k.addr)
-		if n := count[k]; n > 1 {
-			parts[i] += fmt.Sprintf(" ×%d", n)
+	for i, ph := range order {
+		if n := count[ph]; n > 1 {
+			order[i] += fmt.Sprintf(" ×%d", n)
 		}
 	}
-	return strings.Join(parts, ", ")
+	return strings.Join(order, "; ")
+}
+
+// loopFacts descreve os desvios para trás; um laço condicional que lê hardware é uma espera ativa (polling).
+func loopFacts(loops []ps1.Loop) string {
+	parts := make([]string, len(loops))
+	for i, l := range loops {
+		kind := "condicional"
+		if l.Unconditional {
+			kind = "incondicional"
+		}
+		parts[i] = fmt.Sprintf("desvio em 0x%08x volta para 0x%08x (%s", l.PC, l.Target, kind)
+		if l.Polling() {
+			parts[i] += fmt.Sprintf("; espera ativa: só sai quando a leitura de %s (0x%08x) muda", l.Reads[0].Name, l.Reads[0].Addr&0x1FFFFFFF)
+		}
+		parts[i] += ")"
+	}
+	return strings.Join(parts, "; ")
 }
 
 func hexList(addrs []uint32) string {
@@ -188,6 +214,13 @@ func funcContext(exe *ps1.Exe, f ps1.Func, maxInsns int) string {
 			fmt.Fprintf(&b, " 0x%08x", c)
 		}
 		b.WriteString(".")
+	}
+	// fatos já verificados pelo programa; o modelo errou a lógica de um laço de espera sem isto
+	if hw := hwFacts(exe.HWAccesses(f.Addr, maxInsns)); hw != "" {
+		fmt.Fprintf(&b, " Fatos verificados (não contradiga): %s.", hw)
+	}
+	if lp := loopFacts(exe.Loops(f.Addr, maxInsns)); lp != "" {
+		fmt.Fprintf(&b, " Laços verificados: %s.", lp)
 	}
 	return b.String()
 }

@@ -155,7 +155,7 @@ func (e *Exe) Callees(addr uint32, n int) []uint32 {
 // DisasmRange desmonta a função em addr, até n instruções, parando após 'jr $ra' e seu delay slot.
 func (e *Exe) DisasmRange(addr uint32, n int) string {
 	var b strings.Builder
-	var c consts
+	c := newConsts()
 	for i, end := 0, e.span(addr, n); i < end; i++ {
 		pc := addr + uint32(i)*4
 		w, _ := e.Word(pc)

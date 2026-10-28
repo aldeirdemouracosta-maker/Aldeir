@@ -46,8 +46,25 @@ type consts struct {
 	ok  [32]bool
 }
 
-func (c *consts) set(r, v uint32) { c.val[r], c.ok[r] = v, true }
-func (c *consts) kill(r uint32)   { c.ok[r] = false }
+// newConsts começa com $zero conhecido (0): sem isso 'sw $zero' e 'addiu rt,$zero,k' perderiam o valor.
+func newConsts() *consts {
+	c := &consts{}
+	c.ok[0] = true
+	return c
+}
+
+// Escritas em $zero são descartadas pelo hardware, então nunca mudam o estado.
+func (c *consts) set(r, v uint32) {
+	if r != 0 {
+		c.val[r], c.ok[r] = v, true
+	}
+}
+
+func (c *consts) kill(r uint32) {
+	if r != 0 {
+		c.ok[r] = false
+	}
+}
 
 // step atualiza o estado e devolve o acesso, se a instrução lê ou escreve um registrador de hardware.
 func (c *consts) step(w uint32) (HWAccess, bool) {
@@ -72,8 +89,19 @@ func (c *consts) step(w uint32) (HWAccess, bool) {
 		acc, ok := c.access(rs, imm)
 		c.kill(rt)
 		return acc, ok
-	case op >= 0x28 && op <= 0x2E: // stores: só usam rs
-		return c.access(rs, imm)
+	case op >= 0x28 && op <= 0x2E: // stores: só usam rs; o valor vem de rt
+		acc, ok := c.access(rs, imm)
+		if ok {
+			acc.Store = true
+			if width, simple := map[uint32]int{0x28: 1, 0x29: 2, 0x2B: 4}[op]; simple && c.ok[rt] {
+				acc.Known, acc.Width = true, width
+				acc.Value = c.val[rt]
+				if width < 4 {
+					acc.Value &= 1<<(8*width) - 1
+				}
+			}
+		}
+		return acc, ok
 	case op == 0 && w != 0 && w&0x3F != 0x08 && w&0x3F != 0x18 && w&0x3F != 0x19 && w&0x3F != 0x1A && w&0x3F != 0x1B:
 		c.kill(rd) // R-type que escreve rd (jr/mult/div não escrevem)
 	case op == 3: // jal clobbera $ra e, por convenção, os temporários
@@ -105,16 +133,20 @@ func (c *consts) access(base uint32, off int32) (HWAccess, bool) {
 
 // HWAccess é um acesso a registrador de hardware achado por propagação linear de constantes.
 type HWAccess struct {
-	Name string
-	Addr uint32
-	PC   uint32
+	Name  string
+	Addr  uint32
+	PC    uint32
+	Store bool   // false: leitura
+	Known bool   // escrita com valor constante conhecido (só sb, sh, sw)
+	Value uint32 // valor escrito, se Known
+	Width int    // bytes escritos, se Known
 }
 
 // HWAccesses lista, em ordem, os acessos a registradores de hardware da função em addr (até n instruções).
 // É determinístico: serve de fato para o relatório, ao contrário da interpretação do modelo.
 func (e *Exe) HWAccesses(addr uint32, n int) []HWAccess {
 	var out []HWAccess
-	var c consts
+	c := newConsts()
 	for i, end := 0, e.span(addr, n); i < end; i++ {
 		pc := addr + uint32(i)*4
 		w, _ := e.Word(pc)
@@ -122,6 +154,51 @@ func (e *Exe) HWAccesses(addr uint32, n int) []HWAccess {
 			acc.PC = pc
 			out = append(out, acc)
 		}
+	}
+	return out
+}
+
+// Loop é um desvio para trás dentro da função.
+type Loop struct {
+	PC, Target    uint32
+	Unconditional bool       // j ou beq rX,rX
+	Reads         []HWAccess // leituras de hardware dentro do corpo do laço
+}
+
+// Polling diz se é um laço condicional que lê hardware: espera ativa por uma mudança de estado.
+func (l Loop) Polling() bool { return !l.Unconditional && len(l.Reads) > 0 }
+
+// Loops devolve os desvios para trás da função em addr. Um laço condicional que lê um registrador de
+// hardware é uma espera ativa: o código só sai quando o registrador muda.
+func (e *Exe) Loops(addr uint32, n int) []Loop {
+	acc := e.HWAccesses(addr, n)
+	var out []Loop
+	for i, end := 0, e.span(addr, n); i < end; i++ {
+		pc := addr + uint32(i)*4
+		w, _ := e.Word(pc)
+		op := w >> 26
+		var t uint32
+		uncond := false
+		switch {
+		case op == 4 || op == 5 || op == 6 || op == 7 || op == 1:
+			t = pc + 4 + uint32(int32(int16(w))<<2)
+			uncond = op == 4 && w>>21&31 == w>>16&31
+		case op == 2:
+			t = (pc+4)&0xF0000000 | (w&0x03FFFFFF)<<2
+			uncond = true
+		default:
+			continue
+		}
+		if t > pc || t < addr {
+			continue
+		}
+		l := Loop{PC: pc, Target: t, Unconditional: uncond}
+		for _, a := range acc {
+			if !a.Store && a.PC >= t && a.PC <= pc {
+				l.Reads = append(l.Reads, a)
+			}
+		}
+		out = append(out, l)
 	}
 	return out
 }

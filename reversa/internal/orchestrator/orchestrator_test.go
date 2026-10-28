@@ -205,11 +205,42 @@ func TestRelatorioTemCitacoesCorretas(t *testing.T) {
 		}
 	}
 	for _, want := range []string{
-		"### 0x80010074 (chamada 2x)", "I_STAT (0x1f801070) ×2", "DMA2_GPU_MADR (0x1f8010a0)", "TIMER0_COUNT (0x1f801100)",
+		"### 0x80010074 (chamada 2x)", "lê I_STAT (0x1f801070); escreve 0x00000000 em I_STAT (0x1f801070)",
+		"escreve valor variável em DMA2_GPU_MADR (0x1f8010a0)", "escreve 0x01000201 em DMA2_GPU_CHCR (0x1f8010a8)", "lê TIMER0_COUNT (0x1f801100)",
+		"escreve 0x03000001 em GPU_GP1 (0x1f801814)", "desvio em 0x80010084 volta para 0x80010078 (condicional; espera ativa: só sai quando a leitura de I_STAT (0x1f801070) muda)",
+		"Cobertura: 8 de 8 funções",
 		"Saltos indiretos sem destino conhecido: 0x80010124", "## Resumo geral (hipótese do modelo, não verificada)", "resumo inventado [E77]",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("relatório sem %q", want)
+		}
+	}
+}
+
+// O worker recebe os fatos de hardware e laços que o programa já verificou.
+func TestPromptDoOperarioTemFatosVerificados(t *testing.T) {
+	raw, err := os.ReadFile("../../testdata/exemplo2.exe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	exe, err := ps1.ParseExe(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := &capture{}
+	p := &PS1{Worker: w, Synthesizer: stub{"fim"}, Evidence: &evidence.Log{}, Workers: 2, TopN: 20, MaxInsns: 96}
+	if _, err := p.Run(context.Background(), exe); err != nil {
+		t.Fatal(err)
+	}
+	var vblank string
+	for _, s := range w.seen {
+		if strings.Contains(s, "andi $t1,$t1,0x1") {
+			vblank = s
+		}
+	}
+	for _, want := range []string{"Fatos verificados (não contradiga): lê I_STAT", "espera ativa: só sai quando a leitura de I_STAT"} {
+		if !strings.Contains(vblank, want) {
+			t.Errorf("prompt de wait_vblank sem %q:\n%s", want, vblank)
 		}
 	}
 }
