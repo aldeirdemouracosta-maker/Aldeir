@@ -21,6 +21,11 @@ Para usar o Ghidra: `export GHIDRA_INSTALL_DIR=/opt/ghidra` e rode a partir da p
 
 Registro no Claude Code: `claude mcp add reversa -- /caminho/reversa mcp -root ~/jogos`.
 
+## Atualizar (Windows)
+
+Dê dois cliques em `atualizar.bat` (na pasta `reversa`): ele baixa o código novo, recompila e mostra a versão.
+Ou, no PowerShell, **dentro da pasta**: `git pull`, depois `go build -o reversa.exe .\cmd\reversa`.
+
 ## Qual versão está rodando?
 
 ```
