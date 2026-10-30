@@ -121,3 +121,14 @@ func TestFerramentasXrefEMem(t *testing.T) {
 		t.Error("endereço inválido deveria falhar")
 	}
 }
+
+func TestFerramentaPS1Names(t *testing.T) {
+	s, dir := newSet(t)
+	if err := os.WriteFile(filepath.Join(dir, "e9.exe"), mustRead(t, "../../testdata/exemplo9.exe"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := call(t, s, "ps1_names", map[string]any{"path": "e9.exe"})
+	if err != nil || !strings.Contains(out, `nome provável "CD_sync"`) || !strings.Contains(out, "(derived)") {
+		t.Fatalf("ps1_names: %v\n%s", err, out)
+	}
+}

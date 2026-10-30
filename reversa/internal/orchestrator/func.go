@@ -51,6 +51,9 @@ func FuncReport(exe *ps1.Exe, addr uint32, maxInsns int) (string, error) {
 	if k := stubKind(exe, addr); k != "" {
 		fmt.Fprintf(&b, "- Tipo (derivado): %s\n", k)
 	}
+	if ev := nameEvidence(exe, addr, maxInsns); len(ev) > 0 {
+		fmt.Fprintf(&b, "- Nome/padrão (derivado): %s\n", strings.Join(ev, "; "))
+	}
 	if cs := exe.Callees(addr, maxInsns); len(cs) > 0 {
 		fmt.Fprintf(&b, "- Chama: %s\n", hexList(cs))
 	}

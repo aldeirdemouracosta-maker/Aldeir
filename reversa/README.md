@@ -46,6 +46,15 @@ chamadas, hardware, laços, strings, stubs) e a desmontagem anotada, sem usar mo
 
 Salvar o relatório completo em arquivo: `./reversa ps1 -out relatorio.md jogo.cue`.
 
+## Nomes por evidência
+
+```
+./reversa nomes jogo.cue
+```
+Varre todas as funções e lista só as que têm evidência: stubs de BIOS e de syscall, instaladores de callback (trocam um
+ponteiro global e devolvem o antigo) e strings de depuração parecidas com identificadores (como `"CD_cw"`). Nada é
+inventado: cada linha cita a evidência, e os nomes são **pistas**, porque o executável não tem símbolos.
+
 ## Dados: quem usa um endereço e o que ele contém
 
 ```

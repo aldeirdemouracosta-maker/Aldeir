@@ -153,7 +153,11 @@ func TestProgramaInteiroContraLLVM(t *testing.T) {
 }
 
 // compareAll compara o mnemônico de toda instrução do EXE com o llvm-objdump do ELF e devolve quantas comparou.
-func compareAll(t *testing.T, raw []byte, elf string) int {
+func compareAll(t *testing.T, raw []byte, elf string) int { return compareUntil(t, raw, elf, 0) }
+
+// compareUntil compara só as instruções antes de limit (0 = todas). Dados no fim do arquivo podem ser
+// decodificados por nós como instrução e recusados pelo llvm, que valida campos reservados.
+func compareUntil(t *testing.T, raw []byte, elf string, limit uint32) int {
 	e, err := ParseExe(raw)
 	if err != nil {
 		t.Fatal(err)
@@ -167,6 +171,9 @@ func compareAll(t *testing.T, raw []byte, elf string) int {
 		}
 		var pc uint32
 		fmt.Sscanf(m[1], "%x", &pc)
+		if limit != 0 && pc >= limit {
+			continue
+		}
 		w, ok := e.Word(pc)
 		if !ok {
 			t.Fatalf("endereço %08x fora do EXE", pc)

@@ -166,6 +166,18 @@ func (s *Set) MCP() []mcp.Tool {
 			},
 		},
 		{
+			Name: "ps1_names", Description: "Funções com evidência de nome ou padrão: stubs de BIOS/syscall, instaladores de callback e strings de depuração parecidas com identificadores.",
+			Schema: pathSchema(map[string]any{"insns": map[string]any{"type": "integer", "description": "máximo de instruções examinadas por função (padrão 256)"}}),
+			Handler: func(ctx context.Context, a map[string]any) (string, error) {
+				e, err := s.loadExe(ctx, a)
+				if err != nil {
+					return "", err
+				}
+				out := orchestrator.NamesReport(e, num(a, "insns", 256, 1024))
+				return s.record(evidence.Derived, "ps1_names", a, out, "Pistas heurísticas; o executável não tem símbolos, os nomes não são confirmados."), nil
+			},
+		},
+		{
 			Name: "ps1_xref", Description: "Quem lê, escreve ou monta um endereço (ou intervalo de bytes), por função; mostra o valor escrito quando constante e acessos a tabelas com índice variável.",
 			Schema: pathSchema(map[string]any{
 				"address": map[string]any{"type": "string", "description": "endereço em hexadecimal, por exemplo 0x8002d6d8"},

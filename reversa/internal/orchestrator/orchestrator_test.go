@@ -580,3 +580,39 @@ func TestRelatorioComTabelaDeSaltoELacoLimitado(t *testing.T) {
 		t.Errorf("FuncReport do switch (err=%v):\n%s", err, rep)
 	}
 }
+
+func TestNamesReport(t *testing.T) {
+	out := NamesReport(loadExe(t, "exemplo9.exe"), 256)
+	for _, want := range []string{
+		"- 0x80010030 (chamada 1x): instala callback: troca o ponteiro global 0x80010078 e devolve o antigo",
+		"- 0x80010040 (chamada 1x): instala callback: troca o ponteiro global 0x8001007c e devolve o antigo",
+		`- 0x80010060 (chamada 1x): nome provável "CD_sync": string de depuração referenciada em 0x80010080 (heurística)`,
+		"Funções com alguma evidência: 3 de 6",
+		"Os nomes são pistas, não confirmações",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("nomes sem %q:\n%s", want, out)
+		}
+	}
+	for _, not := range []string{"0x80010054 (", "0x8001006c (", "0x80010000 ("} { // only_set, noident, _start
+		if strings.Contains(out, "- "+not) {
+			t.Errorf("função sem evidência apareceu (%s):\n%s", not, out)
+		}
+	}
+	// stubs também entram
+	out = NamesReport(loadExe(t, "exemplo3.exe"), 256)
+	if !strings.Contains(out, "stub de chamada à BIOS A(0x33)") || !strings.Contains(out, "stub de chamada à BIOS B(0x07)") {
+		t.Errorf("stubs de BIOS:\n%s", out)
+	}
+	// sem nenhuma evidência
+	if out := NamesReport(loadExe(t, "exemplo2.exe"), 256); !strings.Contains(out, "Nenhuma função com evidência") {
+		t.Errorf("exemplo2 não tem evidências de nome:\n%s", out)
+	}
+	// aparece também nos relatórios por função
+	if rep, _ := FuncReport(loadExe(t, "exemplo9.exe"), 0x80010060, 96); !strings.Contains(rep, `- Nome/padrão (derivado): nome provável "CD_sync"`) {
+		t.Errorf("FuncReport sem a pista de nome:\n%s", rep)
+	}
+	if rep := runExemplo(t, "exemplo9.exe", stub{"ok"}, stub{"fim"}); !strings.Contains(rep, "- Nome/padrão (derivado): instala callback") {
+		t.Errorf("relatório geral sem o padrão de instalador:\n%s", rep)
+	}
+}

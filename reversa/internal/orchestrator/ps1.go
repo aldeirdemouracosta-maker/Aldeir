@@ -108,6 +108,9 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 		if j.stub != "" {
 			fmt.Fprintf(&body, "- Tipo (derivado): %s\n", j.stub)
 		}
+		if ev := nameEvidence(exe, j.fn.Addr, p.MaxInsns); len(ev) > 0 {
+			fmt.Fprintf(&body, "- Nome/padrão (derivado): %s\n", strings.Join(ev, "; "))
+		}
 		if exe.Recursive(j.fn.Addr, p.MaxInsns) {
 			fmt.Fprintf(&body, "- Recursão (derivado): chama a si mesma\n")
 		}

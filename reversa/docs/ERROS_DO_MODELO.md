@@ -73,3 +73,10 @@ Falhas do programa vistas nessa saída e corrigidas:
 |---|---|
 | "espera ativa lendo CDROM_INDEX" num laço de **no máximo 8 leituras** (a saída é o contador `slti s0,8`) | Só se afirma espera ativa quando a condição de saída depende do valor lido (`While` derivado). Senão: "lê X dentro do laço, condição de saída não determinada (não afirmo espera ativa)" |
 | `switch` por tabela (`lui $at; addu $at,$at,$idx; lw -0x4c30($at); jr $v0`) listado só como salto "desconhecido" | Resolve a base da tabela e lê os destinos da imagem (até a primeira palavra que não aponta para dentro da função); o switch resolvido deixa de constar como desconhecido |
+
+## Callbacks e tabela de parâmetros do CD (xref e mem no jogo real)
+`mem` na tabela `0x8002d640` mostrou `cmd 2 -> 3`, `cmd 0x0D -> 2`, `cmd 0x0E -> 1`: o número de bytes de parâmetro de
+Setloc, Setfilter e Setmode, o que confirma que a tabela guarda a quantidade de parâmetros por comando. `xref` nos
+callbacks `0x8002d3fc` e `0x8002d400` achou os instaladores (`0x80025484` e `0x8002549c`: leem o valor antigo e gravam
+o novo), os wrappers que os desligam e restauram em volta de um comando, as rotinas que os zeram, e as funções que
+chamam a rotina de interrupção e depois os disparam. Desses padrões saiu o comando `nomes`.

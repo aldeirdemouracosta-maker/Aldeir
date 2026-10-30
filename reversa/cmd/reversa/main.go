@@ -51,6 +51,8 @@ func main() {
 		discInfo(os.Args[2:])
 	case "func":
 		funcCmd(os.Args[2:])
+	case "nomes":
+		nomesCmd(os.Args[2:])
 	case "mem":
 		memCmd(os.Args[2:])
 	case "xref":
@@ -63,7 +65,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "uso: reversa doctor | reversa func [-explain] <alvo> <endereço> | reversa xref [-n bytes] <alvo> <endereço> | reversa mem [-n bytes] <alvo> <endereço> | reversa version | reversa mcp -root <pasta> | reversa disc <imagem> | reversa ps1 [opções] <exe|cue|bin|iso> | reversa analyze [-model m] [-steps n] [-evidence arq.json] <binário>")
+	fmt.Fprintln(os.Stderr, "uso: reversa doctor | reversa func [-explain] <alvo> <endereço> | reversa nomes <alvo> | reversa xref [-n bytes] <alvo> <endereço> | reversa mem [-n bytes] <alvo> <endereço> | reversa version | reversa mcp -root <pasta> | reversa disc <imagem> | reversa ps1 [opções] <exe|cue|bin|iso> | reversa analyze [-model m] [-steps n] [-evidence arq.json] <binário>")
 	os.Exit(2)
 }
 
@@ -121,6 +123,26 @@ func loadExeAddr(target, addrText string) (*ps1.Exe, uint32) {
 		fatal(fmt.Errorf("endereço inválido %q: use hexadecimal, por exemplo 0x8002d640", addrText))
 	}
 	return exe, uint32(addr)
+}
+
+// nomesCmd lista as funções com evidência de nome ou padrão (stubs, instaladores de callback, strings de depuração).
+func nomesCmd(args []string) {
+	fs := flag.NewFlagSet("nomes", flag.ExitOnError)
+	insns := fs.Int("insns", 256, "máximo de instruções examinadas por função")
+	out := fs.String("out", "", "grava o resultado neste arquivo .md (UTF-8)")
+	_ = fs.Parse(args)
+	if fs.NArg() != 1 {
+		usage()
+	}
+	raw, err := loadPS1(fs.Arg(0))
+	if err != nil {
+		fatal(err)
+	}
+	exe, err := ps1.ParseExe(raw)
+	if err != nil {
+		fatal(err)
+	}
+	emit(orchestrator.NamesReport(exe, *insns), *out)
 }
 
 // memCmd mostra os valores iniciais da imagem em um endereço (tabelas, ponteiros).
