@@ -137,6 +137,8 @@ func TestPontaAPonta(t *testing.T) {
 var aliasOf = map[string]map[string]bool{
 	"move": {"addu": true, "or": true}, "beqz": {"beq": true}, "bnez": {"bne": true}, "b": {"beq": true},
 	"negu": {"subu": true}, "not": {"nor": true},
+	// bytes que não são instrução (dados no meio do código): llvm diz <unknown>, nós dizemos .word
+	"<unknown>": {".word": true},
 }
 
 var objdumpLine = regexp.MustCompile(`^\s*([0-9a-f]{8}):\s+(?:[0-9a-f]{2} ){4}\s*(\S+)`)
