@@ -19,6 +19,9 @@ func FuncReport(exe *ps1.Exe, addr uint32, maxInsns int) (string, error) {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Função 0x%08x\n\n", addr)
 	fmt.Fprintf(&b, "- Tamanho (heurístico): %d instruções, 0x%08x a 0x%08x\n", n, addr, addr+uint32(n)*4-4)
+	if exe.Truncated(addr, maxInsns) {
+		fmt.Fprintf(&b, "- AVISO: a função continua além de %d instruções; a análise abaixo está truncada (use -insns maior)\n", maxInsns)
+	}
 	callers := exe.Callers(addr)
 	switch {
 	case addr == exe.PC && len(callers) == 0:

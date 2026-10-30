@@ -449,3 +449,36 @@ func TestExplainFunctionDescartaContradicao(t *testing.T) {
 		t.Error("endereço fora do código deveria dar erro")
 	}
 }
+
+func TestRelatorioComPonteiroGlobalETruncamento(t *testing.T) {
+	out := runExemplo(t, "exemplo5.exe", stub{"ok"}, stub{"fim"})
+	for _, want := range []string{
+		"### 0x80010058 (chamada 2x)",
+		"escreve 0x00 em CDROM_INDEX (0x1f801800) [via ponteiro global 0x80020010]",
+		"escreve valor variável em CDROM_REG1 (0x1f801801) [via ponteiro global 0x80020014]",
+		`- Strings referenciadas (derivado): 0x80010094 "CD_cw: %s\n"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("relatório sem %q:\n%s", want, out)
+		}
+	}
+	// use_conflict lê uma global ambígua: não pode aparecer hardware nela
+	for _, sec := range strings.Split(out, "\n### ")[1:] {
+		if strings.HasPrefix(sec, "0x8001007c") && strings.Contains(sec, "Hardware tocado") {
+			t.Errorf("global ambígua virou hardware:\n%s", sec)
+		}
+		if strings.Contains(sec, "Aviso: análise truncada") {
+			t.Errorf("com 96 instruções nenhuma função do exemplo5 é truncada:\n%s", sec)
+		}
+	}
+	// com janela curta o aviso aparece
+	exe := loadExe(t, "exemplo5.exe")
+	p := &PS1{Worker: stub{"ok"}, Synthesizer: stub{"fim"}, Evidence: &evidence.Log{}, Workers: 1, TopN: 20, MaxInsns: 3}
+	short, err := p.Run(context.Background(), exe)
+	if err != nil || !strings.Contains(short, "- Aviso: análise truncada em 3 instruções (-insns); a função continua") {
+		t.Errorf("aviso de truncamento ausente (err=%v):\n%s", err, short)
+	}
+	if rep, _ := FuncReport(exe, 0x80010028, 4); !strings.Contains(rep, "AVISO: a função continua além de 4 instruções") {
+		t.Errorf("FuncReport sem aviso de truncamento:\n%s", rep)
+	}
+}

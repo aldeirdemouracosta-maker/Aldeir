@@ -18,6 +18,9 @@ type Exe struct {
 
 	once  sync.Once
 	calls map[uint32]int // alvo de jal -> número de chamadas; inclui a entrada
+
+	gonce   sync.Once
+	globals map[uint32]uint32 // variável global -> endereço de hardware que o programa sempre guarda nela
 }
 
 var le = binary.LittleEndian

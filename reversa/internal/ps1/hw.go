@@ -53,6 +53,19 @@ type consts struct {
 
 	lastVal uint32 // constante montada pela última instrução addiu/ori
 	lastOK  bool
+
+	// globals resolve 'lw rt,off(base)' de uma variável global que o programa inicializa sempre com o mesmo
+	// endereço de hardware (padrão do libcd: ponteiros para os registradores do CD-ROM). gsrc guarda de qual
+	// global cada registrador foi carregado.
+	globals map[uint32]uint32
+	gsrc    [32]uint32
+}
+
+// newConsts cria o rastreador já conhecendo as globais de hardware do executável.
+func (e *Exe) newConsts() *consts {
+	c := newConsts()
+	c.globals = e.hwGlobals()
+	return c
 }
 
 // newConsts começa com $zero conhecido (0): sem isso 'sw $zero' e 'addiu rt,$zero,k' perderiam o valor.
@@ -65,13 +78,13 @@ func newConsts() *consts {
 // Escritas em $zero são descartadas pelo hardware, então nunca mudam o estado.
 func (c *consts) set(r, v uint32) {
 	if r != 0 {
-		c.val[r], c.ok[r], c.srcOK[r] = v, true, false
+		c.val[r], c.ok[r], c.srcOK[r], c.gsrc[r] = v, true, false, 0
 	}
 }
 
 func (c *consts) kill(r uint32) {
 	if r != 0 {
-		c.ok[r], c.srcOK[r] = false, false
+		c.ok[r], c.srcOK[r], c.gsrc[r] = false, false, 0
 	}
 }
 
@@ -122,7 +135,14 @@ func (c *consts) stepInner(w uint32) (HWAccess, bool) {
 		}
 	case op >= 0x20 && op <= 0x26: // loads: escrevem rt, usam rs
 		acc, ok := c.access(rs, imm)
+		baseOK, baseVal := c.ok[rs], c.val[rs] // antes de kill: rt pode ser o mesmo registrador que rs
 		c.kill(rt)
+		if op == 0x23 && baseOK && rt != 0 { // lw de uma global que sempre guarda um endereço de hardware
+			if g := baseVal + uint32(imm); c.globals[g] != 0 {
+				c.set(rt, c.globals[g])
+				c.gsrc[rt] = g
+			}
+		}
 		if mask, sized := map[uint32]uint32{0x20: 0xFF, 0x21: 0xFFFF, 0x23: 0xFFFFFFFF, 0x24: 0xFF, 0x25: 0xFFFF}[op]; ok && sized && rt != 0 {
 			c.src[rt], c.srcMask[rt], c.srcOK[rt] = acc, mask, true // valor de hardware: rastreia até o desvio
 		}
@@ -161,7 +181,7 @@ func (c *consts) access(base uint32, off int32) (HWAccess, bool) {
 	}
 	addr := c.val[base] + uint32(off)
 	if n := HWName(addr); n != "" {
-		return HWAccess{Name: n, Addr: addr}, true
+		return HWAccess{Name: n, Addr: addr, ViaGlobal: c.gsrc[base]}, true
 	}
 	return HWAccess{}, false
 }
@@ -175,13 +195,16 @@ type HWAccess struct {
 	Known bool   // escrita com valor constante conhecido (só sb, sh, sw)
 	Value uint32 // valor escrito, se Known
 	Width int    // bytes escritos, se Known
+	// ViaGlobal é o endereço da variável global de onde o ponteiro de hardware foi carregado (0 se o
+	// endereço era constante no código). Heurística: vale se o programa só guarda esse valor naquela global.
+	ViaGlobal uint32
 }
 
 // HWAccesses lista, em ordem, os acessos a registradores de hardware da função em addr (até n instruções).
 // É determinístico: serve de fato para o relatório, ao contrário da interpretação do modelo.
 func (e *Exe) HWAccesses(addr uint32, n int) []HWAccess {
 	var out []HWAccess
-	c := newConsts()
+	c := e.newConsts()
 	for i, end := 0, e.span(addr, n); i < end; i++ {
 		pc := addr + uint32(i)*4
 		w, _ := e.Word(pc)
@@ -239,7 +262,7 @@ func (c *consts) branchCond(w uint32) ([2]string, bool) {
 func (e *Exe) Loops(addr uint32, n int) []Loop {
 	acc := e.HWAccesses(addr, n)
 	var out []Loop
-	c := newConsts()
+	c := e.newConsts()
 	for i, end := 0, e.span(addr, n); i < end; i++ {
 		pc := addr + uint32(i)*4
 		w, _ := e.Word(pc)
@@ -297,3 +320,51 @@ func (e *Exe) Indirects(addr uint32, n int) []uint32 {
 	}
 	return out
 }
+
+// hwGlobals procura no executável inteiro variáveis globais em que o programa guarda (sw) sempre o mesmo
+// endereço de hardware, por exemplo o ponteiro para CDROM_INDEX. Descarta globais com valores diferentes ou
+// com escritas de valor desconhecido. É uma heurística linear: aliasing por ponteiros não é considerado.
+func (e *Exe) hwGlobals() map[uint32]uint32 {
+	e.gonce.Do(func() {
+		vals := map[uint32]uint32{}
+		bad := map[uint32]bool{}
+		starts := e.callTargets()
+		c := newConsts()
+		resetAt := -1
+		for off, i := 0, 0; off+4 <= len(e.Text); off, i = off+4, i+1 {
+			pc := e.Load + uint32(off)
+			if _, isStart := starts[pc]; isStart || i == resetAt {
+				c = newConsts() // não deixa constantes de uma função vazarem para a seguinte
+			}
+			w := le.Uint32(e.Text[off:])
+			if w>>26 == 0x2B && c.ok[w>>21&31] { // sw com base constante
+				addr := c.val[w>>21&31] + uint32(int32(int16(w)))
+				if HWName(addr) == "" && addr&0x1FFFFFFF < 0x00200000 {
+					rt := w >> 16 & 31
+					switch v, seen := vals[addr]; {
+					case !c.ok[rt]:
+						bad[addr] = true
+					case seen && v != c.val[rt]:
+						bad[addr] = true
+					default:
+						vals[addr] = c.val[rt]
+					}
+				}
+			}
+			c.step(w)
+			if op := w >> 26; op == 2 || (op == 0 && w&0x3F == 0x08) {
+				resetAt = i + 2 // depois do delay slot
+			}
+		}
+		e.globals = map[uint32]uint32{}
+		for a, v := range vals {
+			if !bad[a] && HWName(v) != "" {
+				e.globals[a] = v
+			}
+		}
+	})
+	return e.globals
+}
+
+// GlobalPointers devolve as globais de hardware resolvidas (global -> endereço de hardware).
+func (e *Exe) GlobalPointers() map[uint32]uint32 { return e.hwGlobals() }

@@ -41,3 +41,13 @@ Resultado da execução com `exemplo2`: `wait_vblank` descrito corretamente (esp
 - Só foram testados programas pequenos escritos para este projeto. Nenhum disco real passou pelo pipeline.
 - A tabela de nomes de registradores veio da memória da documentação psx-spx e foi conferida só nos
   endereços usados pelos exemplos.
+
+## Lacunas do programa vistas em código real (função de comando do CD-ROM, `CD_cw`)
+| Lacuna | Correção |
+|---|---|
+| Nenhum fato de hardware: a função escreve nos registradores do CD-ROM por **ponteiros guardados em variáveis globais** | Procura no executável globais que sempre recebem o mesmo endereço de hardware e resolve o `lw`; o relatório mostra `[via ponteiro global 0x...]`. Globais com valores diferentes ou desconhecidos são ignoradas |
+| Strings de formato (`"CD_cw: %s\n"`) rejeitadas por terem `\n` e símbolos | Aceita `\n`, `\r`, `\t` e exige só 1/3 de letras |
+| Função truncada em 256 instruções sem aviso | Aviso explícito no relatório e no `func` quando a função continua além do limite |
+
+Limitação: a resolução de globais é linear e assume que só as escritas constantes do próprio executável mudam
+a variável; ponteiros que aliasam a global, ou inicialização feita fora do executável (overlays), não são vistos.

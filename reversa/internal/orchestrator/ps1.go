@@ -120,6 +120,9 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 		if st := stringFacts(exe.StringRefs(j.fn.Addr, p.MaxInsns)); st != "" {
 			fmt.Fprintf(&body, "- Strings referenciadas (derivado): %s\n", st)
 		}
+		if exe.Truncated(j.fn.Addr, p.MaxInsns) {
+			fmt.Fprintf(&body, "- Aviso: análise truncada em %d instruções (-insns); a função continua\n", p.MaxInsns)
+		}
 		if cs := exe.Callees(j.fn.Addr, p.MaxInsns); len(cs) > 0 {
 			fmt.Fprintf(&body, "- Chama: %s\n", hexList(cs))
 		}
@@ -178,6 +181,9 @@ func hwFacts(acc []ps1.HWAccess) string {
 			phrase = fmt.Sprintf("escreve 0x%0*x em %s", a.Width*2, a.Value, where)
 		default:
 			phrase = "escreve valor variável em " + where
+		}
+		if a.ViaGlobal != 0 {
+			phrase += fmt.Sprintf(" [via ponteiro global 0x%08x]", a.ViaGlobal)
 		}
 		if count[phrase] == 0 {
 			order = append(order, phrase)

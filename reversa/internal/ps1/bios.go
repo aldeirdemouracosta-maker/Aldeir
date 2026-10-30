@@ -76,7 +76,7 @@ func (e *Exe) asciiAt(a uint32) (string, bool) {
 		if ch == 0 {
 			break
 		}
-		if ch < 0x20 || ch > 0x7E {
+		if (ch < 0x20 || ch > 0x7E) && ch != '\n' && ch != '\r' && ch != '\t' { // formatos de printf têm \n
 			return "", false
 		}
 		if ch|0x20 >= 'a' && ch|0x20 <= 'z' {
@@ -84,7 +84,7 @@ func (e *Exe) asciiAt(a uint32) (string, bool) {
 		}
 		b.WriteByte(ch)
 	}
-	if b.Len() < 4 || letters*2 < b.Len() {
+	if b.Len() < 4 || letters < 3 || letters*3 < b.Len() { // formatos como "%s: %d\n" têm muitos símbolos
 		return "", false
 	}
 	return b.String(), true

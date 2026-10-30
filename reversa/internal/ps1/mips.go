@@ -155,15 +155,21 @@ func (e *Exe) Callees(addr uint32, n int) []uint32 {
 // DisasmRange desmonta a função em addr, até n instruções, parando após 'jr $ra' e seu delay slot.
 func (e *Exe) DisasmRange(addr uint32, n int) string {
 	var b strings.Builder
-	c := newConsts()
+	c := e.newConsts()
 	for i, end := 0, e.span(addr, n); i < end; i++ {
 		pc := addr + uint32(i)*4
 		w, _ := e.Word(pc)
 		line := fmt.Sprintf("%08x  %08x  %s", pc, w, Disasm(w, pc))
 		if hw, ok := c.step(w); ok {
 			line += fmt.Sprintf("  ; %s (0x%08x)", hw.Name, hw.Addr&0x1FFFFFFF) // endereço físico: iguala KSEG0/KSEG1
+			if hw.ViaGlobal != 0 {
+				line += fmt.Sprintf(" via ponteiro global 0x%08x", hw.ViaGlobal)
+			}
 		}
 		b.WriteString(line + "\n")
 	}
 	return b.String()
 }
+
+// Truncated diz se a função em addr continua além de n instruções (o fim não foi alcançado).
+func (e *Exe) Truncated(addr uint32, n int) bool { return e.span(addr, n+1) == n+1 }
