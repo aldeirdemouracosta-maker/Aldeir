@@ -128,3 +128,13 @@ func (e *Exe) NearestStart(pc uint32) (uint32, bool) {
 	}
 	return best, found
 }
+
+// CallCount diz quantas chamadas diretas (jal) a função em addr recebe; ok é false se addr não é início
+// de função conhecido.
+func (e *Exe) CallCount(addr uint32) (calls int, ok bool) {
+	calls, ok = e.callTargets()[addr]
+	return
+}
+
+// StringAt devolve a string ASCII (≥4 caracteres, legível) que começa em addr dentro da imagem.
+func (e *Exe) StringAt(addr uint32) (string, bool) { return e.asciiAt(addr) }

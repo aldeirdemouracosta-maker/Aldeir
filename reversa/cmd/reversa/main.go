@@ -47,6 +47,10 @@ func main() {
 		discInfo(os.Args[2:])
 	case "func":
 		funcCmd(os.Args[2:])
+	case "mem":
+		memCmd(os.Args[2:])
+	case "xref":
+		xrefCmd(os.Args[2:])
 	case "mcp":
 		serveMCP(os.Args[2:])
 	default:
@@ -55,7 +59,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "uso: reversa doctor | reversa func [-explain] <exe|cue|bin|iso> <endereço> | reversa mcp -root <pasta> | reversa disc <imagem> | reversa ps1 [opções] <exe|cue|bin|iso> | reversa analyze [-model m] [-steps n] [-evidence arq.json] <binário>")
+	fmt.Fprintln(os.Stderr, "uso: reversa doctor | reversa func [-explain] <alvo> <endereço> | reversa xref [-n bytes] <alvo> <endereço> | reversa mem [-n bytes] <alvo> <endereço> | reversa mcp -root <pasta> | reversa disc <imagem> | reversa ps1 [opções] <exe|cue|bin|iso> | reversa analyze [-model m] [-steps n] [-evidence arq.json] <binário>")
 	os.Exit(2)
 }
 
@@ -96,6 +100,54 @@ func analyze(args []string) {
 		fatal(err)
 	}
 	fmt.Println(report)
+}
+
+// loadExeAddr carrega o alvo e interpreta o endereço (hexadecimal, com ou sem 0x) para os comandos de consulta.
+func loadExeAddr(target, addrText string) (*ps1.Exe, uint32) {
+	raw, err := loadPS1(target)
+	if err != nil {
+		fatal(err)
+	}
+	exe, err := ps1.ParseExe(raw)
+	if err != nil {
+		fatal(err)
+	}
+	addr, err := strconv.ParseUint(strings.TrimPrefix(strings.ToLower(addrText), "0x"), 16, 32)
+	if err != nil {
+		fatal(fmt.Errorf("endereço inválido %q: use hexadecimal, por exemplo 0x8002d640", addrText))
+	}
+	return exe, uint32(addr)
+}
+
+// memCmd mostra os valores iniciais da imagem em um endereço (tabelas, ponteiros).
+func memCmd(args []string) {
+	fs := flag.NewFlagSet("mem", flag.ExitOnError)
+	n := fs.Int("n", 64, "quantos bytes mostrar (máximo 1024)")
+	out := fs.String("out", "", "grava o resultado neste arquivo .md (UTF-8)")
+	_ = fs.Parse(args)
+	if fs.NArg() != 2 {
+		usage()
+	}
+	exe, addr := loadExeAddr(fs.Arg(0), fs.Arg(1))
+	report, err := orchestrator.MemReport(exe, addr, min(*n, 1024))
+	if err != nil {
+		fatal(err)
+	}
+	emit(report, *out)
+}
+
+// xrefCmd lista quem lê, escreve ou monta um endereço (ou intervalo).
+func xrefCmd(args []string) {
+	fs := flag.NewFlagSet("xref", flag.ExitOnError)
+	n := fs.Int("n", 1, "tamanho do intervalo em bytes (use o tamanho de uma tabela para ver todos os acessos a ela)")
+	max := fs.Int("max", 200, "máximo de linhas")
+	out := fs.String("out", "", "grava o resultado neste arquivo .md (UTF-8)")
+	_ = fs.Parse(args)
+	if fs.NArg() != 2 {
+		usage()
+	}
+	exe, addr := loadExeAddr(fs.Arg(0), fs.Arg(1))
+	emit(orchestrator.XrefReport(exe, addr, *n, *max), *out)
 }
 
 func fatal(err error) {

@@ -100,3 +100,24 @@ func mustRead(t *testing.T, p string) []byte {
 	}
 	return b
 }
+
+func TestFerramentasXrefEMem(t *testing.T) {
+	s, dir := newSet(t)
+	if err := os.WriteFile(filepath.Join(dir, "e7.exe"), mustRead(t, "../../testdata/exemplo7.exe"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := call(t, s, "ps1_xref", map[string]any{"path": "e7.exe", "address": "0x800100a0"})
+	if err != nil || !strings.Contains(out, "sb escreve 0x05") || !strings.Contains(out, "(derived)") {
+		t.Fatalf("ps1_xref: %v\n%s", err, out)
+	}
+	out, err = call(t, s, "ps1_mem", map[string]any{"path": "e7.exe", "address": "0x800100a4", "bytes": float64(12)})
+	if err != nil || !strings.Contains(out, "10 00 00 00") || !strings.Contains(out, "(observed)") {
+		t.Fatalf("ps1_mem: %v\n%s", err, out)
+	}
+	if _, err := call(t, s, "ps1_mem", map[string]any{"path": "e7.exe", "address": "0x70000000"}); err == nil {
+		t.Error("endereço fora da imagem deveria falhar")
+	}
+	if _, err := call(t, s, "ps1_xref", map[string]any{"path": "e7.exe", "address": "zzz"}); err == nil {
+		t.Error("endereço inválido deveria falhar")
+	}
+}

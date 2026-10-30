@@ -33,6 +33,19 @@ chamadas, hardware, laços, strings, stubs) e a desmontagem anotada, sem usar mo
 
 Salvar o relatório completo em arquivo: `./reversa ps1 -out relatorio.md jogo.cue`.
 
+## Dados: quem usa um endereço e o que ele contém
+
+```
+./reversa xref jogo.cue 0x8002d6d8                 # quem lê, escreve ou monta este endereço
+./reversa xref -n 64 jogo.cue 0x8002d640            # todos os acessos a uma tabela de 64 bytes
+./reversa mem -n 64 jogo.cue 0x8002d640             # valores iniciais da imagem (tabelas, ponteiros)
+```
+
+`xref` mostra o valor escrito quando é constante e marca acessos a tabelas com índice variável. `mem` interpreta as
+palavras que parecem endereços (registradores de hardware, funções, strings). Os valores de `mem` são os **iniciais do
+arquivo**; a memória em execução pode ter mudado e dados não inicializados (.bss) não estão no arquivo.
+As flags (`-n`, `-out`) vêm **antes** do disco e do endereço.
+
 ## Escolha do modelo
 
 Em teste com um jogo real, o `qwen2.5-coder:14b` foi ~3,5x mais lento que o 7B e só um pouco melhor. O padrão é o 7B

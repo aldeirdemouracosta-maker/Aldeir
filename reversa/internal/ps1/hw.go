@@ -59,6 +59,10 @@ type consts struct {
 	// global cada registrador foi carregado.
 	globals map[uint32]uint32
 	gsrc    [32]uint32
+
+	// base de tabela: o registrador vale (constante + índice desconhecido), como em 'addu $at,$at,$idx'
+	arr   [32]uint32
+	arrOK [32]bool
 }
 
 // newConsts cria o rastreador já conhecendo as globais de hardware do executável.
@@ -78,13 +82,13 @@ func newConsts() *consts {
 // Escritas em $zero são descartadas pelo hardware, então nunca mudam o estado.
 func (c *consts) set(r, v uint32) {
 	if r != 0 {
-		c.val[r], c.ok[r], c.srcOK[r], c.gsrc[r] = v, true, false, 0
+		c.val[r], c.ok[r], c.srcOK[r], c.gsrc[r], c.arrOK[r] = v, true, false, 0, false
 	}
 }
 
 func (c *consts) kill(r uint32) {
 	if r != 0 {
-		c.ok[r], c.srcOK[r], c.gsrc[r] = false, false, 0
+		c.ok[r], c.srcOK[r], c.gsrc[r], c.arrOK[r] = false, false, 0, false
 	}
 }
 
@@ -160,6 +164,17 @@ func (c *consts) stepInner(w uint32) (HWAccess, bool) {
 			}
 		}
 		return acc, ok
+	case op == 0 && (w&0x3F == 0x20 || w&0x3F == 0x21): // add/addu: soma constantes ou marca base de tabela
+		okS, okT, vS, vT := c.ok[rs], c.ok[rt], c.val[rs], c.val[rt]
+		c.kill(rd)
+		switch {
+		case okS && okT:
+			c.set(rd, vS+vT)
+		case okS && looksAddr(vS) && rd != 0:
+			c.arr[rd], c.arrOK[rd] = vS, true
+		case okT && looksAddr(vT) && rd != 0:
+			c.arr[rd], c.arrOK[rd] = vT, true
+		}
 	case op == 0 && w != 0 && w&0x3F != 0x08 && w&0x3F != 0x18 && w&0x3F != 0x19 && w&0x3F != 0x1A && w&0x3F != 0x1B:
 		c.kill(rd) // R-type que escreve rd (jr/mult/div não escrevem)
 	case op == 3: // jal: o efeito sobre os registradores vem em step, depois do delay slot
@@ -383,3 +398,17 @@ func (e *Exe) hwGlobals() map[uint32]uint32 {
 
 // GlobalPointers devolve as globais de hardware resolvidas (global -> endereço de hardware).
 func (e *Exe) GlobalPointers() map[uint32]uint32 { return e.hwGlobals() }
+
+// looksAddr descarta constantes pequenas, que quase nunca são o início de uma tabela.
+func looksAddr(v uint32) bool { return v&0x1FFFFFFF >= 0x10000 }
+
+// effective calcula o endereço efetivo de um acesso 'off(rs)': constante, ou base de tabela com índice variável.
+func (c *consts) effective(rs uint32, off int32) (addr uint32, indexed, ok bool) {
+	switch {
+	case c.ok[rs]:
+		return c.val[rs] + uint32(off), false, true
+	case c.arrOK[rs]:
+		return c.arr[rs] + uint32(off), true, true
+	}
+	return 0, false, false
+}

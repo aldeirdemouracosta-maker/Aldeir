@@ -56,3 +56,10 @@ O programa passou a ler também as palavras iniciais da imagem (com os mesmos de
 
 Limitação: a resolução de globais é linear e assume que só as escritas constantes do próprio executável mudam
 a variável; ponteiros que aliasam a global, ou inicialização feita fora do executável (overlays), não são vistos.
+
+## Lacuna apontada por uma análise externa do mesmo código
+Uma análise independente da função `CD_cw` (colada pelo usuário) confirmou o fluxo (assinatura, valores de retorno
+-2/-1/0, tempo limite duplo, espera pelo byte de estado) e acertou em ser mais prudente em dois pontos: a conversão do
+timeout em segundos exige saber o que `0x8001fda0` é (não provado), e qual callback é Ready e qual é Sync **não está
+provado** pelas strings. Ela pediu duas coisas que o programa não fazia e agora faz: valores iniciais de tabelas e
+ponteiros (`mem`) e quem escreve/lê as variáveis de estado e de callback (`xref`, incluindo tabelas indexadas).

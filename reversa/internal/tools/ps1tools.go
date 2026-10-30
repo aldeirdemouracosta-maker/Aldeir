@@ -166,6 +166,47 @@ func (s *Set) MCP() []mcp.Tool {
 			},
 		},
 		{
+			Name: "ps1_xref", Description: "Quem lê, escreve ou monta um endereço (ou intervalo de bytes), por função; mostra o valor escrito quando constante e acessos a tabelas com índice variável.",
+			Schema: pathSchema(map[string]any{
+				"address": map[string]any{"type": "string", "description": "endereço em hexadecimal, por exemplo 0x8002d6d8"},
+				"bytes":   map[string]any{"type": "integer", "description": "tamanho do intervalo (padrão 1; use o tamanho de uma tabela)"},
+			}, "address"),
+			Handler: func(ctx context.Context, a map[string]any) (string, error) {
+				e, err := s.loadExe(ctx, a)
+				if err != nil {
+					return "", err
+				}
+				var addr uint32
+				if _, err := fmt.Sscanf(strings.TrimPrefix(strings.ToLower(str(a, "address")), "0x"), "%x", &addr); err != nil {
+					return "", fmt.Errorf("endereço inválido: %q", str(a, "address"))
+				}
+				out := orchestrator.XrefReport(e, addr, num(a, "bytes", 1, 4096), 200)
+				return s.record(evidence.Derived, "ps1_xref", a, out, "Só acessos com endereço constante ou tabela com base constante; ponteiros calculados de outro jeito não aparecem."), nil
+			},
+		},
+		{
+			Name: "ps1_mem", Description: "Bytes da imagem do executável a partir de um endereço (valores iniciais), com interpretação de palavras que parecem endereços.",
+			Schema: pathSchema(map[string]any{
+				"address": map[string]any{"type": "string", "description": "endereço em hexadecimal, por exemplo 0x8002d640"},
+				"bytes":   map[string]any{"type": "integer", "description": "quantos bytes (padrão 64, máximo 1024)"},
+			}, "address"),
+			Handler: func(ctx context.Context, a map[string]any) (string, error) {
+				e, err := s.loadExe(ctx, a)
+				if err != nil {
+					return "", err
+				}
+				var addr uint32
+				if _, err := fmt.Sscanf(strings.TrimPrefix(strings.ToLower(str(a, "address")), "0x"), "%x", &addr); err != nil {
+					return "", fmt.Errorf("endereço inválido: %q", str(a, "address"))
+				}
+				out, err := orchestrator.MemReport(e, addr, num(a, "bytes", 64, 1024))
+				if err != nil {
+					return "", err
+				}
+				return s.record(evidence.Observed, "ps1_mem", a, out, "Valores iniciais do arquivo; a memória em execução pode ter mudado e .bss não está no arquivo."), nil
+			},
+		},
+		{
 			Name: "disc_info", Description: "Volume, executável de boot e arquivos da raiz de uma imagem de disco do PS1.",
 			Schema: pathSchema(nil),
 			Handler: func(ctx context.Context, a map[string]any) (string, error) {

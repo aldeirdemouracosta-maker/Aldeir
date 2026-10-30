@@ -497,3 +497,61 @@ func TestRelatorioComPonteirosNosDadosIniciais(t *testing.T) {
 		t.Errorf("global sobrescrita virou hardware:\n%s", out)
 	}
 }
+
+func TestXrefReport(t *testing.T) {
+	exe := loadExe(t, "exemplo7.exe")
+	out := XrefReport(exe, 0x8001009c, 1, 100) // cb_ptr
+	for _, want := range []string{
+		"# Referências a 0x8001009c", "Escritas: 1 (com valor constante conhecido: 0); leituras: 1",
+		"- 0x80010038 (a partir de 0x80010030): sw escreve valor variável",
+		"- 0x80010040 (a partir de 0x8001003c): lw lê",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("xref sem %q:\n%s", want, out)
+		}
+	}
+	out = XrefReport(exe, 0x800100a0, 1, 100) // flag: escrita constante 5 e leitura
+	if !strings.Contains(out, "sb escreve 0x05") || !strings.Contains(out, "lbu lê") {
+		t.Errorf("flag:\n%s", out)
+	}
+	out = XrefReport(exe, 0x800100a4, 12, 100) // tabela indexada
+	if !strings.Contains(out, "acessos a tabela com índice variável: 1") || !strings.Contains(out, "[tabela de base 0x800100a4, índice variável]") {
+		t.Errorf("tabela:\n%s", out)
+	}
+	if out := XrefReport(exe, 0x80012000, 4, 100); !strings.Contains(out, "Nenhuma referência encontrada") {
+		t.Errorf("sem referências:\n%s", out)
+	}
+	if out := XrefReport(exe, 0x8001009c, 0x20, 2); !strings.Contains(out, "- ... e mais 3") {
+		t.Errorf("limite de linhas:\n%s", out)
+	}
+	// montagem de endereço: a string de exemplo3 é formada por lui+addiu
+	if out := XrefReport(loadExe(t, "exemplo3.exe"), 0x8001008c, 1, 100); !strings.Contains(out, "monta o endereço 0x8001008c") {
+		t.Errorf("montagem de endereço:\n%s", out)
+	}
+}
+
+func TestMemReport(t *testing.T) {
+	exe := loadExe(t, "exemplo7.exe")
+	out, err := MemReport(exe, 0x800100a4, 12) // table = 0x10, 0x20, 0x30
+	if err != nil || !strings.Contains(out, "0x800100a4: 10 00 00 00  20 00 00 00  30 00 00 00") {
+		t.Fatalf("tabela: %v\n%s", err, out)
+	}
+	// ponteiros de hardware e de função: exemplo6 guarda 0x1f801800 e 0x1f801801 na imagem
+	out, err = MemReport(loadExe(t, "exemplo6.exe"), 0x8001006c, 8)
+	if err != nil || !strings.Contains(out, "0x8001006c: 0x1f801800 = registrador de hardware CDROM_INDEX") ||
+		!strings.Contains(out, "0x80010070: 0x1f801801 = registrador de hardware CDROM_REG1") {
+		t.Fatalf("ponteiros de hardware: %v\n%s", err, out)
+	}
+	for _, bad := range []uint32{0x80000000, 0x90000000} {
+		if _, err := MemReport(exe, bad, 8); err == nil {
+			t.Errorf("0x%08x fora da imagem deveria dar erro", bad)
+		}
+	}
+	// o fim da imagem é cortado em vez de falhar
+	if out, err := MemReport(exe, 0x800107f0, 1000); err != nil || !strings.Contains(out, "(16 bytes") {
+		t.Errorf("corte no fim da imagem: %v\n%s", err, out)
+	}
+	if out, _ := MemReport(exe, 0x800100a5, 4); !strings.Contains(out, "desalinhado") {
+		t.Errorf("endereço desalinhado:\n%s", out)
+	}
+}
