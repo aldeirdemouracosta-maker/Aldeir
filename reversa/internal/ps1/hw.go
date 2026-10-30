@@ -48,6 +48,11 @@ type consts struct {
 	src     [32]HWAccess
 	srcMask [32]uint32
 	srcOK   [32]bool
+
+	afterDelay bool // a instrução anterior foi jal/jalr: a próxima é o delay slot
+
+	lastVal uint32 // constante montada pela última instrução addiu/ori
+	lastOK  bool
 }
 
 // newConsts começa com $zero conhecido (0): sem isso 'sw $zero' e 'addiu rt,$zero,k' perderiam o valor.
@@ -71,7 +76,30 @@ func (c *consts) kill(r uint32) {
 }
 
 // step atualiza o estado e devolve o acesso, se a instrução lê ou escreve um registrador de hardware.
+//
+// A instrução depois de jal/jalr (delay slot) executa ANTES da chamada, então o efeito da chamada sobre os
+// registradores só vale depois dela: 'jal f; addiu $a0,$a0,k' usa o $a0 de antes do jal.
 func (c *consts) step(w uint32) (HWAccess, bool) {
+	acc, ok := c.stepInner(w)
+	// valor que addiu/ori acabou de montar, visível mesmo que a chamada o descarte logo em seguida
+	c.lastOK = false
+	if op := w >> 26; op == 0x09 || op == 0x0D {
+		rt := w >> 16 & 31
+		c.lastVal, c.lastOK = c.val[rt], c.ok[rt] && rt != 0
+	}
+	if c.afterDelay { // w foi o delay slot de uma chamada: agora a chamada clobbera os temporários
+		c.afterDelay = false
+		for _, r := range []uint32{31, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 24, 25} {
+			c.kill(r)
+		}
+	}
+	if w>>26 == 3 || (w>>26 == 0 && w&0x3F == 0x09) { // jal, jalr
+		c.afterDelay = true
+	}
+	return acc, ok
+}
+
+func (c *consts) stepInner(w uint32) (HWAccess, bool) {
 	op, rs, rt, rd := w>>26, w>>21&31, w>>16&31, w>>11&31
 	imm := int32(int16(w))
 	switch {
@@ -114,10 +142,7 @@ func (c *consts) step(w uint32) (HWAccess, bool) {
 		return acc, ok
 	case op == 0 && w != 0 && w&0x3F != 0x08 && w&0x3F != 0x18 && w&0x3F != 0x19 && w&0x3F != 0x1A && w&0x3F != 0x1B:
 		c.kill(rd) // R-type que escreve rd (jr/mult/div não escrevem)
-	case op == 3: // jal clobbera $ra e, por convenção, os temporários
-		for _, r := range []uint32{31, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 24, 25} {
-			c.kill(r)
-		}
+	case op == 3: // jal: o efeito sobre os registradores vem em step, depois do delay slot
 	case op == 0x10 || op == 0x12:
 		if rs == 0 || rs == 2 {
 			c.kill(rt)

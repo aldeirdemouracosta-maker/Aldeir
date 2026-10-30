@@ -56,6 +56,8 @@ type Ollama struct {
 	BaseURL string // padrão http://127.0.0.1:11434
 	Model   string
 	Client  *http.Client
+	// NumPredict limita os tokens gerados por resposta (0 = sem limite). Modelos pequenos escrevem demais.
+	NumPredict int
 	// Seed fixa a amostragem. Com temperature 0 e seed fixa a resposta é repetível, o que o cache exige.
 	Seed int
 }
@@ -65,8 +67,11 @@ func NewOllama(model string) *Ollama {
 }
 
 func (o *Ollama) Chat(ctx context.Context, msgs []Message, tools []ToolDef) (Message, error) {
-	payload := map[string]any{"model": o.Model, "messages": msgs, "stream": false,
-		"options": map[string]any{"temperature": 0, "seed": o.Seed}}
+	opts := map[string]any{"temperature": 0, "seed": o.Seed}
+	if o.NumPredict > 0 {
+		opts["num_predict"] = o.NumPredict
+	}
+	payload := map[string]any{"model": o.Model, "messages": msgs, "stream": false, "options": opts}
 	if len(tools) > 0 { // sem ferramentas o campo é omitido, não enviado como null
 		payload["tools"] = tools
 	}

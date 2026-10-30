@@ -245,3 +245,54 @@ func TestPromptDoOperarioTemFatosVerificados(t *testing.T) {
 		}
 	}
 }
+
+// Stubs de BIOS, recursão e strings saem do programa; o modelo nem é consultado nos stubs.
+func TestRelatorioExemplo3(t *testing.T) {
+	raw, err := os.ReadFile("../../testdata/exemplo3.exe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	exe, err := ps1.ParseExe(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := &capture{}
+	p := &PS1{Worker: w, Synthesizer: stub{"fim"}, Evidence: &evidence.Log{}, Workers: 2, TopN: 20, MaxInsns: 96}
+	out, err := p.Run(context.Background(), exe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"### 0x8001002c (chamada 1x)", "- Tipo (derivado): stub de chamada à BIOS A(0x33)",
+		"### 0x80010038 (chamada 2x)", "- Tipo (derivado): stub de chamada à BIOS B(0x07)",
+		"Hipótese do modelo: não solicitada (stub de BIOS não tem lógica própria)",
+		"### 0x80010064 (chamada 2x)", "- Recursão (derivado): chama a si mesma",
+		`- Strings referenciadas (derivado): 0x8001008c "Ola, mundo PS1 teste"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("relatório sem %q:\n%s", want, out)
+		}
+	}
+	if n := strings.Count(out, "Recursão (derivado)"); n != 1 {
+		t.Errorf("só countdown é recursiva; %d seções dizem que são", n)
+	}
+	// 5 funções (entrada, 2 stubs, puts_like, countdown): o modelo só vê as 3 que não são stubs
+	if len(w.seen) != 3 {
+		t.Errorf("modelo consultado %d vezes, esperado 3", len(w.seen))
+	}
+	for _, s := range w.seen {
+		if strings.Contains(s, "jr $t2") {
+			t.Errorf("stub de BIOS foi enviado ao modelo:\n%s", s)
+		}
+	}
+	// os fatos vão no prompt, e a regra sobre recursão também
+	var cd string
+	for _, s := range w.seen {
+		if strings.Contains(s, "Recursiva: chama a si mesma") {
+			cd = s
+		}
+	}
+	if cd == "" || !strings.Contains(cd, `Só diga que a função é recursiva se os fatos disserem "Recursiva"`) {
+		t.Errorf("prompt de countdown sem fato de recursão ou sem a regra:\n%s", cd)
+	}
+}

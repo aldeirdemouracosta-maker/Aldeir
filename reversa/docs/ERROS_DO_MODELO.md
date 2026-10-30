@@ -12,7 +12,20 @@ prompt. O modelo só interpreta; nunca deve copiar números nem decidir lógica 
 | "O laço infinito começa em 0x80010050" | Faltava o corpo do laço | Chamadas dentro do laço listadas; entrada rotulada |
 | Errou a conta de `0x03000001` ("adiciona 1") | Valores escritos não eram informados | Valores constantes escritos em cada registrador, ou "valor variável" |
 
-Resultado da última execução: `wait_vblank` descrito corretamente (espera o bit ser ativado, depois escreve 0),
+### Primeiro jogo real (Valkyrie Profile, tradução pt-BR, executável de 128 KB, 313 funções)
+| Problema | Correção |
+|---|---|
+| "chama recursivamente" para funções que chamam **outras** funções | Recursão só vale se a função chama o próprio endereço (`Recursão (derivado)`); prompt proíbe o termo sem o fato |
+| Listou todos os registradores do MIPS como "informação" | Prompt proíbe listar registradores e instruções; respostas limitadas a 200 tokens (`-worker-tokens`) |
+| Gastou o modelo (30 s cada) em stubs minúsculos de BIOS e chutou "chamada de sistema" / "aloca memória" | Stub de BIOS reconhecido pelo padrão `$t2=0xA0/B0/C0; jr $t2; $t1=N`; relatório diz `BIOS A(0x33)` e o modelo não é consultado |
+| Strings referenciadas passavam despercebidas | `Strings referenciadas (derivado)` a partir de `lui`+`addiu`/`ori` que apontam para texto ASCII |
+
+### Defeito do próprio programa achado no processo
+A propagação de constantes limpava os registradores no `jal`, **antes** do delay slot. No MIPS o delay slot executa
+antes da chamada, então `jal f; addiu $a0,$a0,k` usa o `$a0` de antes do `jal`. Corrigido (efeito da chamada só depois
+do delay slot) com teste de regressão.
+
+Resultado da execução com `exemplo2`: `wait_vblank` descrito corretamente (espera o bit ser ativado, depois escreve 0),
 `gpu_reset`, `dma_to_gpu`, `cd_command`, `read_timer`, `checksum` e `dispatch` coerentes com o código,
 8 funções em 43 s no total (a maior parte vinda do cache).
 

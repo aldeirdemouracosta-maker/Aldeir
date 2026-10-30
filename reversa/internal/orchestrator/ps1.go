@@ -35,9 +35,10 @@ func (p *PS1) logf(format string, args ...any) {
 }
 
 const workerPrompt = `Código MIPS R3000 (PlayStation 1) de uma função.%s
-Responda em no máximo 3 linhas, em português, dizendo o propósito provável da função. Use os nomes de
+Responda em no máximo 2 frases, em português, com o propósito provável da função. Use os nomes de
 registradores de hardware e os endereços como aparecem no código (após ';'); não recalcule nem converta números.
-Não liste instruções. Não invente símbolos. Se não der para saber, diga "indeterminado".
+Não liste registradores nem instruções. Só diga que a função é recursiva se os fatos disserem "Recursiva".
+Não invente símbolos. Se não der para saber, diga "indeterminado".
 
 %s`
 
@@ -54,6 +55,7 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 	}
 	type job struct {
 		context string
+		bios    *ps1.BIOSCall // stub de BIOS: sem lógica própria, o modelo não é consultado
 		fn      ps1.Func
 		dis     string
 		ev      int
@@ -65,6 +67,9 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 		rec := p.Evidence.AddAs(evidence.Derived, "ps1_disasm", fmt.Sprintf("0x%08x (%s)", f.Addr, role(exe, f)), dis,
 			"Desmontagem linear; chamadas indiretas (jalr) e dados no meio do código não são resolvidos.")
 		jobs[i] = job{fn: f, dis: dis, ev: rec.ID, context: funcContext(exe, f, p.MaxInsns)}
+		if b, ok := exe.BIOSStub(f.Addr); ok {
+			jobs[i].bios = &b
+		}
 		if ind := exe.Indirects(f.Addr, p.MaxInsns); len(ind) > 0 {
 			var list strings.Builder
 			for _, pc := range ind {
@@ -80,6 +85,10 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 	p.logf("estágio 1/3 concluído: %d funções; resumindo com o modelo pequeno (%d em paralelo)", len(jobs), max(p.Workers, 1))
 	var done atomic.Int32
 	res := Map(ctx, jobs, p.Workers, func(ctx context.Context, j job) (string, error) {
+		if j.bios != nil {
+			p.logf("estágio 2/3: %d/%d funções resumidas (0x%08x: stub de BIOS, sem modelo)", done.Add(1), len(jobs), j.fn.Addr)
+			return "", nil
+		}
 		m, err := p.Worker.Chat(ctx, []llm.Message{{Role: "user", Content: fmt.Sprintf(workerPrompt, j.context, j.dis)}}, nil)
 		p.logf("estágio 2/3: %d/%d funções resumidas (0x%08x)", done.Add(1), len(jobs), j.fn.Addr)
 		if err != nil {
@@ -97,17 +106,31 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 	for i, r := range res {
 		j := jobs[i]
 		fmt.Fprintf(&body, "\n### 0x%08x (%s)\n\n- Desmontagem: [E%d] (derivada)\n", j.fn.Addr, role(exe, j.fn), j.ev)
+		if j.bios != nil {
+			fmt.Fprintf(&body, "- Tipo (derivado): stub de chamada à BIOS %s\n", biosName(*j.bios))
+		}
+		if exe.Recursive(j.fn.Addr, p.MaxInsns) {
+			fmt.Fprintf(&body, "- Recursão (derivado): chama a si mesma\n")
+		}
 		if hw := hwFacts(exe.HWAccesses(j.fn.Addr, p.MaxInsns)); hw != "" {
 			fmt.Fprintf(&body, "- Hardware tocado (derivado): %s\n", hw)
 		}
 		if lp := loopFacts(exe.Loops(j.fn.Addr, p.MaxInsns)); lp != "" {
 			fmt.Fprintf(&body, "- Laços (derivado): %s\n", lp)
 		}
+		if st := stringFacts(exe.StringRefs(j.fn.Addr, p.MaxInsns)); st != "" {
+			fmt.Fprintf(&body, "- Strings referenciadas (derivado): %s\n", st)
+		}
 		if cs := exe.Callees(j.fn.Addr, p.MaxInsns); len(cs) > 0 {
 			fmt.Fprintf(&body, "- Chama: %s\n", hexList(cs))
 		}
 		if j.unknown != 0 {
 			fmt.Fprintf(&body, "- Saltos indiretos sem destino conhecido: %s [E%d] (desconhecido)\n", hexList(exe.Indirects(j.fn.Addr, p.MaxInsns)), j.unknown)
+		}
+		if j.bios != nil {
+			fmt.Fprintf(&body, "- Hipótese do modelo: não solicitada (stub de BIOS não tem lógica própria)\n")
+			fmt.Fprintf(&forModel, "- 0x%08x: stub de chamada à BIOS %s\n", j.fn.Addr, biosName(*j.bios))
+			continue
 		}
 		if r.Err != nil {
 			fmt.Fprintf(&body, "- Hipótese do modelo: falhou (%v)\n", r.Err)
@@ -232,5 +255,23 @@ func funcContext(exe *ps1.Exe, f ps1.Func, maxInsns int) string {
 	if lp := loopFacts(exe.Loops(f.Addr, maxInsns)); lp != "" {
 		fmt.Fprintf(&b, " Laços verificados: %s.", lp)
 	}
+	if exe.Recursive(f.Addr, maxInsns) {
+		b.WriteString(" Recursiva: chama a si mesma.")
+	}
+	if st := stringFacts(exe.StringRefs(f.Addr, maxInsns)); st != "" {
+		fmt.Fprintf(&b, " Strings referenciadas: %s.", st)
+	}
 	return b.String()
+}
+
+func biosName(b ps1.BIOSCall) string {
+	return fmt.Sprintf("%c(0x%02x)", 'A'+(b.Table-0xA0)/0x10, b.Func)
+}
+
+func stringFacts(refs []ps1.StringRef) string {
+	parts := make([]string, len(refs))
+	for i, r := range refs {
+		parts[i] = fmt.Sprintf("0x%08x %q", r.Addr, r.Text)
+	}
+	return strings.Join(parts, "; ")
 }

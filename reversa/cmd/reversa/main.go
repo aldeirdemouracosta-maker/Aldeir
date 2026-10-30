@@ -108,6 +108,8 @@ func analyzePS1(args []string) {
 	top := fs.Int("top", 24, "quantas funções analisar")
 	insns := fs.Int("insns", 96, "instruções por função enviadas ao modelo")
 	host := fs.String("ollama", os.Getenv("OLLAMA_HOST"), "endereço do Ollama (padrão http://127.0.0.1:11434)")
+	workerTokens := fs.Int("worker-tokens", 200, "limite de tokens por resumo de função (0 = sem limite)")
+	synthTokens := fs.Int("synth-tokens", 450, "limite de tokens do resumo geral (0 = sem limite)")
 	cache := fs.String("cache", ".reversa-cache", "pasta do cache de respostas ('' desliga)")
 	evOut := fs.String("evidence", "", "grava o log de evidências neste arquivo JSON")
 	_ = fs.Parse(args)
@@ -122,8 +124,9 @@ func analyzePS1(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	mk := func(model string) llm.Chatter {
+	mk := func(model string, tokens int) llm.Chatter {
 		o := llm.NewOllama(model)
+		o.NumPredict = tokens
 		if h := *host; h != "" {
 			if !strings.Contains(h, "://") {
 				h = "http://" + h
@@ -132,7 +135,7 @@ func analyzePS1(args []string) {
 		}
 		var c llm.Chatter = o
 		if *cache != "" {
-			c = llm.Cached{Inner: c, Model: model, Dir: *cache}
+			c = llm.Cached{Inner: c, Model: fmt.Sprintf("%s|num_predict=%d", model, tokens), Dir: *cache}
 		}
 		return c
 	}
@@ -140,7 +143,7 @@ func analyzePS1(args []string) {
 	defer stop()
 	sum := sha256.Sum256(raw)
 	log := &evidence.Log{Subject: hex.EncodeToString(sum[:])}
-	p := &orchestrator.PS1{Worker: mk(*workerModel), Synthesizer: mk(*synthModel), Evidence: log,
+	p := &orchestrator.PS1{Worker: mk(*workerModel, *workerTokens), Synthesizer: mk(*synthModel, *synthTokens), Evidence: log,
 		Workers: *workers, TopN: *top, MaxInsns: *insns}
 	start := time.Now()
 	p.Progress = func(format string, args ...any) {

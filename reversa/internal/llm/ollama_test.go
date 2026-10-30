@@ -71,3 +71,25 @@ func TestOllamaSemFerramentasOmiteCampo(t *testing.T) {
 		t.Errorf("campo tools deveria ser omitido: %v", got["tools"])
 	}
 }
+
+func TestOllamaNumPredict(t *testing.T) {
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		_, _ = w.Write([]byte(`{"message":{"role":"assistant","content":"ok"},"done":true}`))
+	}))
+	defer srv.Close()
+	o := NewOllama("m")
+	o.BaseURL, o.NumPredict = srv.URL, 200
+	if _, err := o.Chat(context.Background(), []Message{{Role: "user", Content: "x"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got["options"].(map[string]any)["num_predict"] != float64(200) {
+		t.Errorf("num_predict ausente: %v", got["options"])
+	}
+	o.NumPredict = 0
+	_, _ = o.Chat(context.Background(), []Message{{Role: "user", Content: "x"}}, nil)
+	if _, ok := got["options"].(map[string]any)["num_predict"]; ok {
+		t.Error("sem limite, num_predict deve ser omitido")
+	}
+}
