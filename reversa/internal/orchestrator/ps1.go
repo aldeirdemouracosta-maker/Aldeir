@@ -3,6 +3,8 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync/atomic"
 
@@ -37,8 +39,7 @@ func (p *PS1) logf(format string, args ...any) {
 const workerPrompt = `Código MIPS R3000 (PlayStation 1) de uma função.%s
 Responda em no máximo 2 frases, em português, com o propósito provável da função. Use os nomes de
 registradores de hardware e os endereços como aparecem no código (após ';'); não recalcule nem converta números.
-Não liste registradores nem instruções. Só diga que a função é recursiva se os fatos disserem "Recursiva".
-Não invente símbolos. Se não der para saber, diga "indeterminado".
+Não liste registradores nem instruções. Não invente símbolos. Se não der para saber, diga "indeterminado".
 
 %s`
 
@@ -55,7 +56,7 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 	}
 	type job struct {
 		context string
-		bios    *ps1.BIOSCall // stub de BIOS: sem lógica própria, o modelo não é consultado
+		stub    string // não vazio: stub de BIOS ou de syscall, sem lógica própria; o modelo não é consultado
 		fn      ps1.Func
 		dis     string
 		ev      int
@@ -67,9 +68,7 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 		rec := p.Evidence.AddAs(evidence.Derived, "ps1_disasm", fmt.Sprintf("0x%08x (%s)", f.Addr, role(exe, f)), dis,
 			"Desmontagem linear; chamadas indiretas (jalr) e dados no meio do código não são resolvidos.")
 		jobs[i] = job{fn: f, dis: dis, ev: rec.ID, context: funcContext(exe, f, p.MaxInsns)}
-		if b, ok := exe.BIOSStub(f.Addr); ok {
-			jobs[i].bios = &b
-		}
+		jobs[i].stub = stubKind(exe, f.Addr)
 		if ind := exe.Indirects(f.Addr, p.MaxInsns); len(ind) > 0 {
 			var list strings.Builder
 			for _, pc := range ind {
@@ -85,8 +84,8 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 	p.logf("estágio 1/3 concluído: %d funções; resumindo com o modelo pequeno (%d em paralelo)", len(jobs), max(p.Workers, 1))
 	var done atomic.Int32
 	res := Map(ctx, jobs, p.Workers, func(ctx context.Context, j job) (string, error) {
-		if j.bios != nil {
-			p.logf("estágio 2/3: %d/%d funções resumidas (0x%08x: stub de BIOS, sem modelo)", done.Add(1), len(jobs), j.fn.Addr)
+		if j.stub != "" {
+			p.logf("estágio 2/3: %d/%d funções resumidas (0x%08x: stub, sem modelo)", done.Add(1), len(jobs), j.fn.Addr)
 			return "", nil
 		}
 		m, err := p.Worker.Chat(ctx, []llm.Message{{Role: "user", Content: fmt.Sprintf(workerPrompt, j.context, j.dis)}}, nil)
@@ -106,8 +105,8 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 	for i, r := range res {
 		j := jobs[i]
 		fmt.Fprintf(&body, "\n### 0x%08x (%s)\n\n- Desmontagem: [E%d] (derivada)\n", j.fn.Addr, role(exe, j.fn), j.ev)
-		if j.bios != nil {
-			fmt.Fprintf(&body, "- Tipo (derivado): stub de chamada à BIOS %s\n", biosName(*j.bios))
+		if j.stub != "" {
+			fmt.Fprintf(&body, "- Tipo (derivado): %s\n", j.stub)
 		}
 		if exe.Recursive(j.fn.Addr, p.MaxInsns) {
 			fmt.Fprintf(&body, "- Recursão (derivado): chama a si mesma\n")
@@ -127,13 +126,20 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 		if j.unknown != 0 {
 			fmt.Fprintf(&body, "- Saltos indiretos sem destino conhecido: %s [E%d] (desconhecido)\n", hexList(exe.Indirects(j.fn.Addr, p.MaxInsns)), j.unknown)
 		}
-		if j.bios != nil {
-			fmt.Fprintf(&body, "- Hipótese do modelo: não solicitada (stub de BIOS não tem lógica própria)\n")
-			fmt.Fprintf(&forModel, "- 0x%08x: stub de chamada à BIOS %s\n", j.fn.Addr, biosName(*j.bios))
+		if j.stub != "" {
+			fmt.Fprintf(&body, "- Hipótese do modelo: não solicitada (stub não tem lógica própria)\n")
+			fmt.Fprintf(&forModel, "- 0x%08x: %s\n", j.fn.Addr, j.stub)
 			continue
 		}
 		if r.Err != nil {
 			fmt.Fprintf(&body, "- Hipótese do modelo: falhou (%v)\n", r.Err)
+			continue
+		}
+		if bad := contradictions(exe, j.fn, r.Val, p.MaxInsns); len(bad) > 0 {
+			why := strings.Join(bad, "; ")
+			hyp := p.Evidence.AddAs(evidence.Inferred, "llm_hipotese", fmt.Sprintf("0x%08x", j.fn.Addr), r.Val, "Hipótese do modelo; DESCARTADA: contradiz fatos derivados: "+why)
+			fmt.Fprintf(&body, "- Hipótese do modelo [E%d] (inferida, DESCARTADA: %s): %s\n", hyp.ID, why, oneLine(r.Val))
+			fmt.Fprintf(&forModel, "- 0x%08x (%s): [hipótese do modelo descartada por contradizer fatos; use só os fatos]\n", j.fn.Addr, role(exe, j.fn))
 			continue
 		}
 		hyp := p.Evidence.AddAs(evidence.Inferred, "llm_hipotese", fmt.Sprintf("0x%08x", j.fn.Addr), r.Val, "Hipótese do modelo; não verificada.")
@@ -266,6 +272,64 @@ func funcContext(exe *ps1.Exe, f ps1.Func, maxInsns int) string {
 
 func biosName(b ps1.BIOSCall) string {
 	return fmt.Sprintf("%c(0x%02x)", 'A'+(b.Table-0xA0)/0x10, b.Func)
+}
+
+// stubKind descreve a função se ela for só um stub de BIOS ou de syscall, ou devolve "".
+func stubKind(exe *ps1.Exe, addr uint32) string {
+	if b, ok := exe.BIOSStub(addr); ok {
+		return "stub de chamada à BIOS " + biosName(b)
+	}
+	if n, ok := exe.SyscallStub(addr); ok {
+		// só 1 e 2 têm nome conhecido com certeza (psx-spx); os demais ficam só com o número
+		name := map[uint32]string{1: " (EnterCriticalSection)", 2: " (ExitCriticalSection)"}[n]
+		return fmt.Sprintf("stub de syscall do kernel com $a0=0x%x%s", n, name)
+	}
+	return ""
+}
+
+var (
+	recursivePat = regexp.MustCompile(`(?i)recursiv`)
+	addrPat      = regexp.MustCompile(`(?i)0x[0-9a-f]{6,8}`)
+)
+
+// contradictions confere a hipótese do modelo contra fatos que o programa já provou. Hipóteses que os
+// contradizem são descartadas e não alimentam o resumo geral, para o erro não se propagar.
+func contradictions(exe *ps1.Exe, f ps1.Func, text string, maxInsns int) []string {
+	var bad []string
+	if recursivePat.MatchString(text) && !exe.Recursive(f.Addr, maxInsns) {
+		bad = append(bad, "afirma recursão, mas a função não chama a si mesma")
+	}
+	// endereços citados precisam estar no corpo da função ou entre os fatos derivados dela
+	ok := map[uint32]bool{f.Addr: true}
+	for off := 0; off < exe.FuncLen(f.Addr, maxInsns); off++ {
+		ok[f.Addr+uint32(off)*4] = true
+	}
+	for _, c := range exe.Callees(f.Addr, maxInsns) {
+		ok[c] = true
+	}
+	for _, a := range exe.HWAccesses(f.Addr, maxInsns) {
+		ok[a.Addr], ok[a.Addr&0x1FFFFFFF] = true, true
+	}
+	for _, l := range exe.Loops(f.Addr, maxInsns) {
+		ok[l.PC], ok[l.Target] = true, true
+	}
+	for _, sr := range exe.StringRefs(f.Addr, maxInsns) {
+		ok[sr.Addr] = true
+	}
+	var strange []string
+	seen := map[uint32]bool{}
+	for _, m := range addrPat.FindAllString(text, -1) {
+		v, err := strconv.ParseUint(m[2:], 16, 32)
+		if err != nil || ok[uint32(v)] || seen[uint32(v)] {
+			continue
+		}
+		seen[uint32(v)] = true
+		strange = append(strange, m)
+	}
+	if len(strange) > 0 {
+		bad = append(bad, "cita endereço(s) que não aparecem nos fatos da função: "+strings.Join(strange, ", "))
+	}
+	return bad
 }
 
 func stringFacts(refs []ps1.StringRef) string {

@@ -99,3 +99,26 @@ func (e *Exe) Recursive(addr uint32, n int) bool {
 	}
 	return false
 }
+
+// SyscallStub reconhece uma função que é só um 'syscall' do kernel com $a0 constante (por exemplo
+// addiu $a0,$zero,1; syscall 0; jr $ra). Devolve o valor de $a0, que escolhe a função do kernel.
+func (e *Exe) SyscallStub(addr uint32) (uint32, bool) {
+	c := newConsts()
+	for i := 0; i < 6; i++ {
+		w, ok := e.Word(addr + uint32(i)*4)
+		if !ok {
+			return 0, false
+		}
+		if w>>26 == 0 && w&0x3F == 0x0C { // syscall
+			return c.val[4], c.ok[4]
+		}
+		if op := w >> 26; op == 2 || op == 3 || (op >= 4 && op <= 7) || (op == 0 && (w&0x3F == 0x08 || w&0x3F == 0x09)) {
+			return 0, false // salto antes do syscall: não é um stub simples
+		}
+		c.step(w)
+	}
+	return 0, false
+}
+
+// FuncLen devolve quantas instruções a função em addr ocupa (heurística de fim de função, até n).
+func (e *Exe) FuncLen(addr uint32, n int) int { return e.span(addr, n) }

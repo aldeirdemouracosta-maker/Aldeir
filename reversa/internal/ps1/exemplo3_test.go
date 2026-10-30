@@ -122,3 +122,33 @@ func TestExemplo3ContraLLVM(t *testing.T) {
 		t.Fatalf("comparou só %d instruções", n)
 	}
 }
+
+func TestExemplo4StubsDeSyscall(t *testing.T) {
+	raw, err := os.ReadFile("../../testdata/exemplo4.exe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := ParseExe(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, ok := e.SyscallStub(0x80010018); !ok || n != 1 {
+		t.Errorf("sys_enter: %d %v", n, ok)
+	}
+	if n, ok := e.SyscallStub(0x80010028); !ok || n != 2 {
+		t.Errorf("sys_exit: %d %v", n, ok)
+	}
+	if _, ok := e.SyscallStub(0x80010000); ok {
+		t.Error("_start não é stub de syscall")
+	}
+	if _, ok := e.BIOSStub(0x80010018); ok {
+		t.Error("stub de syscall não é stub de BIOS")
+	}
+	// e as outras funções dos exemplos anteriores nunca são stubs de syscall
+	e3 := loadExemplo3(t)
+	for _, a := range []uint32{e3Start, e3PutsLike, e3Countdown, e3BIOSMalloc} {
+		if _, ok := e3.SyscallStub(a); ok {
+			t.Errorf("exemplo3 %08x não é stub de syscall", a)
+		}
+	}
+}

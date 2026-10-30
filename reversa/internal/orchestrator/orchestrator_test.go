@@ -265,7 +265,7 @@ func TestRelatorioExemplo3(t *testing.T) {
 	for _, want := range []string{
 		"### 0x8001002c (chamada 1x)", "- Tipo (derivado): stub de chamada à BIOS A(0x33)",
 		"### 0x80010038 (chamada 2x)", "- Tipo (derivado): stub de chamada à BIOS B(0x07)",
-		"Hipótese do modelo: não solicitada (stub de BIOS não tem lógica própria)",
+		"Hipótese do modelo: não solicitada (stub não tem lógica própria)",
 		"### 0x80010064 (chamada 2x)", "- Recursão (derivado): chama a si mesma",
 		`- Strings referenciadas (derivado): 0x8001008c "Ola, mundo PS1 teste"`,
 	} {
@@ -292,7 +292,95 @@ func TestRelatorioExemplo3(t *testing.T) {
 			cd = s
 		}
 	}
-	if cd == "" || !strings.Contains(cd, `Só diga que a função é recursiva se os fatos disserem "Recursiva"`) {
-		t.Errorf("prompt de countdown sem fato de recursão ou sem a regra:\n%s", cd)
+	if cd == "" {
+		t.Errorf("prompt de countdown sem o fato de recursão")
+	}
+	// mencionar "recursiva" onde não é fato induz o modelo pequeno a repetir a palavra: só countdown a recebe
+	for _, s := range w.seen {
+		if strings.Contains(strings.ToLower(s), "recursiv") && !strings.Contains(s, "Recursiva: chama a si mesma") {
+			t.Errorf("prompt menciona recursão sem que seja fato:\n%s", s)
+		}
+	}
+}
+
+func runExemplo(t *testing.T, file string, worker llm.Chatter, synth llm.Chatter) string {
+	t.Helper()
+	raw, err := os.ReadFile("../../testdata/" + file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exe, err := ps1.ParseExe(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &PS1{Worker: worker, Synthesizer: synth, Evidence: &evidence.Log{}, Workers: 2, TopN: 20, MaxInsns: 96}
+	out, err := p.Run(context.Background(), exe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// Regressão do primeiro jogo real: o modelo dizia "recursiva" para quase tudo e o resumo repetia o erro.
+func TestHipoteseQueContradizFatoEhDescartada(t *testing.T) {
+	syn := &capture{}
+	out := runExemplo(t, "exemplo3.exe", stub{"A função é recursiva e processa dados."}, syn)
+	sections := strings.Split(out, "\n### ")[1:]
+	discarded, kept := 0, 0
+	for _, sec := range sections {
+		switch {
+		case strings.Contains(sec, "Recursão (derivado)"):
+			kept++
+			if strings.Contains(sec, "DESCARTADA") {
+				t.Errorf("countdown é recursiva de verdade, a hipótese não pode ser descartada:\n%s", sec)
+			}
+		case strings.Contains(sec, "DESCARTADA: afirma recursão, mas a função não chama a si mesma"):
+			discarded++
+		}
+	}
+	// _start e puts_like afirmam recursão sem ser; os 2 stubs não consultam o modelo
+	if discarded != 2 || kept != 1 {
+		t.Errorf("descartadas=%d (esperado 2), mantidas=%d (esperado 1):\n%s", discarded, kept, out)
+	}
+	if n := strings.Count(syn.seen[0], "descartada por contradizer fatos"); n != 2 {
+		t.Errorf("o resumo geral deve receber só um aviso, sem o texto errado, nas 2 descartadas (%d):\n%s", n, syn.seen[0])
+	}
+	if strings.Count(syn.seen[0], "é recursiva") != 1 {
+		t.Errorf("o texto 'é recursiva' só pode chegar ao resumo geral pela função realmente recursiva:\n%s", syn.seen[0])
+	}
+}
+
+func TestHipoteseComEnderecoSemRelacaoEhDescartada(t *testing.T) {
+	out := runExemplo(t, "exemplo3.exe", stub{"Mexe na memória em 0x80999999."}, stub{"fim"})
+	if !strings.Contains(out, "DESCARTADA: cita endereço(s) que não aparecem nos fatos da função: 0x80999999") {
+		t.Errorf("endereço inventado deveria descartar a hipótese:\n%s", out)
+	}
+	// O modelo falso devolve o mesmo texto para todas as funções. 0x80010044 (puts_like) é um endereço
+	// válido para ela mesma e para _start (que a chama), mas não para countdown: só countdown é descartada.
+	out = runExemplo(t, "exemplo3.exe", stub{"A função em 0x80010044 percorre bytes."}, stub{"fim"})
+	if n := strings.Count(out, "DESCARTADA"); n != 1 {
+		t.Fatalf("esperava 1 descartada (countdown), vieram %d:\n%s", n, out)
+	}
+	for _, sec := range strings.Split(out, "\n### ")[1:] {
+		isCountdown := strings.HasPrefix(sec, "0x80010064")
+		if strings.Contains(sec, "DESCARTADA") != isCountdown {
+			t.Errorf("descarte errado na seção %s:\n%s", sec[:10], sec)
+		}
+	}
+}
+
+func TestStubsDeSyscall(t *testing.T) {
+	w := &capture{}
+	out := runExemplo(t, "exemplo4.exe", w, stub{"fim"})
+	for _, want := range []string{
+		"- Tipo (derivado): stub de syscall do kernel com $a0=0x1 (EnterCriticalSection)",
+		"- Tipo (derivado): stub de syscall do kernel com $a0=0x2 (ExitCriticalSection)",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("relatório sem %q:\n%s", want, out)
+		}
+	}
+	if len(w.seen) != 1 { // só _start vai ao modelo
+		t.Errorf("modelo consultado %d vezes, esperado 1", len(w.seen))
 	}
 }
