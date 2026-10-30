@@ -49,5 +49,10 @@ Resultado da execução com `exemplo2`: `wait_vblank` descrito corretamente (esp
 | Strings de formato (`"CD_cw: %s\n"`) rejeitadas por terem `\n` e símbolos | Aceita `\n`, `\r`, `\t` e exige só 1/3 de letras |
 | Função truncada em 256 instruções sem aviso | Aviso explícito no relatório e no `func` quando a função continua além do limite |
 
+Segunda rodada, com a função inteira (263 instruções): as strings `"%s: no param\n"` e `"%s:(%s) Sync=%s, Ready=%s\n"`
+confirmaram a leitura (erro -2 e as duas funções de retorno Sync/Ready), mas **ainda não saiu nenhum fato de hardware**: os
+ponteiros do CD-ROM não são gravados por instruções, já vêm preenchidos na imagem do executável (dados iniciais, `.data`).
+O programa passou a ler também as palavras iniciais da imagem (com os mesmos descartes por sobrescrita desconhecida).
+
 Limitação: a resolução de globais é linear e assume que só as escritas constantes do próprio executável mudam
 a variável; ponteiros que aliasam a global, ou inicialização feita fora do executável (overlays), não são vistos.

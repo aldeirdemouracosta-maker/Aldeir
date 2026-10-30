@@ -321,9 +321,10 @@ func (e *Exe) Indirects(addr uint32, n int) []uint32 {
 	return out
 }
 
-// hwGlobals procura no executável inteiro variáveis globais em que o programa guarda (sw) sempre o mesmo
-// endereço de hardware, por exemplo o ponteiro para CDROM_INDEX. Descarta globais com valores diferentes ou
-// com escritas de valor desconhecido. É uma heurística linear: aliasing por ponteiros não é considerado.
+// hwGlobals procura variáveis globais que guardam um endereço de hardware, por exemplo o ponteiro para
+// CDROM_INDEX: ou o código guarda (sw) sempre o mesmo valor nelas, ou o dado já vem preenchido na imagem do
+// executável (.data). Descarta globais com valores diferentes ou com escritas de valor desconhecido. É uma
+// heurística linear: aliasing por ponteiros e alteração em tempo de execução não são considerados.
 func (e *Exe) hwGlobals() map[uint32]uint32 {
 	e.gonce.Do(func() {
 		vals := map[uint32]uint32{}
@@ -355,6 +356,20 @@ func (e *Exe) hwGlobals() map[uint32]uint32 {
 			if op := w >> 26; op == 2 || (op == 0 && w&0x3F == 0x08) {
 				resetAt = i + 2 // depois do delay slot
 			}
+		}
+		// Dados iniciais da própria imagem (como .data): um ponteiro já preenchido com um endereço de hardware.
+		// Vale se o código não o sobrescreve com valor diferente ou desconhecido.
+		for off := 0; off+4 <= len(e.Text); off += 4 {
+			addr := e.Load + uint32(off)
+			v := le.Uint32(e.Text[off:])
+			if HWName(v) == "" || bad[addr] {
+				continue
+			}
+			if old, seen := vals[addr]; seen && old != v {
+				bad[addr] = true
+				continue
+			}
+			vals[addr] = v
 		}
 		e.globals = map[uint32]uint32{}
 		for a, v := range vals {

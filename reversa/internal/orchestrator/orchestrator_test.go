@@ -482,3 +482,18 @@ func TestRelatorioComPonteiroGlobalETruncamento(t *testing.T) {
 		t.Errorf("FuncReport sem aviso de truncamento:\n%s", rep)
 	}
 }
+
+func TestRelatorioComPonteirosNosDadosIniciais(t *testing.T) {
+	out := runExemplo(t, "exemplo6.exe", stub{"ok"}, stub{"fim"})
+	for _, want := range []string{
+		"escreve 0x00 em CDROM_INDEX (0x1f801800) [via ponteiro global 0x8001006c]",
+		"escreve valor variável em CDROM_REG1 (0x1f801801) [via ponteiro global 0x80010070]",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("relatório sem %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "0x80010074") && strings.Contains(out, "[via ponteiro global 0x80010074]") {
+		t.Errorf("global sobrescrita virou hardware:\n%s", out)
+	}
+}
