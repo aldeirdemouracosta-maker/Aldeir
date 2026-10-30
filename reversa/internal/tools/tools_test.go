@@ -75,3 +75,28 @@ func TestRaizPermitida(t *testing.T) {
 		t.Errorf("caminho absoluto dentro da raiz deveria funcionar: %v", err)
 	}
 }
+
+func TestFerramentaPS1Function(t *testing.T) {
+	s, dir := newSet(t)
+	if err := os.WriteFile(filepath.Join(dir, "e2.exe"), mustRead(t, "../../testdata/exemplo2.exe"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := call(t, s, "ps1_function", map[string]any{"path": "e2.exe", "address": "0x80010074"})
+	if err != nil || !strings.Contains(out, "# Função 0x80010074") || !strings.Contains(out, "repete enquanto (I_STAT & 0x1) == 0") || !strings.Contains(out, "(derived)") {
+		t.Fatalf("ps1_function: %v\n%s", err, out)
+	}
+	if _, err := call(t, s, "ps1_function", map[string]any{"path": "e2.exe", "address": "0x70000000"}); err == nil {
+		t.Error("endereço fora do código deveria falhar")
+	}
+	if _, err := call(t, s, "ps1_function", map[string]any{"path": "e2.exe", "address": "lixo"}); err == nil {
+		t.Error("endereço inválido deveria falhar")
+	}
+}
+
+func mustRead(t *testing.T, p string) []byte {
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}

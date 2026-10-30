@@ -95,3 +95,33 @@ func (e *Exe) FindFunctions() []Func {
 	})
 	return out
 }
+
+// Callers devolve os endereços das instruções 'jal' que chamam target, em ordem crescente.
+func (e *Exe) Callers(target uint32) []uint32 {
+	var out []uint32
+	for off := 0; off+4 <= len(e.Text); off += 4 {
+		w := le.Uint32(e.Text[off:])
+		if w>>26 != 3 {
+			continue
+		}
+		pc := e.Load + uint32(off)
+		if (pc+4)&0xF0000000|(w&0x03FFFFFF)<<2 == target {
+			out = append(out, pc)
+		}
+	}
+	return out
+}
+
+// NearestStart devolve o início de função conhecido (alvo de jal ou entrada) mais próximo antes de pc.
+// É só uma aproximação: funções alcançadas apenas por tabela de salto ou jalr não são conhecidas, e
+// então pc pode pertencer a uma função desconhecida logo depois do início devolvido.
+func (e *Exe) NearestStart(pc uint32) (uint32, bool) {
+	var best uint32
+	found := false
+	for a := range e.callTargets() {
+		if a <= pc && (!found || a > best) {
+			best, found = a, true
+		}
+	}
+	return best, found
+}

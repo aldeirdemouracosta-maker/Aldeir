@@ -25,6 +25,11 @@ A propagação de constantes limpava os registradores no `jal`, **antes** do del
 antes da chamada, então `jal f; addiu $a0,$a0,k` usa o `$a0` de antes do `jal`. Corrigido (efeito da chamada só depois
 do delay slot) com teste de regressão.
 
+### Comparação 7B x 14B no mesmo jogo (4 funções)
+O 14B levou 5 min 55 s contra ~26 s por função do 7B (≈3,5x), com qualidade parecida, e também escreveu "chamadas
+recursivas" para chamadas a **outra** função (o verificador descartou). O limite é a informação disponível para cada
+função (isolada, sem nomes), não o tamanho do modelo.
+
 Resultado da execução com `exemplo2`: `wait_vblank` descrito corretamente (espera o bit ser ativado, depois escreve 0),
 `gpu_reset`, `dma_to_gpu`, `cd_command`, `read_timer`, `checksum` e `dispatch` coerentes com o código,
 8 funções em 43 s no total (a maior parte vinda do cache).

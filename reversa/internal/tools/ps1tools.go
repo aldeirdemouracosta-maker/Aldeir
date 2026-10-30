@@ -13,6 +13,7 @@ import (
 	"reversa/internal/disc"
 	"reversa/internal/evidence"
 	"reversa/internal/mcp"
+	"reversa/internal/orchestrator"
 	"reversa/internal/ps1"
 	"reversa/internal/target"
 )
@@ -140,6 +141,28 @@ func (s *Set) MCP() []mcp.Tool {
 					out += fmt.Sprintf("; atenção: %d salto(s) indireto(s) sem destino conhecido\n", len(ind))
 				}
 				return s.record(evidence.Derived, "ps1_disasm", a, out, "Desmontagem linear; propagação de constantes sem seguir desvios; dados no meio do código aparecem como instruções."), nil
+			},
+		},
+		{
+			Name: "ps1_function", Description: "Relatório de uma função só com fatos: tamanho, chamadores, funções chamadas, hardware, laços, strings, stubs e desmontagem anotada.",
+			Schema: pathSchema(map[string]any{
+				"address": map[string]any{"type": "string", "description": "endereço da função em hexadecimal, por exemplo 0x80026538"},
+				"insns":   map[string]any{"type": "integer", "description": "máximo de instruções (padrão 256, máximo 1024)"},
+			}, "address"),
+			Handler: func(ctx context.Context, a map[string]any) (string, error) {
+				e, err := s.loadExe(ctx, a)
+				if err != nil {
+					return "", err
+				}
+				var addr uint32
+				if _, err := fmt.Sscanf(strings.TrimPrefix(strings.ToLower(str(a, "address")), "0x"), "%x", &addr); err != nil {
+					return "", fmt.Errorf("endereço inválido: %q", str(a, "address"))
+				}
+				out, err := orchestrator.FuncReport(e, addr, num(a, "insns", 256, 1024))
+				if err != nil {
+					return "", err
+				}
+				return s.record(evidence.Derived, "ps1_function", a, out, "Fatos derivados; fim de função, chamadores e condições de laço são heurísticas."), nil
 			},
 		},
 		{

@@ -209,3 +209,26 @@ func TestExemplo2LacosEEsperaAtiva(t *testing.T) {
 		}
 	}
 }
+
+func TestExemplo2Callers(t *testing.T) {
+	e := loadExemplo2(t)
+	got := e.Callers(e2WaitVblank)
+	if len(got) != 2 || got[0] != 0x80010010 || got[1] != 0x80010040 {
+		t.Errorf("chamadores de wait_vblank: %x", got)
+	}
+	// read_timer é chamada por _start (laço principal) e por handler_a, que só existe via tabela de salto
+	got = e.Callers(e2ReadTimer)
+	if len(got) != 2 || got[0] != 0x80010048 || got[1] != 0x80010134 {
+		t.Errorf("chamadores de read_timer: %x", got)
+	}
+	if n, ok := e.NearestStart(0x80010048); !ok || n != e2Start {
+		t.Errorf("início mais próximo de 0x80010048: %x", n)
+	}
+	// limitação documentada: handler_a não é conhecido, então a aproximação aponta para dispatch
+	if n, _ := e.NearestStart(0x80010134); n != e2Dispatch {
+		t.Errorf("início mais próximo de 0x80010134: %x", n)
+	}
+	if got := e.Callers(0x80010001); len(got) != 0 {
+		t.Errorf("endereço sem chamadas: %x", got)
+	}
+}

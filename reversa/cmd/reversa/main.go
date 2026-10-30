@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"time"
 
@@ -44,6 +45,8 @@ func main() {
 		analyzePS1(os.Args[2:])
 	case "disc":
 		discInfo(os.Args[2:])
+	case "func":
+		funcCmd(os.Args[2:])
 	case "mcp":
 		serveMCP(os.Args[2:])
 	default:
@@ -52,7 +55,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "uso: reversa doctor | reversa mcp -root <pasta> | reversa disc <imagem> | reversa ps1 [opções] <exe|cue|bin|iso> | reversa analyze [-model m] [-steps n] [-evidence arq.json] <binário>")
+	fmt.Fprintln(os.Stderr, "uso: reversa doctor | reversa func [-explain] <exe|cue|bin|iso> <endereço> | reversa mcp -root <pasta> | reversa disc <imagem> | reversa ps1 [opções] <exe|cue|bin|iso> | reversa analyze [-model m] [-steps n] [-evidence arq.json] <binário>")
 	os.Exit(2)
 }
 
@@ -103,7 +106,7 @@ func fatal(err error) {
 func analyzePS1(args []string) {
 	fs := flag.NewFlagSet("ps1", flag.ExitOnError)
 	workerModel := fs.String("worker-model", "qwen2.5-coder:7b", "modelo pequeno que resume cada função")
-	synthModel := fs.String("synth-model", "qwen2.5-coder:14b", "modelo maior que escreve o relatório")
+	synthModel := fs.String("synth-model", "qwen2.5-coder:7b", "modelo que escreve o resumo geral (o 14B é ~3,5x mais lento e pouco melhor)")
 	workers := fs.Int("workers", 2, "chamadas simultâneas ao Ollama (igual a OLLAMA_NUM_PARALLEL)")
 	top := fs.Int("top", 24, "quantas funções analisar")
 	insns := fs.Int("insns", 96, "instruções por função enviadas ao modelo")
@@ -112,6 +115,7 @@ func analyzePS1(args []string) {
 	synthTokens := fs.Int("synth-tokens", 450, "limite de tokens do resumo geral (0 = sem limite)")
 	cache := fs.String("cache", ".reversa-cache", "pasta do cache de respostas ('' desliga)")
 	evOut := fs.String("evidence", "", "grava o log de evidências neste arquivo JSON")
+	out := fs.String("out", "", "grava o relatório neste arquivo .md (UTF-8), além de mostrá-lo")
 	_ = fs.Parse(args)
 	if fs.NArg() != 1 {
 		usage()
@@ -157,7 +161,72 @@ func analyzePS1(args []string) {
 	if err != nil {
 		fatal(err)
 	}
+	emit(report, *out)
+}
+
+// emit mostra o relatório e, se pedido, também o grava em arquivo.
+func emit(report, path string) {
 	fmt.Println(report)
+	if path == "" {
+		return
+	}
+	if err := os.WriteFile(path, []byte(report), 0o644); err != nil {
+		fatal(err)
+	}
+	fmt.Fprintln(os.Stderr, "relatório salvo em", path)
+}
+
+// funcCmd mostra uma função só com fatos do programa; com -explain pede também uma explicação ao modelo.
+func funcCmd(args []string) {
+	fs := flag.NewFlagSet("func", flag.ExitOnError)
+	insns := fs.Int("insns", 256, "máximo de instruções da função")
+	explain := fs.Bool("explain", false, "pede ao modelo uma explicação (mais lento)")
+	model := fs.String("model", "qwen2.5-coder:7b", "modelo usado por -explain")
+	host := fs.String("ollama", os.Getenv("OLLAMA_HOST"), "endereço do Ollama")
+	out := fs.String("out", "", "grava o relatório neste arquivo .md (UTF-8)")
+	_ = fs.Parse(args)
+	if fs.NArg() != 2 {
+		usage()
+	}
+	raw, err := loadPS1(fs.Arg(0))
+	if err != nil {
+		fatal(err)
+	}
+	exe, err := ps1.ParseExe(raw)
+	if err != nil {
+		fatal(err)
+	}
+	addr, err := strconv.ParseUint(strings.TrimPrefix(strings.ToLower(fs.Arg(1)), "0x"), 16, 32)
+	if err != nil {
+		fatal(fmt.Errorf("endereço inválido %q: use hexadecimal, por exemplo 0x80026538", fs.Arg(1)))
+	}
+	report, err := orchestrator.FuncReport(exe, uint32(addr), *insns)
+	if err != nil {
+		fatal(err)
+	}
+	if *explain {
+		o := llm.NewOllama(*model)
+		o.NumPredict = 300
+		if h := *host; h != "" {
+			if !strings.Contains(h, "://") {
+				h = "http://" + h
+			}
+			o.BaseURL = h
+		}
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+		defer stop()
+		fmt.Fprintln(os.Stderr, "consultando o modelo...")
+		text, bad, err := orchestrator.ExplainFunction(ctx, o, exe, uint32(addr), *insns)
+		if err != nil {
+			fatal(err)
+		}
+		status := "inferida, não verificada"
+		if len(bad) > 0 {
+			status = "inferida, DESCARTADA: " + strings.Join(bad, "; ")
+		}
+		report += fmt.Sprintf("\n## Hipótese do modelo (%s)\n\n%s\n", status, text)
+	}
+	emit(report, *out)
 }
 
 func loadPS1(path string) ([]byte, error) {

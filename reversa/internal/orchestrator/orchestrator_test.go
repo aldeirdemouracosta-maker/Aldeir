@@ -384,3 +384,68 @@ func TestStubsDeSyscall(t *testing.T) {
 		t.Errorf("modelo consultado %d vezes, esperado 1", len(w.seen))
 	}
 }
+
+func loadExe(t *testing.T, file string) *ps1.Exe {
+	t.Helper()
+	raw, err := os.ReadFile("../../testdata/" + file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exe, err := ps1.ParseExe(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return exe
+}
+
+func TestFuncReport(t *testing.T) {
+	exe := loadExe(t, "exemplo2.exe")
+	out, err := FuncReport(exe, 0x80010074, 96) // wait_vblank
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"# Função 0x80010074", "- Tamanho (heurístico): 9 instruções, 0x80010074 a 0x80010094",
+		"- Chamada por 2 instrução(ões) jal: 0x80010010 (a partir de 0x80010000), 0x80010040 (a partir de 0x80010000)",
+		"lê I_STAT (0x1f801070); escreve 0x00000000 em I_STAT (0x1f801070)",
+		"repete enquanto (I_STAT & 0x1) == 0; sai quando (I_STAT & 0x1) != 0",
+		"## Desmontagem", "80010074  3c081f80  lui $t0,0x1f80", "jr $ra",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("FuncReport sem %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "lbu") {
+		t.Errorf("FuncReport vazou para a função seguinte:\n%s", out)
+	}
+	// entrada, stub e função sem chamadas diretas
+	if out, _ := FuncReport(exe, 0x80010000, 96); !strings.Contains(out, "Papel: ponto de entrada do programa") {
+		t.Errorf("entrada:\n%s", out)
+	}
+	if out, _ := FuncReport(exe, 0x8001012c, 96); !strings.Contains(out, "Nenhuma chamada direta (jal)") { // handler_a
+		t.Errorf("handler sem jal:\n%s", out)
+	}
+	if out, _ := FuncReport(loadExe(t, "exemplo4.exe"), 0x80010018, 96); !strings.Contains(out, "EnterCriticalSection") {
+		t.Errorf("stub de syscall:\n%s", out)
+	}
+	for _, bad := range []uint32{0x80010002, 0x80000000, 0x90000000} {
+		if _, err := FuncReport(exe, bad, 96); err == nil {
+			t.Errorf("0x%08x deveria dar erro", bad)
+		}
+	}
+}
+
+func TestExplainFunctionDescartaContradicao(t *testing.T) {
+	exe := loadExe(t, "exemplo3.exe")
+	txt, bad, err := ExplainFunction(context.Background(), stub{"É recursiva."}, exe, 0x80010044, 96) // puts_like
+	if err != nil || txt != "É recursiva." || len(bad) != 1 {
+		t.Errorf("puts_like não é recursiva: txt=%q bad=%v err=%v", txt, bad, err)
+	}
+	_, bad, _ = ExplainFunction(context.Background(), stub{"É recursiva."}, exe, 0x80010064, 96) // countdown
+	if len(bad) != 0 {
+		t.Errorf("countdown é recursiva de verdade: %v", bad)
+	}
+	if _, _, err := ExplainFunction(context.Background(), stub{"x"}, exe, 0x70000000, 96); err == nil {
+		t.Error("endereço fora do código deveria dar erro")
+	}
+}
