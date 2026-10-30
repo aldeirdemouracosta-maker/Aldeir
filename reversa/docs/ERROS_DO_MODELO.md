@@ -63,3 +63,13 @@ Uma análise independente da função `CD_cw` (colada pelo usuário) confirmou o
 timeout em segundos exige saber o que `0x8001fda0` é (não provado), e qual callback é Ready e qual é Sync **não está
 provado** pelas strings. Ela pediu duas coisas que o programa não fazia e agora faz: valores iniciais de tabelas e
 ponteiros (`mem`) e quem escreve/lê as variáveis de estado e de callback (`xref`, incluindo tabelas indexadas).
+
+## Rotina de interrupção do CD (`0x80025a64`, 354 instruções): ponteiros de hardware resolvidos no jogo real
+A resolução de ponteiros globais **funcionou no jogo real**: `0x8002d6c0`=`CDROM_INDEX`, `0x8002d6c4`=`CDROM_REG1`,
+`0x8002d6c8`=`CDROM_REG2`, `0x8002d6cc`=`CDROM_REG3`, com os valores escritos (`0x01`, `0x07`, `0x00`).
+Falhas do programa vistas nessa saída e corrigidas:
+
+| Falha | Correção |
+|---|---|
+| "espera ativa lendo CDROM_INDEX" num laço de **no máximo 8 leituras** (a saída é o contador `slti s0,8`) | Só se afirma espera ativa quando a condição de saída depende do valor lido (`While` derivado). Senão: "lê X dentro do laço, condição de saída não determinada (não afirmo espera ativa)" |
+| `switch` por tabela (`lui $at; addu $at,$at,$idx; lw -0x4c30($at); jr $v0`) listado só como salto "desconhecido" | Resolve a base da tabela e lê os destinos da imagem (até a primeira palavra que não aponta para dentro da função); o switch resolvido deixa de constar como desconhecido |

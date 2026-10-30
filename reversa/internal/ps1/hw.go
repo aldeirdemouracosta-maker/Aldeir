@@ -63,6 +63,10 @@ type consts struct {
 	// base de tabela: o registrador vale (constante + índice desconhecido), como em 'addu $at,$at,$idx'
 	arr   [32]uint32
 	arrOK [32]bool
+
+	// tabela de onde o registrador foi carregado: 'lw rt,off(base indexada)' guarda a base da tabela
+	tbl   [32]uint32
+	tblOK [32]bool
 }
 
 // newConsts cria o rastreador já conhecendo as globais de hardware do executável.
@@ -82,13 +86,13 @@ func newConsts() *consts {
 // Escritas em $zero são descartadas pelo hardware, então nunca mudam o estado.
 func (c *consts) set(r, v uint32) {
 	if r != 0 {
-		c.val[r], c.ok[r], c.srcOK[r], c.gsrc[r], c.arrOK[r] = v, true, false, 0, false
+		c.val[r], c.ok[r], c.srcOK[r], c.gsrc[r], c.arrOK[r], c.tblOK[r] = v, true, false, 0, false, false
 	}
 }
 
 func (c *consts) kill(r uint32) {
 	if r != 0 {
-		c.ok[r], c.srcOK[r], c.gsrc[r], c.arrOK[r] = false, false, 0, false
+		c.ok[r], c.srcOK[r], c.gsrc[r], c.arrOK[r], c.tblOK[r] = false, false, 0, false, false
 	}
 }
 
@@ -140,7 +144,11 @@ func (c *consts) stepInner(w uint32) (HWAccess, bool) {
 	case op >= 0x20 && op <= 0x26: // loads: escrevem rt, usam rs
 		acc, ok := c.access(rs, imm)
 		baseOK, baseVal := c.ok[rs], c.val[rs] // antes de kill: rt pode ser o mesmo registrador que rs
+		idxOK, idxBase := !c.ok[rs] && c.arrOK[rs], c.arr[rs]
 		c.kill(rt)
+		if op == 0x23 && idxOK && rt != 0 { // lw de tabela indexada: lembra a base para resolver um jr
+			c.tbl[rt], c.tblOK[rt] = idxBase+uint32(imm), true
+		}
 		if op == 0x23 && baseOK && rt != 0 { // lw de uma global que sempre guarda um endereço de hardware
 			if g := baseVal + uint32(imm); c.globals[g] != 0 {
 				c.set(rt, c.globals[g])
@@ -242,8 +250,12 @@ type Loop struct {
 	While, Until string
 }
 
-// Polling diz se é um laço condicional que lê hardware: espera ativa por uma mudança de estado.
-func (l Loop) Polling() bool { return !l.Unconditional && len(l.Reads) > 0 }
+// Polling diz se é uma espera ativa COMPROVADA: laço condicional cuja condição de saída depende de um valor lido
+// de hardware (While preenchido). Um laço que apenas lê hardware, mas termina por contador, não é espera ativa.
+func (l Loop) Polling() bool { return !l.Unconditional && len(l.Reads) > 0 && l.While != "" }
+
+// ReadsHardware diz se o corpo do laço lê algum registrador de hardware (sem afirmar nada sobre a condição).
+func (l Loop) ReadsHardware() bool { return len(l.Reads) > 0 }
 
 // branchCond descreve a condição de um beq/bne contra $zero que testa um valor lido de hardware.
 // Devolve {condição de desvio tomado, negação}, por exemplo {"(I_STAT & 0x1) == 0", "(I_STAT & 0x1) != 0"}.
@@ -411,4 +423,40 @@ func (c *consts) effective(rs uint32, off int32) (addr uint32, indexed, ok bool)
 		return c.arr[rs] + uint32(off), true, true
 	}
 	return 0, false, false
+}
+
+// JumpTable é um 'jr' que salta por uma tabela de endereços indexada (switch).
+type JumpTable struct {
+	PC      uint32   // o jr
+	Base    uint32   // início da tabela na imagem
+	Targets []uint32 // destinos lidos da imagem
+}
+
+// JumpTables resolve os 'jr' (que não são $ra) da função em addr que saltam por uma tabela indexada de base
+// constante, lendo da imagem as entradas que apontam para dentro da função. Heurística: a tabela é lida até a
+// primeira palavra que não aponta para dentro da função (ou 64 entradas); tabelas de ponteiros para outras
+// funções (vtables) não são resolvidas.
+func (e *Exe) JumpTables(addr uint32, n int) []JumpTable {
+	var out []JumpTable
+	c := e.newConsts()
+	end := addr + uint32(e.span(addr, n))*4
+	for i, last := 0, e.span(addr, n); i < last; i++ {
+		pc := addr + uint32(i)*4
+		w, _ := e.Word(pc)
+		if w>>26 == 0 && w&0x3F == 0x08 && w>>21&31 != 31 && c.tblOK[w>>21&31] {
+			jt := JumpTable{PC: pc, Base: c.tbl[w>>21&31]}
+			for k := uint32(0); k < 64; k++ {
+				v, ok := e.Word(jt.Base + 4*k)
+				if !ok || v < addr || v >= end || v%4 != 0 {
+					break
+				}
+				jt.Targets = append(jt.Targets, v)
+			}
+			if len(jt.Targets) > 0 {
+				out = append(out, jt)
+			}
+		}
+		c.step(w)
+	}
+	return out
 }

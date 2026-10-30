@@ -69,7 +69,7 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 			"Desmontagem linear; chamadas indiretas (jalr) e dados no meio do código não são resolvidos.")
 		jobs[i] = job{fn: f, dis: dis, ev: rec.ID, context: funcContext(exe, f, p.MaxInsns)}
 		jobs[i].stub = stubKind(exe, f.Addr)
-		if ind := exe.Indirects(f.Addr, p.MaxInsns); len(ind) > 0 {
+		if ind := unresolved(exe, f.Addr, p.MaxInsns); len(ind) > 0 {
 			var list strings.Builder
 			for _, pc := range ind {
 				fmt.Fprintf(&list, "0x%08x ", pc)
@@ -111,6 +111,9 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 		if exe.Recursive(j.fn.Addr, p.MaxInsns) {
 			fmt.Fprintf(&body, "- Recursão (derivado): chama a si mesma\n")
 		}
+		if jt := jumpTableFacts(exe.JumpTables(j.fn.Addr, p.MaxInsns)); jt != "" {
+			fmt.Fprintf(&body, "- Tabelas de salto (derivado): %s\n", jt)
+		}
 		if hw := hwFacts(exe.HWAccesses(j.fn.Addr, p.MaxInsns)); hw != "" {
 			fmt.Fprintf(&body, "- Hardware tocado (derivado): %s\n", hw)
 		}
@@ -127,7 +130,7 @@ func (p *PS1) Run(ctx context.Context, exe *ps1.Exe) (string, error) {
 			fmt.Fprintf(&body, "- Chama: %s\n", hexList(cs))
 		}
 		if j.unknown != 0 {
-			fmt.Fprintf(&body, "- Saltos indiretos sem destino conhecido: %s [E%d] (desconhecido)\n", hexList(exe.Indirects(j.fn.Addr, p.MaxInsns)), j.unknown)
+			fmt.Fprintf(&body, "- Saltos indiretos sem destino conhecido: %s [E%d] (desconhecido)\n", hexList(unresolved(exe, j.fn.Addr, p.MaxInsns)), j.unknown)
 		}
 		if j.stub != "" {
 			fmt.Fprintf(&body, "- Hipótese do modelo: não solicitada (stub não tem lógica própria)\n")
@@ -208,13 +211,14 @@ func loopFacts(loops []ps1.Loop) string {
 			kind = "incondicional"
 		}
 		parts[i] = fmt.Sprintf("desvio em 0x%08x volta para 0x%08x (%s", l.PC, l.Target, kind)
-		if l.Polling() {
+		if l.ReadsHardware() {
 			r := l.Reads[0]
 			where := fmt.Sprintf("%s (0x%08x)", r.Name, r.Addr&0x1FFFFFFF)
-			if l.While != "" {
+			if l.Polling() {
 				parts[i] += fmt.Sprintf("; espera ativa em %s: repete enquanto %s; sai quando %s", where, l.While, l.Until)
 			} else {
-				parts[i] += fmt.Sprintf("; espera ativa lendo %s, condição de saída não determinada", where)
+				// ler hardware dentro do laço não prova espera ativa: a saída pode ser por contador
+				parts[i] += fmt.Sprintf("; lê %s dentro do laço, condição de saída não determinada (não afirmo espera ativa)", where)
 			}
 		}
 		if len(l.Calls) > 0 {
@@ -342,6 +346,29 @@ func stringFacts(refs []ps1.StringRef) string {
 	parts := make([]string, len(refs))
 	for i, r := range refs {
 		parts[i] = fmt.Sprintf("0x%08x %q", r.Addr, r.Text)
+	}
+	return strings.Join(parts, "; ")
+}
+
+// unresolved devolve os saltos indiretos da função que NÃO são um switch por tabela resolvido.
+func unresolved(exe *ps1.Exe, addr uint32, maxInsns int) []uint32 {
+	resolved := map[uint32]bool{}
+	for _, jt := range exe.JumpTables(addr, maxInsns) {
+		resolved[jt.PC] = true
+	}
+	var out []uint32
+	for _, pc := range exe.Indirects(addr, maxInsns) {
+		if !resolved[pc] {
+			out = append(out, pc)
+		}
+	}
+	return out
+}
+
+func jumpTableFacts(jts []ps1.JumpTable) string {
+	parts := make([]string, len(jts))
+	for i, jt := range jts {
+		parts[i] = fmt.Sprintf("jr em 0x%08x salta pela tabela 0x%08x com %d destinos: %s", jt.PC, jt.Base, len(jt.Targets), hexList(jt.Targets))
 	}
 	return strings.Join(parts, "; ")
 }

@@ -66,7 +66,11 @@ func FuncReport(exe *ps1.Exe, addr uint32, maxInsns int) (string, error) {
 	if st := stringFacts(exe.StringRefs(addr, maxInsns)); st != "" {
 		fmt.Fprintf(&b, "- Strings referenciadas (derivado): %s\n", st)
 	}
-	if ind := exe.Indirects(addr, maxInsns); len(ind) > 0 {
+	if jt := jumpTableFacts(exe.JumpTables(addr, maxInsns)); jt != "" {
+		fmt.Fprintf(&b, "- Tabelas de salto (derivado): %s\n", jt)
+		b.WriteString("  (as entradas são lidas da imagem até a primeira palavra que não aponta para dentro da função)\n")
+	}
+	if ind := unresolved(exe, addr, maxInsns); len(ind) > 0 {
 		fmt.Fprintf(&b, "- Saltos indiretos sem destino conhecido: %s\n", hexList(ind))
 	}
 	fmt.Fprintf(&b, "\n## Desmontagem\n\n```\n%s```\n", exe.DisasmRange(addr, maxInsns))

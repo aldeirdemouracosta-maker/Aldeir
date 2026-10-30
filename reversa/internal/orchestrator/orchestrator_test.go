@@ -555,3 +555,28 @@ func TestMemReport(t *testing.T) {
 		t.Errorf("endereço desalinhado:\n%s", out)
 	}
 }
+
+func TestRelatorioComTabelaDeSaltoELacoLimitado(t *testing.T) {
+	out := runExemplo(t, "exemplo8.exe", stub{"ok"}, stub{"fim"})
+	for _, want := range []string{
+		"- Tabelas de salto (derivado): jr em 0x80010034 salta pela tabela 0x80010090 com 3 destinos: 0x8001003c, 0x80010048, 0x80010054",
+		"lê CDROM_INDEX (0x1f801800) dentro do laço, condição de saída não determinada (não afirmo espera ativa)",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("relatório sem %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "espera ativa em CDROM_INDEX") {
+		t.Errorf("laço limitado não pode ser chamado de espera ativa:\n%s", out)
+	}
+	// o switch resolvido deixa de ser "desconhecido"
+	for _, sec := range strings.Split(out, "\n### ")[1:] {
+		if strings.HasPrefix(sec, "0x80010018") && strings.Contains(sec, "Saltos indiretos sem destino conhecido") {
+			t.Errorf("o switch por tabela foi resolvido; não deve constar como desconhecido:\n%s", sec)
+		}
+	}
+	rep, err := FuncReport(loadExe(t, "exemplo8.exe"), 0x80010018, 96)
+	if err != nil || !strings.Contains(rep, "Tabelas de salto (derivado)") || strings.Contains(rep, "Saltos indiretos sem destino conhecido") {
+		t.Errorf("FuncReport do switch (err=%v):\n%s", err, rep)
+	}
+}
