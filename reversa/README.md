@@ -21,6 +21,14 @@ Para usar o Ghidra: `export GHIDRA_INSTALL_DIR=/opt/ghidra` e rode a partir da p
 
 Registro no Claude Code: `claude mcp add reversa -- /caminho/reversa mcp -root ~/jogos`.
 
+## Qual versão está rodando?
+
+```
+./reversa version
+```
+Mostra o commit e a data do binário (e o rodapé de cada relatório registra a versão que o gerou). Depois de um
+`git pull`, é preciso recompilar (`go build -o reversa.exe .\cmd\reversa`) para o binário refletir o código novo.
+
 ## Aprofundar uma função
 
 Depois de rodar `ps1`, escolha um endereço do relatório e veja a função com fatos (tamanho, chamadores, funções

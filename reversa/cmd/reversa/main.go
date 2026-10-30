@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -35,7 +36,10 @@ func main() {
 		usage()
 	}
 	switch os.Args[1] {
+	case "version":
+		fmt.Println("reversa", buildInfo())
 	case "doctor":
+		fmt.Println("reversa", buildInfo())
 		for _, b := range backends() {
 			fmt.Printf("%-10s disponível=%v\n", b.Name(), b.Available())
 		}
@@ -59,7 +63,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "uso: reversa doctor | reversa func [-explain] <alvo> <endereço> | reversa xref [-n bytes] <alvo> <endereço> | reversa mem [-n bytes] <alvo> <endereço> | reversa mcp -root <pasta> | reversa disc <imagem> | reversa ps1 [opções] <exe|cue|bin|iso> | reversa analyze [-model m] [-steps n] [-evidence arq.json] <binário>")
+	fmt.Fprintln(os.Stderr, "uso: reversa doctor | reversa func [-explain] <alvo> <endereço> | reversa xref [-n bytes] <alvo> <endereço> | reversa mem [-n bytes] <alvo> <endereço> | reversa version | reversa mcp -root <pasta> | reversa disc <imagem> | reversa ps1 [opções] <exe|cue|bin|iso> | reversa analyze [-model m] [-steps n] [-evidence arq.json] <binário>")
 	os.Exit(2)
 }
 
@@ -216,8 +220,37 @@ func analyzePS1(args []string) {
 	emit(report, *out)
 }
 
-// emit mostra o relatório e, se pedido, também o grava em arquivo.
+// buildInfo identifica a versão do programa (commit e data), para saber se o binário está atualizado.
+func buildInfo() string {
+	bi, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "versão desconhecida"
+	}
+	var rev, when, dirty string
+	for _, s := range bi.Settings {
+		switch s.Key {
+		case "vcs.revision":
+			rev = s.Value
+		case "vcs.time":
+			when = s.Value
+		case "vcs.modified":
+			if s.Value == "true" {
+				dirty = " (com alterações locais)"
+			}
+		}
+	}
+	if rev == "" {
+		return "versão desconhecida (compilado fora de um repositório git)"
+	}
+	if len(rev) > 7 {
+		rev = rev[:7]
+	}
+	return fmt.Sprintf("commit %s de %s%s", rev, when, dirty)
+}
+
+// emit mostra o relatório e, se pedido, também o grava em arquivo. O rodapé registra qual versão o gerou.
 func emit(report, path string) {
+	report = strings.TrimRight(report, "\n") + "\n\n---\nGerado por reversa " + buildInfo() + "\n"
 	fmt.Println(report)
 	if path == "" {
 		return
