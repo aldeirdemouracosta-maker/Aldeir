@@ -158,8 +158,8 @@ func TestErros(t *testing.T) {
 	}
 }
 
-// imagem com 40 setores em que dados "escondidos" (fora de qualquer arquivo do ISO) contêm texto
-func imagemComDadosEscondidos(t *testing.T) (*Image, int64) {
+// buildHidden monta os bytes de um ISO de 40 setores em que dados "escondidos" (fora de qualquer arquivo) contêm texto.
+func buildHidden() ([]byte, int64) {
 	iso := newBuilder().iso(sampleFiles())
 	for len(iso) < 40*userSize {
 		iso = append(iso, 0)
@@ -169,6 +169,11 @@ func imagemComDadosEscondidos(t *testing.T) (*Image, int64) {
 	copy(iso[35*userSize+100:], []byte{'r' + 0x20, 'e' + 0x20, 'y' + 0x20, 'a' + 0x20}) // "reya" numa tabela deslocada de 0x20
 	copy(iso[37*userSize:], UTF16LE("Freya"))
 	copy(iso[38*userSize+8:], "FREYA")
+	return iso, hidden
+}
+
+func imagemComDadosEscondidos(t *testing.T) (*Image, int64) {
+	iso, hidden := buildHidden()
 	img, err := New(bytes.NewReader(iso), int64(len(iso)))
 	if err != nil {
 		t.Fatal(err)
@@ -281,5 +286,120 @@ func TestRelatoriosDeBuscaESetor(t *testing.T) {
 	// Hexdump com linha curta e bytes não imprimíveis
 	if h := Hexdump([]byte{'A', 0, 'B'}, 0x10); !strings.HasPrefix(h, "00000010: 41 00 42 ") || !strings.Contains(h, "|A.B|") {
 		t.Errorf("hexdump: %q", h)
+	}
+}
+
+// grava um .bin bruto (2352 por setor) e um .cue numa pasta temporária
+func gravaCueBruto(t *testing.T, dir string) (cue, bin string, hidden int64) {
+	iso, hidden := buildHidden()
+	bin = filepath.Join(dir, "jogo.bin")
+	cue = filepath.Join(dir, "jogo.cue")
+	if err := os.WriteFile(bin, raw(iso), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	text := "FILE \"jogo.bin\" BINARY\r\n  TRACK 01 MODE2/2352\r\n    INDEX 01 00:00:00\r\n"
+	if err := os.WriteFile(cue, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return cue, bin, hidden
+}
+
+func TestCopiaComPatchNaoTocaNoOriginal(t *testing.T) {
+	dir := t.TempDir()
+	cue, bin, hidden := gravaCueBruto(t, dir)
+	before, _ := os.ReadFile(bin)
+	out := filepath.Join(dir, "novo.cue")
+	// troca "Freya" por "Frxya" atravessando a fronteira entre os setores 30 e 31 (2 bytes de cada lado)
+	written, err := CopyAndPatch(cue, out, []BytePatch{{Abs: hidden, Data: []byte("Frxya")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(written) != 2 || written[0] != out || filepath.Base(written[1]) != "novo.bin" {
+		t.Fatalf("arquivos gravados: %v", written)
+	}
+	// o original continua idêntico
+	after, _ := os.ReadFile(bin)
+	if !bytes.Equal(before, after) {
+		t.Fatal("o .bin original foi alterado")
+	}
+	// o novo .cue aponta para o novo .bin e o conteúdo mudou onde pedido
+	cueText, _ := os.ReadFile(out)
+	if !strings.Contains(string(cueText), `FILE "novo.bin" BINARY`) || !strings.Contains(string(cueText), "TRACK 01 MODE2/2352") {
+		t.Errorf("novo .cue: %q", cueText)
+	}
+	novo, err := Open(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer novo.Close()
+	got, _ := novo.ReadUser(hidden, 5)
+	if string(got) != "Frxya" {
+		t.Errorf("conteúdo do patch: %q", got)
+	}
+	// o cabeçalho bruto dos setores continua válido (a imagem ainda abre e o resto é igual)
+	orig, _ := Open(cue)
+	defer orig.Close()
+	rep, err := DiffReport(orig, novo, 10)
+	if err != nil || !strings.Contains(rep, "Regiões diferentes: 1") || !strings.Contains(rep, "1 byte(s)") ||
+		!strings.Contains(rep, fmt.Sprintf("Byte 0x%x", hidden+2)) || !strings.Contains(rep, "FORA dos arquivos") {
+		t.Errorf("diff (%v):\n%s", err, rep)
+	}
+	same, _ := DiffReport(orig, orig, 10)
+	if !strings.Contains(same, "idênticas") {
+		t.Errorf("diff de imagem consigo mesma:\n%s", same)
+	}
+}
+
+func TestPatchRecusaCasosPerigosos(t *testing.T) {
+	dir := t.TempDir()
+	cue, bin, hidden := gravaCueBruto(t, dir)
+	ok := []BytePatch{{Abs: hidden, Data: []byte("X")}}
+	if _, err := CopyAndPatch(cue, cue, ok); err == nil || !strings.Contains(err.Error(), "próprio original") {
+		t.Errorf("mesmo arquivo: %v", err)
+	}
+	if _, err := CopyAndPatch(cue, filepath.Join(dir, "x.bin"), ok); err == nil || !strings.Contains(err.Error(), "mesma extensão") {
+		t.Errorf("extensão diferente: %v", err)
+	}
+	if _, err := CopyAndPatch(cue, filepath.Join(dir, "n.cue"), nil); err == nil {
+		t.Error("sem alterações deveria dar erro")
+	}
+	if _, err := CopyAndPatch(cue, filepath.Join(dir, "n.cue"), []BytePatch{{Abs: 40 * userSize, Data: []byte("X")}}); err == nil || !strings.Contains(err.Error(), "fora da imagem") {
+		t.Errorf("fora da imagem: %v", err)
+	}
+	// não sobrescreve saída existente
+	if _, err := CopyAndPatch(cue, filepath.Join(dir, "n.cue"), ok); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CopyAndPatch(cue, filepath.Join(dir, "n.cue"), ok); err == nil || !strings.Contains(err.Error(), "já existe") {
+		t.Errorf("sobrescrita: %v", err)
+	}
+	// o .bin original continua sem alteração mesmo depois de tudo isso
+	if got, _ := os.ReadFile(bin); !bytes.Equal(got, raw(func() []byte { i, _ := buildHidden(); return i }())) {
+		t.Error("o original mudou")
+	}
+	// .cue com dois arquivos de dados não é suportado
+	dois := filepath.Join(dir, "dois.cue")
+	_ = os.WriteFile(dois, []byte("FILE \"jogo.bin\" BINARY\r\n FILE \"audio.bin\" BINARY\r\n"), 0o644)
+	if _, err := CopyAndPatch(dois, filepath.Join(dir, "d2.cue"), ok); err == nil || !strings.Contains(err.Error(), "2 arquivos de dados") {
+		t.Errorf("cue com 2 arquivos: %v", err)
+	}
+}
+
+func TestPatchEmIsoDe2048(t *testing.T) {
+	dir := t.TempDir()
+	iso, hidden := buildHidden()
+	src := filepath.Join(dir, "jogo.iso")
+	_ = os.WriteFile(src, iso, 0o644)
+	out := filepath.Join(dir, "novo.iso")
+	if _, err := CopyAndPatch(src, out, []BytePatch{{Abs: hidden, Data: []byte("Frxya")}}); err != nil {
+		t.Fatal(err)
+	}
+	novo, err := Open(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer novo.Close()
+	if got, _ := novo.ReadUser(hidden, 5); string(got) != "Frxya" {
+		t.Errorf("patch em ISO: %q", got)
 	}
 }

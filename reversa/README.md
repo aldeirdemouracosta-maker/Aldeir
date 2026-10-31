@@ -59,6 +59,18 @@ A busca varre **todos** os setores, inclusive os que não pertencem a nenhum arq
 número de setor), e diz se cada achado está dentro de um arquivo do ISO ou fora. A busca relativa acha um texto em qualquer
 tabela em que as letras mantenham as mesmas distâncias entre si; use a parte em minúsculas da palavra.
 
+## Alterar uma cópia da imagem (para testar no emulador)
+
+```
+./reversa patch -out novo.cue -ascii "40+0x64:Frxya" jogo.cue      # texto, no setor 40, posição 0x64
+./reversa patch -out novo.cue -at "0x14064:46 72 78 79 61" jogo.cue # bytes, por deslocamento nos dados
+./reversa diff jogo.cue novo.cue                                    # o que mudou, região por região
+```
+`patch` grava uma **cópia** (`novo.cue` + `novo.bin`) e **nunca** altera o original: recusa sobrescrever qualquer arquivo
+existente e recusa usar o mesmo nome da entrada. Depois de gravar, relê a cópia para conferir e mostra o que mudou. Só aceita
+`.cue` com um único `.bin`. Os códigos de correção (EDC/ECC) dos setores brutos **não** são recalculados: os emuladores os
+ignoram, mas um disco gravado de verdade poderia recusar. Os locais são os mesmos que `find` e `sector` mostram.
+
 ## Nomes por evidência
 
 ```

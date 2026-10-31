@@ -25,3 +25,26 @@ func TestParseHexBytes(t *testing.T) {
 		}
 	}
 }
+
+func TestParsePatch(t *testing.T) {
+	p, err := parsePatch("0x14064:46 72 65", false)
+	if err != nil || p.Abs != 0x14064 || string(p.Data) != "Fre" {
+		t.Errorf("deslocamento: %+v %v", p, err)
+	}
+	p, err = parsePatch("40+0x64:4672", false)
+	if err != nil || p.Abs != 40*2048+0x64 || string(p.Data) != "Fr" {
+		t.Errorf("setor+posição: %+v %v", p, err)
+	}
+	p, err = parsePatch("100:Frxya", true)
+	if err != nil || p.Abs != 100 || string(p.Data) != "Frxya" {
+		t.Errorf("ascii: %+v %v", p, err)
+	}
+	for _, bad := range []string{"semdoispontos", "xyz:46", "40+2048:46", "-1:46", "10:", "10:zz"} {
+		if _, err := parsePatch(bad, false); err == nil {
+			t.Errorf("%q deveria dar erro", bad)
+		}
+	}
+	if _, err := parsePatch("10:", true); err == nil {
+		t.Error("texto vazio deveria dar erro")
+	}
+}

@@ -36,6 +36,7 @@ type Image struct {
 	closer     io.Closer
 	// VolumeID lido do descritor primário.
 	VolumeID string
+	path     string // arquivo de dados aberto (o .bin, mesmo que se tenha aberto o .cue)
 	root     entry
 }
 
@@ -70,8 +71,15 @@ func Open(path string) (*Image, error) {
 		return nil, err
 	}
 	img.closer = f
+	img.path = path
 	return img, nil
 }
+
+// BinPath devolve o arquivo de dados aberto (o .bin ou .iso; vazio se a imagem veio da memória).
+func (i *Image) BinPath() string { return i.path }
+
+// SectorSize devolve o tamanho de cada setor no arquivo: 2352 (bruto) ou 2048.
+func (i *Image) SectorSize() int { return int(i.sectorSize) }
 
 func (i *Image) Close() error {
 	if i.closer != nil {

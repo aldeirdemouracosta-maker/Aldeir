@@ -55,6 +55,10 @@ func main() {
 		nomesCmd(os.Args[2:])
 	case "find":
 		findCmd(os.Args[2:])
+	case "patch":
+		patchCmd(os.Args[2:])
+	case "diff":
+		diffCmd(os.Args[2:])
 	case "sector":
 		sectorCmd(os.Args[2:])
 	case "mem":
@@ -69,7 +73,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "uso: reversa doctor | reversa func [-explain] <alvo> <endereço> | reversa nomes <alvo> | reversa find [-i|-utf16|-hex|-relative] <disco> <texto> | reversa sector [-n bytes] <disco> <setor> | reversa xref [-n bytes] <alvo> <endereço> | reversa mem [-n bytes] <alvo> <endereço> | reversa version | reversa mcp -root <pasta> | reversa disc <imagem> | reversa ps1 [opções] <exe|cue|bin|iso> | reversa analyze [-model m] [-steps n] [-evidence arq.json] <binário>")
+	fmt.Fprintln(os.Stderr, "uso: reversa doctor | reversa func [-explain] <alvo> <endereço> | reversa nomes <alvo> | reversa find [-i|-utf16|-hex|-relative] <disco> <texto> | reversa patch -out <novo> -at <local>:<hex> <disco> | reversa diff <discoA> <discoB> | reversa sector [-n bytes] <disco> <setor> | reversa xref [-n bytes] <alvo> <endereço> | reversa mem [-n bytes] <alvo> <endereço> | reversa version | reversa mcp -root <pasta> | reversa disc <imagem> | reversa ps1 [opções] <exe|cue|bin|iso> | reversa analyze [-model m] [-steps n] [-evidence arq.json] <binário>")
 	os.Exit(2)
 }
 
@@ -185,6 +189,123 @@ func findCmd(args []string) {
 		fatal(err)
 	}
 	emit(report, *out)
+}
+
+// multiFlag junta várias ocorrências de uma opção repetida (-at ... -at ...).
+type multiFlag []string
+
+func (m *multiFlag) String() string     { return strings.Join(*m, "; ") }
+func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
+
+// parsePatch lê "LOCAL:BYTES". LOCAL é um deslocamento nos dados (decimal ou 0x...) ou "SETOR+POSIÇÃO".
+func parsePatch(spec string, ascii bool) (disc.BytePatch, error) {
+	loc, data, ok := strings.Cut(spec, ":")
+	if !ok {
+		return disc.BytePatch{}, fmt.Errorf("use LOCAL:BYTES, por exemplo 0x14064:46 72 65 (recebi %q)", spec)
+	}
+	var abs int64
+	if sec, off, plus := strings.Cut(loc, "+"); plus {
+		l, err1 := strconv.ParseInt(strings.TrimSpace(sec), 0, 64)
+		o, err2 := strconv.ParseInt(strings.TrimSpace(off), 0, 64)
+		if err1 != nil || err2 != nil || l < 0 || o < 0 || o >= 2048 {
+			return disc.BytePatch{}, fmt.Errorf("local inválido %q: use SETOR+POSIÇÃO com posição de 0 a 2047", loc)
+		}
+		abs = l*2048 + o
+	} else {
+		a, err := strconv.ParseInt(strings.TrimSpace(loc), 0, 64)
+		if err != nil || a < 0 {
+			return disc.BytePatch{}, fmt.Errorf("local inválido %q: use um deslocamento (decimal ou 0x...) ou SETOR+POSIÇÃO", loc)
+		}
+		abs = a
+	}
+	if ascii {
+		if data == "" {
+			return disc.BytePatch{}, fmt.Errorf("texto vazio em %q", spec)
+		}
+		return disc.BytePatch{Abs: abs, Data: []byte(data)}, nil
+	}
+	b, err := parseHexBytes(data)
+	if err != nil {
+		return disc.BytePatch{}, err
+	}
+	return disc.BytePatch{Abs: abs, Data: b}, nil
+}
+
+// patchCmd grava uma CÓPIA da imagem com bytes trocados e mostra o que mudou. O original não é alterado.
+func patchCmd(args []string) {
+	fs := flag.NewFlagSet("patch", flag.ExitOnError)
+	out := fs.String("out", "", "caminho da cópia (.cue, .bin ou .iso, com a extensão da entrada); nunca sobrescreve")
+	var at, asciiAt multiFlag
+	fs.Var(&at, "at", "LOCAL:BYTES em hexadecimal (repetível), por exemplo 0x14064:46 72 65 ou 40+0x64:46 72")
+	fs.Var(&asciiAt, "ascii", "LOCAL:TEXTO (repetível); o texto é gravado em ASCII, byte a byte")
+	_ = fs.Parse(args)
+	if fs.NArg() != 1 || *out == "" || len(at)+len(asciiAt) == 0 {
+		usage()
+	}
+	var patches []disc.BytePatch
+	for _, spec := range at {
+		p, err := parsePatch(spec, false)
+		if err != nil {
+			fatal(err)
+		}
+		patches = append(patches, p)
+	}
+	for _, spec := range asciiAt {
+		p, err := parsePatch(spec, true)
+		if err != nil {
+			fatal(err)
+		}
+		patches = append(patches, p)
+	}
+	written, err := disc.CopyAndPatch(fs.Arg(0), *out, patches)
+	if err != nil {
+		fatal(err)
+	}
+	for _, w := range written {
+		fmt.Fprintln(os.Stderr, "gravado:", w)
+	}
+	a, err := disc.Open(fs.Arg(0))
+	if err != nil {
+		fatal(err)
+	}
+	defer a.Close()
+	b, err := disc.Open(*out)
+	if err != nil {
+		fatal(err)
+	}
+	defer b.Close()
+	rep, err := disc.DiffReport(a, b, 50)
+	if err != nil {
+		fatal(err)
+	}
+	fmt.Println(rep)
+	fmt.Fprintln(os.Stderr, "Aviso: os códigos de correção (EDC/ECC) dos setores não foram recalculados; emuladores os ignoram.")
+}
+
+// diffCmd compara os dados de duas imagens.
+func diffCmd(args []string) {
+	fs := flag.NewFlagSet("diff", flag.ExitOnError)
+	max := fs.Int("max", 50, "máximo de regiões listadas")
+	out := fs.String("out", "", "grava o resultado neste arquivo .md (UTF-8)")
+	_ = fs.Parse(args)
+	if fs.NArg() != 2 {
+		usage()
+	}
+	a, err := disc.Open(fs.Arg(0))
+	if err != nil {
+		fatal(err)
+	}
+	defer a.Close()
+	b, err := disc.Open(fs.Arg(1))
+	if err != nil {
+		fatal(err)
+	}
+	defer b.Close()
+	rep, err := disc.DiffReport(a, b, *max)
+	if err != nil {
+		fatal(err)
+	}
+	emit(rep, *out)
 }
 
 // sectorCmd mostra bytes a partir de um setor do disco.
