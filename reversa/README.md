@@ -46,6 +46,19 @@ chamadas, hardware, laços, strings, stubs) e a desmontagem anotada, sem usar mo
 
 Salvar o relatório completo em arquivo: `./reversa ps1 -out relatorio.md jogo.cue`.
 
+## Procurar dados no disco inteiro
+
+```
+./reversa find -i jogo.cue Freya              # texto ASCII, sem diferenciar maiúsculas
+./reversa find -utf16 jogo.cue Freya          # UTF-16
+./reversa find -hex jogo.cue "46 72 65 79 61" # bytes
+./reversa find -relative jogo.cue reya        # tabela de caracteres desconhecida (dá falsos positivos)
+./reversa sector -n 512 jogo.cue 12345        # bytes a partir de um setor
+```
+A busca varre **todos** os setores, inclusive os que não pertencem a nenhum arquivo do ISO 9660 (dados que o jogo lê por
+número de setor), e diz se cada achado está dentro de um arquivo do ISO ou fora. A busca relativa acha um texto em qualquer
+tabela em que as letras mantenham as mesmas distâncias entre si; use a parte em minúsculas da palavra.
+
 ## Nomes por evidência
 
 ```

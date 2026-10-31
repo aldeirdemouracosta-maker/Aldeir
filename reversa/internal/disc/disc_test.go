@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -153,5 +155,131 @@ func TestErros(t *testing.T) {
 		if _, err = img2.ReadFile("SLUS_006.64"); err == nil {
 			t.Fatal("esperava erro em imagem truncada")
 		}
+	}
+}
+
+// imagem com 40 setores em que dados "escondidos" (fora de qualquer arquivo do ISO) contêm texto
+func imagemComDadosEscondidos(t *testing.T) (*Image, int64) {
+	iso := newBuilder().iso(sampleFiles())
+	for len(iso) < 40*userSize {
+		iso = append(iso, 0)
+	}
+	hidden := int64(31*userSize - 2) // "Freya" atravessa a fronteira entre os setores 30 e 31
+	copy(iso[hidden:], "Freya")
+	copy(iso[35*userSize+100:], []byte{'r' + 0x20, 'e' + 0x20, 'y' + 0x20, 'a' + 0x20}) // "reya" numa tabela deslocada de 0x20
+	copy(iso[37*userSize:], UTF16LE("Freya"))
+	copy(iso[38*userSize+8:], "FREYA")
+	img, err := New(bytes.NewReader(iso), int64(len(iso)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return img, hidden
+}
+
+func TestBuscaExataAtravessaSetores(t *testing.T) {
+	img, hidden := imagemComDadosEscondidos(t)
+	m, err := img.Search(5, ExactTest([]byte("Freya"), false), 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m) != 1 || m[0].Abs != hidden || m[0].LBA != 30 || m[0].Offset != userSize-2 {
+		t.Fatalf("busca exata: %+v (esperado abs=%d, setor 30)", m, hidden)
+	}
+	// sem diferenciar maiúsculas, também acha "FREYA"
+	m, _ = img.Search(5, ExactTest([]byte("freya"), true), 10)
+	if len(m) != 2 || m[1].LBA != 38 || m[1].Offset != 8 {
+		t.Errorf("busca sem diferenciar maiúsculas: %+v", m)
+	}
+	// o limite de resultados vale
+	if m, _ := img.Search(5, ExactTest([]byte("freya"), true), 1); len(m) != 1 {
+		t.Errorf("limite: %+v", m)
+	}
+}
+
+func TestBuscaUTF16ERelativa(t *testing.T) {
+	img, _ := imagemComDadosEscondidos(t)
+	u := UTF16LE("Freya")
+	m, _ := img.Search(len(u), ExactTest(u, false), 10)
+	if len(m) != 1 || m[0].LBA != 37 || m[0].Offset != 0 {
+		t.Errorf("UTF-16: %+v", m)
+	}
+	// busca relativa por "reya": acha a ASCII (setor 30/31) e a deslocada (setor 35)
+	m, _ = img.Search(4, RelativeTest([]byte("reya")), 20)
+	var sec35 bool
+	for _, x := range m {
+		sec35 = sec35 || (x.LBA == 35 && x.Offset == 100)
+	}
+	if !sec35 {
+		t.Errorf("a busca relativa deveria achar a tabela deslocada no setor 35: %+v", m)
+	}
+}
+
+func TestExtentsEReadUser(t *testing.T) {
+	img, hidden := imagemComDadosEscondidos(t)
+	ex, err := img.Extents()
+	if err != nil || len(ex) != 2 {
+		t.Fatalf("extents: %+v %v", ex, err)
+	}
+	var boot *Extent
+	for k := range ex {
+		if ex[k].Name == "SLUS_006.64" {
+			boot = &ex[k]
+		}
+	}
+	if boot == nil || boot.Size != 3000 || boot.LBA < 20 {
+		t.Errorf("extent do boot: %+v", boot)
+	}
+	// lê através da fronteira dos setores 30 e 31
+	b, err := img.ReadUser(hidden-1, 8)
+	if err != nil || string(b[1:6]) != "Freya" {
+		t.Errorf("ReadUser: %q %v", b, err)
+	}
+	// perto do fim devolve só o que existe
+	b, err = img.ReadUser(int64(img.Sectors())*userSize-4, 100)
+	if err != nil || len(b) != 4 {
+		t.Errorf("fim da imagem: %d bytes, %v", len(b), err)
+	}
+	if _, err := img.ReadUser(int64(img.Sectors())*userSize, 4); err == nil {
+		t.Error("além do fim deveria dar erro")
+	}
+}
+
+func TestRelatoriosDeBuscaESetor(t *testing.T) {
+	img, hidden := imagemComDadosEscondidos(t)
+	out, err := img.FindReport(`"Freya"`, 5, ExactTest([]byte("Freya"), false), 10, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"Ocorrências: 1", "## Setor 30 (0x1e), posição 0x7fe no setor", "FORA dos arquivos do ISO 9660 (dados lidos por setor)", "|", "Freya",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("relatório sem %q:\n%s", want, out)
+		}
+	}
+	if !strings.Contains(out, fmt.Sprintf("byte 0x%x dos dados", hidden)) {
+		t.Errorf("deslocamento absoluto:\n%s", out)
+	}
+	// dado de um arquivo do ISO é reconhecido como tal
+	ex, _ := img.Extents()
+	var cnf Extent
+	for _, e := range ex {
+		if e.Name == "SYSTEM.CNF" {
+			cnf = e
+		}
+	}
+	rep, err := img.SectorReport(cnf.LBA, 64)
+	if err != nil || !strings.Contains(rep, "dentro do arquivo SYSTEM.CNF") || !strings.Contains(rep, "BOOT") {
+		t.Errorf("setor do SYSTEM.CNF (%v):\n%s", err, rep)
+	}
+	if _, err := img.SectorReport(9999, 16); err == nil {
+		t.Error("setor fora da imagem deveria dar erro")
+	}
+	if none, _ := img.FindReport("x", 5, ExactTest([]byte("ZZZZZ"), false), 10, 4); !strings.Contains(none, "Nenhuma ocorrência") {
+		t.Errorf("sem ocorrências:\n%s", none)
+	}
+	// Hexdump com linha curta e bytes não imprimíveis
+	if h := Hexdump([]byte{'A', 0, 'B'}, 0x10); !strings.HasPrefix(h, "00000010: 41 00 42 ") || !strings.Contains(h, "|A.B|") {
+		t.Errorf("hexdump: %q", h)
 	}
 }

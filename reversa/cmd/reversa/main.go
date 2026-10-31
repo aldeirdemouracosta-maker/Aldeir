@@ -53,6 +53,10 @@ func main() {
 		funcCmd(os.Args[2:])
 	case "nomes":
 		nomesCmd(os.Args[2:])
+	case "find":
+		findCmd(os.Args[2:])
+	case "sector":
+		sectorCmd(os.Args[2:])
 	case "mem":
 		memCmd(os.Args[2:])
 	case "xref":
@@ -65,7 +69,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "uso: reversa doctor | reversa func [-explain] <alvo> <endereço> | reversa nomes <alvo> | reversa xref [-n bytes] <alvo> <endereço> | reversa mem [-n bytes] <alvo> <endereço> | reversa version | reversa mcp -root <pasta> | reversa disc <imagem> | reversa ps1 [opções] <exe|cue|bin|iso> | reversa analyze [-model m] [-steps n] [-evidence arq.json] <binário>")
+	fmt.Fprintln(os.Stderr, "uso: reversa doctor | reversa func [-explain] <alvo> <endereço> | reversa nomes <alvo> | reversa find [-i|-utf16|-hex|-relative] <disco> <texto> | reversa sector [-n bytes] <disco> <setor> | reversa xref [-n bytes] <alvo> <endereço> | reversa mem [-n bytes] <alvo> <endereço> | reversa version | reversa mcp -root <pasta> | reversa disc <imagem> | reversa ps1 [opções] <exe|cue|bin|iso> | reversa analyze [-model m] [-steps n] [-evidence arq.json] <binário>")
 	os.Exit(2)
 }
 
@@ -123,6 +127,89 @@ func loadExeAddr(target, addrText string) (*ps1.Exe, uint32) {
 		fatal(fmt.Errorf("endereço inválido %q: use hexadecimal, por exemplo 0x8002d640", addrText))
 	}
 	return exe, uint32(addr)
+}
+
+// parseHexBytes lê "46 72 65", "467265" ou "0x46 0x72" como bytes.
+func parseHexBytes(s string) ([]byte, error) {
+	s = strings.NewReplacer("0x", "", "0X", "", " ", "", ",", "").Replace(s)
+	b, err := hex.DecodeString(s)
+	if err != nil || len(b) == 0 {
+		return nil, fmt.Errorf("bytes em hexadecimal inválidos: %q", s)
+	}
+	return b, nil
+}
+
+// findCmd procura texto ou bytes em TODOS os setores do disco, inclusive os fora dos arquivos do ISO 9660.
+func findCmd(args []string) {
+	fs := flag.NewFlagSet("find", flag.ExitOnError)
+	fold := fs.Bool("i", false, "ignora maiúsculas e minúsculas (ASCII)")
+	u16 := fs.Bool("utf16", false, "procura o texto em UTF-16 little-endian")
+	hexMode := fs.Bool("hex", false, "o argumento são bytes em hexadecimal, por exemplo \"46 72 65\"")
+	rel := fs.Bool("relative", false, "busca relativa: acha o texto em tabela de caracteres desconhecida (dá falsos positivos)")
+	max := fs.Int("max", 30, "máximo de ocorrências")
+	ctx := fs.Int("ctx", 24, "bytes de contexto antes e depois")
+	out := fs.String("out", "", "grava o resultado neste arquivo .md (UTF-8)")
+	_ = fs.Parse(args)
+	if fs.NArg() != 2 {
+		usage()
+	}
+	img, err := disc.Open(fs.Arg(0))
+	if err != nil {
+		fatal(err)
+	}
+	defer img.Close()
+	text := fs.Arg(1)
+	var window int
+	var test func([]byte) bool
+	var mode string
+	switch {
+	case *hexMode:
+		b, err := parseHexBytes(text)
+		if err != nil {
+			fatal(err)
+		}
+		window, test, mode = len(b), disc.ExactTest(b, false), "bytes"
+	case *rel:
+		if len(text) < 3 {
+			fatal(fmt.Errorf("a busca relativa precisa de pelo menos 3 letras (use a parte em minúsculas, por exemplo \"reya\")"))
+		}
+		window, test, mode = len(text), disc.RelativeTest([]byte(text)), "relativa: qualquer tabela com as mesmas distâncias entre as letras"
+	case *u16:
+		b := disc.UTF16LE(text)
+		window, test, mode = len(b), disc.ExactTest(b, *fold), "UTF-16"
+	default:
+		window, test, mode = len(text), disc.ExactTest([]byte(text), *fold), "ASCII"
+	}
+	report, err := img.FindReport(fmt.Sprintf("%q (%s)", text, mode), window, test, *max, *ctx)
+	if err != nil {
+		fatal(err)
+	}
+	emit(report, *out)
+}
+
+// sectorCmd mostra bytes a partir de um setor do disco.
+func sectorCmd(args []string) {
+	fs := flag.NewFlagSet("sector", flag.ExitOnError)
+	n := fs.Int("n", 256, "quantos bytes mostrar (máximo 4096)")
+	out := fs.String("out", "", "grava o resultado neste arquivo .md (UTF-8)")
+	_ = fs.Parse(args)
+	if fs.NArg() != 2 {
+		usage()
+	}
+	lba, err := strconv.ParseUint(fs.Arg(1), 0, 32)
+	if err != nil {
+		fatal(fmt.Errorf("setor inválido %q: use decimal ou 0x hexadecimal", fs.Arg(1)))
+	}
+	img, err := disc.Open(fs.Arg(0))
+	if err != nil {
+		fatal(err)
+	}
+	defer img.Close()
+	report, err := img.SectorReport(uint32(lba), min(*n, 4096))
+	if err != nil {
+		fatal(err)
+	}
+	emit(report, *out)
 }
 
 // nomesCmd lista as funções com evidência de nome ou padrão (stubs, instaladores de callback, strings de depuração).

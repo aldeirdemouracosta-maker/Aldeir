@@ -295,3 +295,144 @@ func (i *Image) BootExe() (string, []byte, error) {
 	b, err := i.ReadFile(p)
 	return p, b, err
 }
+
+// Sectors devolve quantos setores de dados a imagem tem.
+func (i *Image) Sectors() uint32 { return uint32(i.size / i.sectorSize) }
+
+// ReadUser lê n bytes a partir do deslocamento abs na área de dados do usuário: 2048 bytes por setor, contíguos
+// (sem o cabeçalho e o código de correção dos setores brutos).
+func (i *Image) ReadUser(abs int64, n int) ([]byte, error) {
+	if abs < 0 {
+		return nil, fmt.Errorf("deslocamento negativo")
+	}
+	out := make([]byte, 0, n)
+	for len(out) < n {
+		lba := uint32((abs + int64(len(out))) / userSize)
+		off := int((abs + int64(len(out))) % userSize)
+		sec, err := i.Sector(lba)
+		if err != nil {
+			if len(out) > 0 {
+				return out, nil // fim da imagem: devolve o que existe
+			}
+			return nil, err
+		}
+		out = append(out, sec[off:min(userSize, off+(n-len(out)))]...)
+	}
+	return out, nil
+}
+
+// Extent é um arquivo da raiz do ISO 9660 e onde ele começa no disco.
+type Extent struct {
+	Name      string
+	LBA, Size uint32
+}
+
+// Extents lista os arquivos da raiz com o setor inicial e o tamanho. O que está fora deles não tem nome no ISO 9660.
+func (i *Image) Extents() ([]Extent, error) {
+	es, err := i.readDir(i.root)
+	if err != nil {
+		return nil, err
+	}
+	var out []Extent
+	for _, e := range es {
+		if !e.IsDir {
+			out = append(out, Extent{e.Name, e.LBA, e.Size})
+		}
+	}
+	return out, nil
+}
+
+// Match é uma ocorrência achada por Search.
+type Match struct {
+	Abs    int64  // deslocamento na área de dados do usuário
+	LBA    uint32 // setor
+	Offset int    // posição dentro do setor
+}
+
+// Search varre os dados de TODOS os setores (inclusive os que não pertencem a nenhum arquivo do ISO 9660) e devolve
+// até max posições onde test(janela) é verdadeiro, com janelas de window bytes. Uma ocorrência pode atravessar a
+// fronteira entre dois setores.
+func (i *Image) Search(window int, test func([]byte) bool, max int) ([]Match, error) {
+	if window < 1 {
+		return nil, fmt.Errorf("janela inválida")
+	}
+	var out []Match
+	var carry []byte
+	var base int64
+	for lba := uint32(0); lba < i.Sectors(); lba++ {
+		sec, err := i.Sector(lba)
+		if err != nil {
+			return out, err
+		}
+		buf := append(carry, sec...)
+		for p := 0; p+window <= len(buf); p++ {
+			if test(buf[p : p+window]) {
+				abs := base + int64(p)
+				out = append(out, Match{Abs: abs, LBA: uint32(abs / userSize), Offset: int(abs % userSize)})
+				if len(out) >= max {
+					return out, nil
+				}
+			}
+		}
+		keep := min(window-1, len(buf))
+		carry = append([]byte(nil), buf[len(buf)-keep:]...)
+		base += int64(len(buf) - keep)
+	}
+	return out, nil
+}
+
+// ExactTest compara a janela com pat; com fold, ignora maiúsculas e minúsculas ASCII.
+func ExactTest(pat []byte, fold bool) func([]byte) bool {
+	p := append([]byte(nil), pat...)
+	if fold {
+		for k := range p {
+			p[k] = lowerASCII(p[k])
+		}
+	}
+	return func(w []byte) bool {
+		for k := range p {
+			b := w[k]
+			if fold {
+				b = lowerASCII(b)
+			}
+			if b != p[k] {
+				return false
+			}
+		}
+		return true
+	}
+}
+
+func lowerASCII(b byte) byte {
+	if b >= 'A' && b <= 'Z' {
+		return b + 0x20
+	}
+	return b
+}
+
+// RelativeTest acha texto em codificação desconhecida: só exige que as diferenças entre bytes consecutivos sejam
+// as mesmas das letras de word (por exemplo, 'r','e','y','a' em qualquer tabela em que as letras minúsculas sejam
+// consecutivas). Dá falsos positivos: confira o contexto. Palavras curtas dão muitos.
+func RelativeTest(word []byte) func([]byte) bool {
+	d := make([]byte, len(word)-1)
+	for k := 1; k < len(word); k++ {
+		d[k-1] = word[k] - word[k-1]
+	}
+	return func(w []byte) bool {
+		for k := range d {
+			if w[k+1]-w[k] != d[k] {
+				return false
+			}
+		}
+		return true
+	}
+}
+
+// UTF16LE codifica ASCII como UTF-16 little-endian (cada caractere seguido de um zero).
+func UTF16LE(s string) []byte {
+	out := make([]byte, 0, 2*len(s))
+	for _, b := range []byte(s) {
+		out = append(out, b, 0)
+	}
+	return out
+}
