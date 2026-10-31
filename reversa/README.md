@@ -69,6 +69,17 @@ musicais (SEQ) e faixas de áudio XA (pelo subcabeçalho; só em imagens brutas 
 dentro ou fora dos arquivos do ISO. Reconhece só formatos sem compressão, pelo cabeçalho; o que estiver comprimido ou em
 formato próprio não aparece, e um achado não prova que o jogo o usa nem que não usa.
 
+## Ver as imagens do disco (TIM para PNG)
+
+```
+./reversa tim -out tela.png jogo.cue 36310+0x548        # setor+posição, como o scan mostra
+./reversa tim -pal 3 -out pal3.png jogo.cue 36310+0x548 # outra paleta da mesma imagem
+./reversa tim -all -out todas.png jogo.cue 36310+0x548  # todas as paletas lado a lado
+```
+Converte uma imagem TIM (4, 8, 16 ou 24 bpp) em PNG, com a cor `0x0000` transparente. Mostra também **onde ficam as cores
+da paleta no disco** (byte e tamanho de cada paleta), que é o que `patch` precisa para trocar as cores de um sprite.
+Nunca sobrescreve um PNG existente.
+
 ## Alterar uma cópia da imagem (para testar no emulador)
 
 ```

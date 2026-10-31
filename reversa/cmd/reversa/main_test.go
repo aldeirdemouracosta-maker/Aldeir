@@ -48,3 +48,16 @@ func TestParsePatch(t *testing.T) {
 		t.Error("texto vazio deveria dar erro")
 	}
 }
+
+func TestParseLoc(t *testing.T) {
+	for in, want := range map[string]int64{"0x14064": 0x14064, "100": 100, "40+0x64": 40*2048 + 0x64, "36310+0x548": 36310*2048 + 0x548} {
+		if got, err := parseLoc(in); err != nil || got != want {
+			t.Errorf("%q: %d %v (esperado %d)", in, got, err, want)
+		}
+	}
+	for _, bad := range []string{"", "x", "-5", "40+2048", "a+b"} {
+		if _, err := parseLoc(bad); err == nil {
+			t.Errorf("%q deveria dar erro", bad)
+		}
+	}
+}

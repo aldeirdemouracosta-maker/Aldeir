@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"image"
+	"image/png"
 	"os"
 	"os/signal"
 	"runtime/debug"
@@ -24,6 +26,7 @@ import (
 	"reversa/internal/orchestrator"
 	"reversa/internal/ps1"
 	"reversa/internal/target"
+	"reversa/internal/tim"
 	"reversa/internal/tools"
 )
 
@@ -57,6 +60,8 @@ func main() {
 		findCmd(os.Args[2:])
 	case "scan":
 		scanCmd(os.Args[2:])
+	case "tim":
+		timCmd(os.Args[2:])
 	case "patch":
 		patchCmd(os.Args[2:])
 	case "diff":
@@ -75,7 +80,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "uso: reversa doctor | reversa func [-explain] <alvo> <endereço> | reversa nomes <alvo> | reversa find [-i|-utf16|-hex|-relative] <disco> <texto> | reversa scan <disco> | reversa patch -out <novo> -at <local>:<hex> <disco> | reversa diff <discoA> <discoB> | reversa sector [-n bytes] <disco> <setor> | reversa xref [-n bytes] <alvo> <endereço> | reversa mem [-n bytes] <alvo> <endereço> | reversa version | reversa mcp -root <pasta> | reversa disc <imagem> | reversa ps1 [opções] <exe|cue|bin|iso> | reversa analyze [-model m] [-steps n] [-evidence arq.json] <binário>")
+	fmt.Fprintln(os.Stderr, "uso: reversa doctor | reversa func [-explain] <alvo> <endereço> | reversa nomes <alvo> | reversa find [-i|-utf16|-hex|-relative] <disco> <texto> | reversa scan <disco> | reversa tim [-pal N|-all] <disco> <setor+posição> | reversa patch -out <novo> -at <local>:<hex> <disco> | reversa diff <discoA> <discoB> | reversa sector [-n bytes] <disco> <setor> | reversa xref [-n bytes] <alvo> <endereço> | reversa mem [-n bytes] <alvo> <endereço> | reversa version | reversa mcp -root <pasta> | reversa disc <imagem> | reversa ps1 [opções] <exe|cue|bin|iso> | reversa analyze [-model m] [-steps n] [-evidence arq.json] <binário>")
 	os.Exit(2)
 }
 
@@ -214,11 +219,92 @@ func scanCmd(args []string) {
 	emit(res.Report(img), *out)
 }
 
+// timCmd converte uma imagem TIM do disco em PNG, para ver sprites e paletas.
+func timCmd(args []string) {
+	fs := flag.NewFlagSet("tim", flag.ExitOnError)
+	pal := fs.Int("pal", 0, "número da paleta a usar")
+	all := fs.Bool("all", false, "uma folha com todas as paletas lado a lado")
+	out := fs.String("out", "", "arquivo PNG de saída (padrão: tim_SETOR_POSIÇÃO.png); nunca sobrescreve")
+	_ = fs.Parse(args)
+	if fs.NArg() != 2 {
+		usage()
+	}
+	abs, err := parseLoc(fs.Arg(1))
+	if err != nil {
+		fatal(err)
+	}
+	img, err := disc.Open(fs.Arg(0))
+	if err != nil {
+		fatal(err)
+	}
+	defer img.Close()
+	raw, err := img.ReadTIM(abs)
+	if err != nil {
+		fatal(err)
+	}
+	t, err := tim.Parse(raw)
+	if err != nil {
+		fatal(err)
+	}
+	var pic image.Image
+	switch {
+	case *all:
+		pic, err = t.Sheet()
+	default:
+		pic, err = t.Render(*pal)
+	}
+	if err != nil {
+		fatal(err)
+	}
+	name := *out
+	if name == "" {
+		name = fmt.Sprintf("tim_%d_0x%x.png", abs/2048, abs%2048)
+	}
+	f, err := os.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil {
+		fatal(fmt.Errorf("não grava %s (já existe ou sem permissão): %w", name, err))
+	}
+	if err := png.Encode(f, pic); err != nil {
+		f.Close()
+		fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		fatal(err)
+	}
+	fmt.Printf("TIM em 0x%x (setor %d, posição 0x%x): %d bpp, %d×%d pixels, %d paleta(s)\n", abs, abs/2048, abs%2048, t.BPP, t.Width(), t.H, t.Palettes())
+	if len(t.CLUT) > 0 {
+		per := 16
+		if t.BPP == 8 {
+			per = 256
+		}
+		fmt.Printf("Cores da paleta: começam no byte 0x%x dos dados; cada cor tem 2 bytes (15 bits, vermelho nos bits 0-4, verde 5-9, azul 10-14); cada paleta tem %d cores (%d bytes), então a paleta N começa em 0x%x + N×0x%x\n",
+			abs+20, per, per*2, abs+20, per*2)
+	}
+	fmt.Println("PNG gravado em", name)
+}
+
 // multiFlag junta várias ocorrências de uma opção repetida (-at ... -at ...).
 type multiFlag []string
 
 func (m *multiFlag) String() string     { return strings.Join(*m, "; ") }
 func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
+
+// parseLoc lê um local nos dados do disco: deslocamento (decimal ou 0x...) ou "SETOR+POSIÇÃO".
+func parseLoc(loc string) (int64, error) {
+	if sec, off, plus := strings.Cut(loc, "+"); plus {
+		l, err1 := strconv.ParseInt(strings.TrimSpace(sec), 0, 64)
+		o, err2 := strconv.ParseInt(strings.TrimSpace(off), 0, 64)
+		if err1 != nil || err2 != nil || l < 0 || o < 0 || o >= 2048 {
+			return 0, fmt.Errorf("local inválido %q: use SETOR+POSIÇÃO com posição de 0 a 2047", loc)
+		}
+		return l*2048 + o, nil
+	}
+	a, err := strconv.ParseInt(strings.TrimSpace(loc), 0, 64)
+	if err != nil || a < 0 {
+		return 0, fmt.Errorf("local inválido %q: use um deslocamento (decimal ou 0x...) ou SETOR+POSIÇÃO", loc)
+	}
+	return a, nil
+}
 
 // parsePatch lê "LOCAL:BYTES". LOCAL é um deslocamento nos dados (decimal ou 0x...) ou "SETOR+POSIÇÃO".
 func parsePatch(spec string, ascii bool) (disc.BytePatch, error) {
@@ -226,20 +312,9 @@ func parsePatch(spec string, ascii bool) (disc.BytePatch, error) {
 	if !ok {
 		return disc.BytePatch{}, fmt.Errorf("use LOCAL:BYTES, por exemplo 0x14064:46 72 65 (recebi %q)", spec)
 	}
-	var abs int64
-	if sec, off, plus := strings.Cut(loc, "+"); plus {
-		l, err1 := strconv.ParseInt(strings.TrimSpace(sec), 0, 64)
-		o, err2 := strconv.ParseInt(strings.TrimSpace(off), 0, 64)
-		if err1 != nil || err2 != nil || l < 0 || o < 0 || o >= 2048 {
-			return disc.BytePatch{}, fmt.Errorf("local inválido %q: use SETOR+POSIÇÃO com posição de 0 a 2047", loc)
-		}
-		abs = l*2048 + o
-	} else {
-		a, err := strconv.ParseInt(strings.TrimSpace(loc), 0, 64)
-		if err != nil || a < 0 {
-			return disc.BytePatch{}, fmt.Errorf("local inválido %q: use um deslocamento (decimal ou 0x...) ou SETOR+POSIÇÃO", loc)
-		}
-		abs = a
+	abs, err := parseLoc(loc)
+	if err != nil {
+		return disc.BytePatch{}, err
 	}
 	if ascii {
 		if data == "" {

@@ -581,3 +581,21 @@ func TestScanListaTrechosDeAdpcm(t *testing.T) {
 		}
 	}
 }
+
+func TestReadTIMDoDisco(t *testing.T) {
+	img, at := discoComRecursos(t) // o TIM de 4 bpp está em at["tim"], atravessando setores
+	b, err := img.ReadTIM(at["tim"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 8 (cabeçalho) + 44 (paleta) + 12+8*4*2 (imagem 8×4 em unidades de 16 bits)
+	if want := 8 + 44 + 12 + 64; len(b) != want || b[0] != 0x10 {
+		t.Errorf("TIM lido: %d bytes (esperado %d)", len(b), want)
+	}
+	if _, err := img.ReadTIM(at["vag"]); err == nil {
+		t.Error("onde não há TIM deveria dar erro")
+	}
+	if _, err := img.ReadTIM(at["timRGB"]); err == nil {
+		t.Error("cabeçalho de TIM com tamanho incoerente deveria dar erro")
+	}
+}

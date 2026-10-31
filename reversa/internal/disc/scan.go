@@ -250,3 +250,28 @@ func (r ScanResult) Report(i *Image) string {
 	b.WriteString("\nLimites: reconheço só formatos sem compressão e pelo cabeçalho. Dados comprimidos ou em formato próprio não aparecem aqui, e um achado não prova que o jogo o usa (nem que não usa).\n")
 	return b.String()
 }
+
+// ReadTIM lê os bytes completos de uma imagem TIM que começa em abs (os mesmos deslocamentos que scan mostra).
+func (i *Image) ReadTIM(abs int64) ([]byte, error) {
+	h, err := i.ReadUser(abs, scanWindow)
+	if err != nil || len(h) < scanWindow {
+		return nil, fmt.Errorf("não consegui ler o cabeçalho em 0x%x: %v", abs, err)
+	}
+	ok, flags, size, _, _ := tim(h)
+	if !ok {
+		return nil, fmt.Errorf("não há um TIM válido no deslocamento 0x%x", abs)
+	}
+	total := 8 + int(size)
+	if flags&8 != 0 { // o primeiro bloco era a paleta: o bloco de imagem vem depois
+		ih, err := i.ReadUser(abs+int64(total), 12)
+		if err != nil || len(ih) < 12 {
+			return nil, fmt.Errorf("bloco de imagem ausente: %v", err)
+		}
+		isz := int(binary.LittleEndian.Uint32(ih[0:4]))
+		if isz < 12 || isz > 1<<22 {
+			return nil, fmt.Errorf("tamanho do bloco de imagem implausível: %d", isz)
+		}
+		total += isz
+	}
+	return i.ReadUser(abs, total)
+}
