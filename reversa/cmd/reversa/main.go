@@ -186,7 +186,7 @@ func findCmd(args []string) {
 	default:
 		window, test, mode = len(text), disc.ExactTest([]byte(text), *fold), "ASCII"
 	}
-	report, err := img.FindReport(fmt.Sprintf("%q (%s)", text, mode), window, test, *max, *ctx)
+	report, err := img.FindReport(fmt.Sprintf("%q (%s)", text, mode), window, test, *max, *ctx, *rel)
 	if err != nil {
 		fatal(err)
 	}

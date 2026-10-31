@@ -22,13 +22,18 @@ type XARange struct {
 	File, Channel, Cd byte
 }
 
+// SectorRange é uma sequência contígua de setores.
+type SectorRange struct{ Start, Count uint32 }
+
 // ScanResult é o inventário do disco.
 type ScanResult struct {
-	Assets      []Asset
-	Counts      map[string]int
-	XA          []XARange
-	XASectors   uint32
-	ListLimited bool // há mais achados do que os listados
+	Assets       []Asset
+	Counts       map[string]int
+	XA           []XARange
+	XASectors    uint32
+	ADPCM        []SectorRange // setores com áudio ADPCM cru do SPU (blocos de 16 bytes), sem cabeçalho
+	ADPCMSectors uint32
+	ListLimited  bool // há mais achados do que os listados
 }
 
 const scanWindow = 20
@@ -73,6 +78,14 @@ func (i *Image) Scan(list int) (ScanResult, error) {
 		if err != nil {
 			return res, err
 		}
+		if adpcmSector(sec) {
+			res.ADPCMSectors++
+			if n := len(res.ADPCM); n > 0 && res.ADPCM[n-1].Start+res.ADPCM[n-1].Count == lba {
+				res.ADPCM[n-1].Count++
+			} else {
+				res.ADPCM = append(res.ADPCM, SectorRange{Start: lba, Count: 1})
+			}
+		}
 		buf := append(carry, sec...)
 		for p := 0; p+scanWindow <= len(buf); p++ {
 			w := buf[p : p+scanWindow]
@@ -115,6 +128,46 @@ func (i *Image) timDetail(abs int64, flags, size uint32, wd, ht uint16) string {
 		d += fmt.Sprintf("; imagem %d×%d pixels", px, h)
 	}
 	return d
+}
+
+// adpcmSector diz se o setor parece áudio ADPCM cru do SPU do PS1: blocos de 16 bytes em que o primeiro byte é
+// filtro (0 a 4) e ganho (0 a 12), o segundo é flags (0 a 7, quase sempre 0) e os 14 restantes são amostra de alta
+// entropia. Exige a estrutura em quase todos os blocos de algum alinhamento, dados não vazios e variedade de bytes,
+// para não confundir com tabelas numéricas, zeros, código ou dados comprimidos (que quebram a estrutura).
+func adpcmSector(sec []byte) bool {
+	nz := 0
+	for _, b := range sec {
+		if b != 0 {
+			nz++
+		}
+	}
+	if nz < 512 {
+		return false
+	}
+	for k := 0; k < 16; k++ {
+		total, ok, zeroFlags := 0, 0, 0
+		var seen [256]bool
+		distinct := 0
+		for off := k; off+16 <= len(sec); off += 16 {
+			total++
+			if sec[off]>>4 <= 4 && sec[off]&0xF <= 12 && sec[off+1] <= 7 {
+				ok++
+				if sec[off+1] == 0 {
+					zeroFlags++
+				}
+			}
+			for _, b := range sec[off+2 : off+16] {
+				if !seen[b] {
+					seen[b] = true
+					distinct++
+				}
+			}
+		}
+		if total > 0 && ok*100 >= total*95 && zeroFlags*100 >= total*70 && distinct >= 128 {
+			return true
+		}
+	}
+	return false
 }
 
 // scanXA lê o subcabeçalho dos setores brutos: submodo 0x04 = áudio. Só funciona em imagens de 2352 bytes por setor.
@@ -165,12 +218,24 @@ func (r ScanResult) Report(i *Image) string {
 	} else {
 		b.WriteString("- Áudio XA: não dá para detectar (a imagem não é bruta, 2352 bytes por setor)\n")
 	}
+	fmt.Fprintf(&b, "- Áudio ADPCM cru (blocos de 16 bytes do SPU, sem cabeçalho VAG): %d setor(es) em %d trecho(s), cerca de %d MiB\n", r.ADPCMSectors, len(r.ADPCM), int64(r.ADPCMSectors)*userSize>>20)
 	if r.ListLimited {
 		b.WriteString("- Há mais achados do que os listados (limite por tipo); as contagens acima são completas\n")
 	}
 	b.WriteString("\n## Achados\n\n")
 	for _, a := range r.Assets {
 		fmt.Fprintf(&b, "- %s no setor %d (0x%x), posição 0x%x, byte 0x%x: %s; %s\n", a.Kind, a.LBA, a.LBA, a.Offset, a.Abs, a.Detail, i.where(a.LBA))
+	}
+	if len(r.ADPCM) > 0 {
+		b.WriteString("\n## Trechos de áudio ADPCM cru\n\n")
+		b.WriteString("Heurística pela estrutura de blocos; pode incluir dados que apenas se pareçam com áudio.\n\n")
+		for k, a := range r.ADPCM {
+			if k >= 60 {
+				fmt.Fprintf(&b, "- ... e mais %d trecho(s)\n", len(r.ADPCM)-k)
+				break
+			}
+			fmt.Fprintf(&b, "- setor %d a %d (%d setores, %d KiB): %s\n", a.Start, a.Start+a.Count-1, a.Count, int64(a.Count)*userSize>>10, i.where(a.Start))
+		}
 	}
 	if len(r.XA) > 0 {
 		b.WriteString("\n## Faixas de áudio XA\n\n")

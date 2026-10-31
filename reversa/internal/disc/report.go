@@ -2,6 +2,7 @@ package disc
 
 import (
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -55,7 +56,7 @@ func (i *Image) where(lba uint32) string {
 }
 
 // FindReport procura em todos os setores e mostra cada ocorrência com o contexto em volta.
-func (i *Image) FindReport(what string, window int, test func([]byte) bool, max, ctx int) (string, error) {
+func (i *Image) FindReport(what string, window int, test func([]byte) bool, max, ctx int, relative bool) (string, error) {
 	ms, err := i.Search(window, test, max)
 	if err != nil {
 		return "", err
@@ -64,6 +65,11 @@ func (i *Image) FindReport(what string, window int, test func([]byte) bool, max,
 	fmt.Fprintf(&b, "# Busca por %s\n\n", what)
 	fmt.Fprintf(&b, "- Setores de dados varridos: %d (%d MiB de dados do usuário)\n", i.Sectors(), int64(i.Sectors())*userSize>>20)
 	fmt.Fprintf(&b, "- Ocorrências: %d%s\n", len(ms), map[bool]string{true: " (limite atingido: pode haver mais)", false: ""}[len(ms) >= max])
+	exp := ExpectedByChance(int64(i.Sectors())*userSize, window, relative)
+	fmt.Fprintf(&b, "- Esperado só por acaso em dados aleatórios deste tamanho: cerca de %.1f ocorrência(s)\n", exp)
+	if exp >= 1 && float64(len(ms)) <= 2*exp {
+		b.WriteString("- ATENÇÃO: o número de achados é compatível com pura coincidência. Use uma palavra mais longa antes de confiar nestes resultados.\n")
+	}
 	for _, m := range ms {
 		start := max64(0, m.Abs-int64(ctx))
 		blob, err := i.ReadUser(start, window+2*ctx)
@@ -98,4 +104,15 @@ func (i *Image) SectorReport(lba uint32, n int) (string, error) {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Setor %d (0x%x), %d bytes\n\n- Local: %s\n\n```\n%s```\n", lba, lba, len(blob), i.where(lba), Hexdump(blob, int64(lba)*userSize))
 	return b.String(), nil
+}
+
+// ExpectedByChance estima quantas ocorrências uma busca de window bytes acharia por pura coincidência em totalBytes
+// de dados aleatórios: cada byte exigido tem chance 1/256. A busca relativa exige uma diferença a menos (window-1).
+// É uma aproximação: dados reais (texto, tabelas, áudio) não são aleatórios.
+func ExpectedByChance(totalBytes int64, window int, relative bool) float64 {
+	n := window
+	if relative {
+		n = window - 1
+	}
+	return float64(totalBytes) * math.Pow(256, -float64(n))
 }

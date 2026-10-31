@@ -251,7 +251,7 @@ func TestExtentsEReadUser(t *testing.T) {
 
 func TestRelatoriosDeBuscaESetor(t *testing.T) {
 	img, hidden := imagemComDadosEscondidos(t)
-	out, err := img.FindReport(`"Freya"`, 5, ExactTest([]byte("Freya"), false), 10, 8)
+	out, err := img.FindReport(`"Freya"`, 5, ExactTest([]byte("Freya"), false), 10, 8, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,7 +280,7 @@ func TestRelatoriosDeBuscaESetor(t *testing.T) {
 	if _, err := img.SectorReport(9999, 16); err == nil {
 		t.Error("setor fora da imagem deveria dar erro")
 	}
-	if none, _ := img.FindReport("x", 5, ExactTest([]byte("ZZZZZ"), false), 10, 4); !strings.Contains(none, "Nenhuma ocorrência") {
+	if none, _ := img.FindReport("x", 5, ExactTest([]byte("ZZZZZ"), false), 10, 4, false); !strings.Contains(none, "Nenhuma ocorrência") {
 		t.Errorf("sem ocorrências:\n%s", none)
 	}
 	// Hexdump com linha curta e bytes não imprimíveis
@@ -483,5 +483,101 @@ func TestScanInventariaRecursos(t *testing.T) {
 	r2, _ := plain.Scan(5)
 	if r2.XASectors != 0 || !strings.Contains(r2.Report(plain), "não dá para detectar") {
 		t.Errorf("imagem de 2048: %+v", r2)
+	}
+}
+
+func TestAcasoEsperadoEAvisoDeRuido(t *testing.T) {
+	// 628 MiB e busca relativa de 4 letras: ~39 ocorrências ao acaso (o caso real do usuário)
+	exp := ExpectedByChance(658_000_000, 4, true)
+	if exp < 38 || exp > 40 {
+		t.Errorf("esperado ~39, veio %.1f", exp)
+	}
+	// busca exata de 5 letras no mesmo disco: praticamente nunca por acaso
+	if e := ExpectedByChance(658_000_000, 5, false); e > 0.001 {
+		t.Errorf("5 letras exatas: %.5f", e)
+	}
+	// numa imagem minúscula o acaso é desprezível e não há aviso
+	img, _ := imagemComDadosEscondidos(t)
+	rep, _ := img.FindReport("x", 4, RelativeTest([]byte("reya")), 20, 4, true)
+	if strings.Contains(rep, "ATENÇÃO") || !strings.Contains(rep, "Esperado só por acaso") {
+		t.Errorf("imagem pequena:\n%s", rep)
+	}
+}
+
+// adpcmFake monta um setor de blocos de 16 bytes [filtro/ganho, flags, 14 amostras] com dados variados
+func adpcmFake(seed int) []byte {
+	sec := make([]byte, userSize)
+	x := uint32(seed)*2654435761 + 12345
+	for off := 0; off+16 <= userSize; off += 16 {
+		sec[off] = byte(1<<4 | 8) // filtro 1, ganho 8
+		sec[off+1] = 0
+		for k := 2; k < 16; k++ {
+			x = x*1664525 + 1013904223
+			sec[off+k] = byte(x >> 24)
+		}
+	}
+	return sec
+}
+
+func TestDeteccaoDeAdpcmCru(t *testing.T) {
+	if !adpcmSector(adpcmFake(1)) || !adpcmSector(adpcmFake(2)) {
+		t.Error("blocos de ADPCM deveriam ser reconhecidos")
+	}
+	// com deslocamento de 5 bytes no início do setor (o áudio nem sempre começa no limite)
+	sh := append(make([]byte, 5), adpcmFake(3)...)[:userSize]
+	if !adpcmSector(sh) {
+		t.Error("ADPCM deslocado deveria ser reconhecido")
+	}
+	// não pode confundir com: zeros, aleatório (comprimido), tabela numérica de inteiros pequenos, texto
+	if adpcmSector(make([]byte, userSize)) {
+		t.Error("zeros não são áudio")
+	}
+	rnd := make([]byte, userSize)
+	x := uint32(99)
+	for k := range rnd {
+		x = x*1664525 + 1013904223
+		rnd[k] = byte(x >> 24)
+	}
+	if adpcmSector(rnd) {
+		t.Error("dados aleatórios (comprimidos) não são áudio")
+	}
+	tab := make([]byte, userSize)
+	for k := 0; k+4 <= userSize; k += 4 {
+		tab[k] = byte(k / 4 % 40) // inteiros pequenos de 32 bits
+	}
+	if adpcmSector(tab) {
+		t.Error("tabela de inteiros pequenos não é áudio")
+	}
+	txt := []byte(strings.Repeat("Freya e Lenneth conversam na cidade. ", 60))[:userSize]
+	if adpcmSector(txt) {
+		t.Error("texto não é áudio")
+	}
+}
+
+func TestScanListaTrechosDeAdpcm(t *testing.T) {
+	iso := newBuilder().iso(sampleFiles())
+	for len(iso) < 60*userSize {
+		iso = append(iso, 0)
+	}
+	for lba := 40; lba < 45; lba++ { // 5 setores seguidos de ADPCM, fora de qualquer arquivo
+		copy(iso[lba*userSize:], adpcmFake(lba))
+	}
+	copy(iso[50*userSize:], adpcmFake(50)) // outro trecho isolado
+	img, err := New(bytes.NewReader(iso), int64(len(iso)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := img.Scan(5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ADPCMSectors != 6 || len(res.ADPCM) != 2 || res.ADPCM[0].Start != 40 || res.ADPCM[0].Count != 5 || res.ADPCM[1].Start != 50 {
+		t.Fatalf("trechos de ADPCM: %d setores, %+v", res.ADPCMSectors, res.ADPCM)
+	}
+	rep := res.Report(img)
+	for _, want := range []string{"Áudio ADPCM cru", "6 setor(es) em 2 trecho(s)", "setor 40 a 44 (5 setores, 10 KiB)", "FORA dos arquivos do ISO 9660"} {
+		if !strings.Contains(rep, want) {
+			t.Errorf("relatório sem %q:\n%s", want, rep)
+		}
 	}
 }
