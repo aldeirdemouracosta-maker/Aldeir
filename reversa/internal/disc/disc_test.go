@@ -403,3 +403,85 @@ func TestPatchEmIsoDe2048(t *testing.T) {
 		t.Errorf("patch em ISO: %q", got)
 	}
 }
+
+// monta um disco bruto com recursos conhecidos escondidos fora dos arquivos do ISO
+func discoComRecursos(t *testing.T) (*Image, map[string]int64) {
+	iso := newBuilder().iso(sampleFiles())
+	for len(iso) < 60*userSize {
+		iso = append(iso, 0)
+	}
+	at := map[string]int64{"tim": 30*userSize + 16, "vag": 31*userSize - 2, "vab": 33 * userSize, "seq": 34*userSize + 5, "timRGB": 36 * userSize}
+	// TIM 4bpp com paleta de 16 cores x 1 linha: bloco de paleta 12+32 = 44 bytes; imagem 8x4 em unidades de 16 bits
+	clut := []byte{0x10, 0, 0, 0, 0x08, 0, 0, 0, 44, 0, 0, 0, 0, 0, 0, 0, 16, 0, 1, 0}
+	copy(iso[at["tim"]:], clut)
+	copy(iso[at["tim"]+8+44:], []byte{12 + 8*4*2, 0, 0, 0, 0, 0, 0, 0, 8, 0, 4, 0})
+	copy(iso[at["vag"]:], "VAGp")
+	copy(iso[at["vab"]:], "pBAV")
+	copy(iso[at["seq"]:], "pQES")
+	// cabeçalho que lembra TIM mas com tamanho incoerente: não pode ser contado
+	copy(iso[at["timRGB"]:], []byte{0x10, 0, 0, 0, 0x08, 0, 0, 0, 99, 0, 0, 0, 0, 0, 0, 0, 16, 0, 1, 0})
+	data := raw(iso)
+	// setores 50..54: áudio XA (submodo Form 2 + áudio), arquivo 1, canal 2; 55: outro canal; 56: dados comuns
+	for lba := 50; lba <= 55; lba++ {
+		ch := byte(2)
+		if lba == 55 {
+			ch = 3
+		}
+		copy(data[lba*rawSize+16:], []byte{1, ch, 0x64, 0x01, 1, ch, 0x64, 0x01})
+	}
+	img, err := New(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return img, at
+}
+
+func TestScanInventariaRecursos(t *testing.T) {
+	img, at := discoComRecursos(t)
+	res, err := img.Scan(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for kind, want := range map[string]int{"TIM": 1, "VAG": 1, "VAB": 1, "SEQ": 1} {
+		if res.Counts[kind] != want {
+			t.Errorf("%s: %d achados, esperado %d (o falso TIM de tamanho incoerente não conta)", kind, res.Counts[kind], want)
+		}
+	}
+	var tim *Asset
+	for k := range res.Assets {
+		if res.Assets[k].Kind == "TIM" {
+			tim = &res.Assets[k]
+		}
+	}
+	if tim == nil || tim.Abs != at["tim"] || !strings.Contains(tim.Detail, "4 bpp com paleta de 16 cores × 1 linha(s)") || !strings.Contains(tim.Detail, "imagem 32×4 pixels") {
+		t.Errorf("detalhe do TIM: %+v", tim)
+	}
+	// o VAG atravessa a fronteira entre setores e ainda é achado
+	for _, a := range res.Assets {
+		if a.Kind == "VAG" && a.Abs != at["vag"] {
+			t.Errorf("posição do VAG: %+v", a)
+		}
+	}
+	// áudio XA: 5 setores no canal 2 e 1 no canal 3, em duas faixas
+	if res.XASectors != 6 || len(res.XA) != 2 || res.XA[0].Start != 50 || res.XA[0].Count != 5 || res.XA[0].Channel != 2 || res.XA[1].Channel != 3 {
+		t.Errorf("áudio XA: setores=%d faixas=%+v", res.XASectors, res.XA)
+	}
+	rep := res.Report(img)
+	for _, want := range []string{"TIM: 1 achado(s)", "VAB: 1", "Áudio XA: 6 setor(es) em 2 faixa(s)", "setor 50 a 54 (5 setores): arquivo 1, canal 2", "FORA dos arquivos do ISO 9660", "Limites:"} {
+		if !strings.Contains(rep, want) {
+			t.Errorf("relatório sem %q:\n%s", want, rep)
+		}
+	}
+	// o limite de listagem não altera as contagens
+	small, _ := img.Scan(0)
+	if small.Counts["TIM"] != 1 || len(small.Assets) != 0 || !small.ListLimited {
+		t.Errorf("limite de listagem: %+v", small)
+	}
+	// imagem que não é bruta: sem XA, e o relatório avisa
+	iso := newBuilder().iso(sampleFiles())
+	plain, _ := New(bytes.NewReader(iso), int64(len(iso)))
+	r2, _ := plain.Scan(5)
+	if r2.XASectors != 0 || !strings.Contains(r2.Report(plain), "não dá para detectar") {
+		t.Errorf("imagem de 2048: %+v", r2)
+	}
+}

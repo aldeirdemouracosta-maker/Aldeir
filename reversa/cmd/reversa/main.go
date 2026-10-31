@@ -55,6 +55,8 @@ func main() {
 		nomesCmd(os.Args[2:])
 	case "find":
 		findCmd(os.Args[2:])
+	case "scan":
+		scanCmd(os.Args[2:])
 	case "patch":
 		patchCmd(os.Args[2:])
 	case "diff":
@@ -73,7 +75,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "uso: reversa doctor | reversa func [-explain] <alvo> <endereço> | reversa nomes <alvo> | reversa find [-i|-utf16|-hex|-relative] <disco> <texto> | reversa patch -out <novo> -at <local>:<hex> <disco> | reversa diff <discoA> <discoB> | reversa sector [-n bytes] <disco> <setor> | reversa xref [-n bytes] <alvo> <endereço> | reversa mem [-n bytes] <alvo> <endereço> | reversa version | reversa mcp -root <pasta> | reversa disc <imagem> | reversa ps1 [opções] <exe|cue|bin|iso> | reversa analyze [-model m] [-steps n] [-evidence arq.json] <binário>")
+	fmt.Fprintln(os.Stderr, "uso: reversa doctor | reversa func [-explain] <alvo> <endereço> | reversa nomes <alvo> | reversa find [-i|-utf16|-hex|-relative] <disco> <texto> | reversa scan <disco> | reversa patch -out <novo> -at <local>:<hex> <disco> | reversa diff <discoA> <discoB> | reversa sector [-n bytes] <disco> <setor> | reversa xref [-n bytes] <alvo> <endereço> | reversa mem [-n bytes] <alvo> <endereço> | reversa version | reversa mcp -root <pasta> | reversa disc <imagem> | reversa ps1 [opções] <exe|cue|bin|iso> | reversa analyze [-model m] [-steps n] [-evidence arq.json] <binário>")
 	os.Exit(2)
 }
 
@@ -189,6 +191,27 @@ func findCmd(args []string) {
 		fatal(err)
 	}
 	emit(report, *out)
+}
+
+// scanCmd faz o inventário do disco: imagens, bancos de som, sequências e áudio XA.
+func scanCmd(args []string) {
+	fs := flag.NewFlagSet("scan", flag.ExitOnError)
+	list := fs.Int("list", 40, "quantos achados listar por tipo (as contagens são sempre completas)")
+	out := fs.String("out", "", "grava o resultado neste arquivo .md (UTF-8)")
+	_ = fs.Parse(args)
+	if fs.NArg() != 1 {
+		usage()
+	}
+	img, err := disc.Open(fs.Arg(0))
+	if err != nil {
+		fatal(err)
+	}
+	defer img.Close()
+	res, err := img.Scan(*list)
+	if err != nil {
+		fatal(err)
+	}
+	emit(res.Report(img), *out)
 }
 
 // multiFlag junta várias ocorrências de uma opção repetida (-at ... -at ...).

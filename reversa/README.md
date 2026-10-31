@@ -59,6 +59,16 @@ A busca varre **todos** os setores, inclusive os que não pertencem a nenhum arq
 número de setor), e diz se cada achado está dentro de um arquivo do ISO ou fora. A busca relativa acha um texto em qualquer
 tabela em que as letras mantenham as mesmas distâncias entre si; use a parte em minúsculas da palavra.
 
+## Inventário do disco (imagens, sons, música)
+
+```
+./reversa scan -out inventario.md jogo.cue
+```
+Varre todos os setores atrás de imagens TIM (sprites, paletas, fundos), bancos de som (VAB), amostras (VAG), sequências
+musicais (SEQ) e faixas de áudio XA (pelo subcabeçalho; só em imagens brutas de 2352 bytes). Cada achado diz o setor e se está
+dentro ou fora dos arquivos do ISO. Reconhece só formatos sem compressão, pelo cabeçalho; o que estiver comprimido ou em
+formato próprio não aparece, e um achado não prova que o jogo o usa nem que não usa.
+
 ## Alterar uma cópia da imagem (para testar no emulador)
 
 ```
