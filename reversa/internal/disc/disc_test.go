@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -47,7 +48,13 @@ func (b *builder) iso(files map[string][]byte) []byte {
 	copy(pvd[40:72], "TESTE_PS1                       ")
 	var dir []byte
 	next := uint32(20)
-	for name, data := range files {
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
+	}
+	sort.Strings(names) // ordem fixa: percorrer o map direto dava imagens diferentes a cada execução (teste intermitente)
+	for _, name := range names {
+		data := files[name]
 		dir = append(dir, record(name+";1", next, uint32(len(data)), false)...)
 		b.put(next, data)
 		next += uint32(len(data)+userSize-1) / userSize

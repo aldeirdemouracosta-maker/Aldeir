@@ -75,12 +75,33 @@ func main() {
 	case "mcp":
 		serveMCP(os.Args[2:])
 	default:
+		fmt.Fprintf(os.Stderr, "comando desconhecido: %q\n(se ele aparece na documentação, o seu programa está desatualizado: rode atualizar.bat e confira com 'reversa version')\n\n", os.Args[1])
 		usage()
 	}
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "uso: reversa doctor | reversa func [-explain] <alvo> <endereço> | reversa nomes <alvo> | reversa find [-i|-utf16|-hex|-relative] <disco> <texto> | reversa scan <disco> | reversa tim [-pal N|-all] <disco> <setor+posição> | reversa patch -out <novo> -at <local>:<hex> <disco> | reversa diff <discoA> <discoB> | reversa sector [-n bytes] <disco> <setor> | reversa xref [-n bytes] <alvo> <endereço> | reversa mem [-n bytes] <alvo> <endereço> | reversa version | reversa mcp -root <pasta> | reversa disc <imagem> | reversa ps1 [opções] <exe|cue|bin|iso> | reversa analyze [-model m] [-steps n] [-evidence arq.json] <binário>")
+	fmt.Fprintln(os.Stderr, `uso: reversa <comando> [opções] <argumentos>
+
+Comandos:
+  disc <imagem>                          volume, arquivo de boot e arquivos da raiz do disco
+  ps1 [opções] <exe|cue|bin|iso>         relatório de engenharia reversa com modelos locais
+  func [-explain] <alvo> <endereço>      uma função só com fatos (chamadores, hardware, laços, strings)
+  nomes <alvo>                           funções com evidência de nome ou padrão
+  xref [-n bytes] <alvo> <endereço>      quem lê, escreve ou monta um endereço
+  mem [-n bytes] <alvo> <endereço>       valores iniciais da imagem em um endereço
+  find [-i|-utf16|-hex|-relative] <disco> <texto>   procura texto ou bytes em todos os setores
+  sector [-n bytes] <disco> <setor>      bytes a partir de um setor
+  scan <disco>                           inventário: imagens TIM, sons, música
+  tim [-pal N|-all] [-out f.png] <disco> <setor+posição>   converte uma imagem TIM em PNG
+  patch -out <novo> (-at|-ascii) <local>:<dados> <disco>   altera uma CÓPIA da imagem
+  diff <discoA> <discoB>                 o que mudou entre duas imagens
+  mcp -root <pasta>                      servidor MCP (stdio)
+  doctor | version                       ferramentas disponíveis e versão do programa
+  analyze [-model m] [-steps n] [-evidence arq.json] <binário>
+
+Versão: `+buildInfo()+`
+Se um comando acima "não existe" no seu programa, ele está desatualizado: rode atualizar.bat`)
 	os.Exit(2)
 }
 
