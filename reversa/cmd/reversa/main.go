@@ -12,6 +12,7 @@ import (
 	"image/png"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -224,6 +225,7 @@ func scanCmd(args []string) {
 	fs := flag.NewFlagSet("scan", flag.ExitOnError)
 	list := fs.Int("list", 40, "quantos achados listar por tipo (as contagens são sempre completas)")
 	out := fs.String("out", "", "grava o resultado neste arquivo .md (UTF-8)")
+	pngDir := fs.String("png", "", "pasta onde gravar um PNG de CADA imagem TIM achada (todas as paletas lado a lado)")
 	_ = fs.Parse(args)
 	if fs.NArg() != 1 {
 		usage()
@@ -233,11 +235,59 @@ func scanCmd(args []string) {
 		fatal(err)
 	}
 	defer img.Close()
+	if *pngDir != "" && *list < 5000 {
+		*list = 5000 // para exportar todas, é preciso lembrar de todas
+	}
 	res, err := img.Scan(*list)
 	if err != nil {
 		fatal(err)
 	}
+	if *pngDir != "" {
+		exportTIMs(img, res, *pngDir)
+	}
 	emit(res.Report(img), *out)
+}
+
+// exportTIMs grava um PNG por imagem TIM achada. Não sobrescreve arquivos existentes.
+func exportTIMs(img *disc.Image, res disc.ScanResult, dir string) {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		fatal(err)
+	}
+	var done, failed int
+	for _, a := range res.Assets {
+		if a.Kind != "TIM" {
+			continue
+		}
+		raw, err := img.ReadTIM(a.Abs)
+		if err == nil {
+			var t *tim.TIM
+			if t, err = tim.Parse(raw); err == nil {
+				var pic image.Image
+				if t.Palettes() > 1 {
+					pic, err = t.Sheet()
+				} else {
+					pic, err = t.Render(0)
+				}
+				if err == nil {
+					name := filepath.Join(dir, fmt.Sprintf("tim_%d_0x%x.png", a.LBA, a.Offset))
+					var f *os.File
+					if f, err = os.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644); err == nil {
+						err = png.Encode(f, pic)
+						if cerr := f.Close(); err == nil {
+							err = cerr
+						}
+					}
+				}
+			}
+		}
+		if err != nil {
+			failed++
+			fmt.Fprintf(os.Stderr, "TIM do setor %d (posição 0x%x): %v\n", a.LBA, a.Offset, err)
+			continue
+		}
+		done++
+	}
+	fmt.Fprintf(os.Stderr, "PNGs gravados em %s: %d (falhas ou já existentes: %d)\n", dir, done, failed)
 }
 
 // timCmd converte uma imagem TIM do disco em PNG, para ver sprites e paletas.
