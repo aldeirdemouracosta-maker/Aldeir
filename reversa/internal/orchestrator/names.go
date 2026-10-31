@@ -13,7 +13,12 @@ import (
 func nameEvidence(exe *ps1.Exe, addr uint32, maxInsns int) []string {
 	var ev []string
 	if g, ok := exe.PointerSwap(addr); ok {
-		ev = append(ev, fmt.Sprintf("instala callback: troca o ponteiro global 0x%08x e devolve o antigo", g))
+		if call, isCB := exe.CallbackGlobals()[g]; isCB {
+			ev = append(ev, fmt.Sprintf("instala callback: troca o ponteiro global 0x%08x e devolve o antigo (a global é chamada por jalr em 0x%08x)", g, call))
+		} else {
+			// o mesmo padrão serve para níveis e flags: sem chamada por ponteiro, não afirmo que é callback
+			ev = append(ev, fmt.Sprintf("troca o valor da global 0x%08x e devolve o antigo (setter; nenhuma chamada por ponteiro encontrada, então pode ser nível ou flag e não um callback)", g))
+		}
 	}
 	for _, h := range exe.NameHints(addr, maxInsns) {
 		ev = append(ev, fmt.Sprintf("nome provável %q: string de depuração referenciada em 0x%08x (heurística)", h.Text, h.Addr))

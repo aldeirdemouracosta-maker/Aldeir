@@ -67,6 +67,9 @@ type consts struct {
 	// tabela de onde o registrador foi carregado: 'lw rt,off(base indexada)' guarda a base da tabela
 	tbl   [32]uint32
 	tblOK [32]bool
+
+	// loaded guarda o endereço da variável global (de endereço constante) de onde o registrador foi carregado
+	loaded [32]uint32
 }
 
 // newConsts cria o rastreador já conhecendo as globais de hardware do executável.
@@ -86,12 +89,14 @@ func newConsts() *consts {
 // Escritas em $zero são descartadas pelo hardware, então nunca mudam o estado.
 func (c *consts) set(r, v uint32) {
 	if r != 0 {
+		c.loaded[r] = 0
 		c.val[r], c.ok[r], c.srcOK[r], c.gsrc[r], c.arrOK[r], c.tblOK[r] = v, true, false, 0, false, false
 	}
 }
 
 func (c *consts) kill(r uint32) {
 	if r != 0 {
+		c.loaded[r] = 0
 		c.ok[r], c.srcOK[r], c.gsrc[r], c.arrOK[r], c.tblOK[r] = false, false, 0, false, false
 	}
 }
@@ -146,6 +151,9 @@ func (c *consts) stepInner(w uint32) (HWAccess, bool) {
 		baseOK, baseVal := c.ok[rs], c.val[rs] // antes de kill: rt pode ser o mesmo registrador que rs
 		idxOK, idxBase := !c.ok[rs] && c.arrOK[rs], c.arr[rs]
 		c.kill(rt)
+		if op == 0x23 && baseOK && rt != 0 { // lw de variável global: lembra de onde veio, para saber se vira alvo de jalr
+			c.loaded[rt] = baseVal + uint32(imm)
+		}
 		if op == 0x23 && idxOK && rt != 0 { // lw de tabela indexada: lembra a base para resolver um jr
 			c.tbl[rt], c.tblOK[rt] = idxBase+uint32(imm), true
 		}
@@ -459,4 +467,33 @@ func (e *Exe) JumpTables(addr uint32, n int) []JumpTable {
 		c.step(w)
 	}
 	return out
+}
+
+// CallbackGlobals devolve as variáveis globais que o programa carrega e usa como destino de 'jalr' (ou 'jr' que não
+// seja $ra): ponteiros de função, ou seja, callbacks. O valor é o endereço da primeira instrução que as chama.
+// Heurística linear por função: não segue desvios.
+func (e *Exe) CallbackGlobals() map[uint32]uint32 {
+	e.cbonce.Do(func() {
+		e.cbs = map[uint32]uint32{}
+		starts := e.callTargets()
+		c := e.newConsts()
+		resetAt := -1
+		for off, i := 0, 0; off+4 <= len(e.Text); off, i = off+4, i+1 {
+			pc := e.Load + uint32(off)
+			if _, isStart := starts[pc]; isStart || i == resetAt {
+				c = e.newConsts()
+			}
+			w := le.Uint32(e.Text[off:])
+			if w>>26 == 0 && (w&0x3F == 0x09 || (w&0x3F == 0x08 && w>>21&31 != 31)) { // jalr, jr que não é $ra
+				if g := c.loaded[w>>21&31]; g != 0 && e.cbs[g] == 0 {
+					e.cbs[g] = pc
+				}
+			}
+			c.step(w)
+			if op := w >> 26; op == 2 || (op == 0 && w&0x3F == 0x08) {
+				resetAt = i + 2
+			}
+		}
+	})
+	return e.cbs
 }

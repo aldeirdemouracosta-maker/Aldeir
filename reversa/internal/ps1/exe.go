@@ -21,6 +21,9 @@ type Exe struct {
 
 	gonce   sync.Once
 	globals map[uint32]uint32 // variável global -> endereço de hardware que o programa sempre guarda nela
+
+	cbonce sync.Once
+	cbs    map[uint32]uint32 // variável global -> primeira instrução jalr/jr que a usa como destino de chamada
 }
 
 var le = binary.LittleEndian

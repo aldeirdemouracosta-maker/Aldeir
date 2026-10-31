@@ -283,8 +283,22 @@ func funcContext(exe *ps1.Exe, f ps1.Func, maxInsns int) string {
 	return b.String()
 }
 
+// biosKnown guarda só os nomes da BIOS em que há alta confiança. A tabela foi escrita de memória a partir da
+// documentação psx-spx e NÃO foi conferida: o relatório marca o nome com "conferir".
+var biosKnown = map[string]string{
+	"A33": "malloc", "A34": "free", "A44": "FlushCache",
+	"B07": "DeliverEvent", "B08": "OpenEvent", "B09": "CloseEvent", "B0A": "WaitEvent", "B0B": "TestEvent",
+	"B0C": "EnableEvent", "B0D": "DisableEvent", "B17": "ReturnFromException",
+	"C02": "SysEnqIntRP", "C03": "SysDeqIntRP", "C0A": "ChangeClearRCnt",
+}
+
 func biosName(b ps1.BIOSCall) string {
-	return fmt.Sprintf("%c(0x%02x)", 'A'+(b.Table-0xA0)/0x10, b.Func)
+	tab := 'A' + rune(b.Table-0xA0)/0x10
+	s := fmt.Sprintf("%c(0x%02x)", tab, b.Func)
+	if n, ok := biosKnown[fmt.Sprintf("%c%02X", tab, b.Func)]; ok {
+		s += fmt.Sprintf(" [%s, nome de memória do psx-spx: conferir]", n)
+	}
+	return s
 }
 
 // stubKind descreve a função se ela for só um stub de BIOS ou de syscall, ou devolve "".

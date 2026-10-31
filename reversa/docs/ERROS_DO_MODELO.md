@@ -80,3 +80,12 @@ Setloc, Setfilter e Setmode, o que confirma que a tabela guarda a quantidade de 
 callbacks `0x8002d3fc` e `0x8002d400` achou os instaladores (`0x80025484` e `0x8002549c`: leem o valor antigo e gravam
 o novo), os wrappers que os desligam e restauram em volta de um comando, as rotinas que os zeram, e as funções que
 chamam a rotina de interrupção e depois os disparam. Desses padrões saiu o comando `nomes`.
+
+## Comando `nomes` no jogo real (43 de 313 funções com evidência)
+Achou por string de depuração `CD_sync` (0x80025fec), `CD_ready` (0x8002626c), `CD_cw` (0x80026538), `CD_datasync`
+(0x80026dec) e `LoadImage` (0x80021058), 31 stubs de BIOS/syscall e vários instaladores. Erro do programa visto nessa saída:
+
+| Erro | Correção |
+|---|---|
+| `0x800253c4` rotulada "instala callback" para a global `0x8002d408`, que é o **nível de depuração** do `CD_cw` | O padrão "lê a global e grava `$a0` nela" serve para callbacks, níveis e flags. Só se diz "callback" quando a global é usada como destino de `jalr` em algum ponto (`CallbackGlobals`); senão: "troca o valor da global ... (setter; pode ser nível ou flag)" |
+| Funções de BIOS só com número | Nomes de alta confiança (eventos, `FlushCache`, `malloc`/`free`, `SysEnqIntRP`...) entram marcados "nome de memória do psx-spx: conferir"; os demais ficam só com o número |

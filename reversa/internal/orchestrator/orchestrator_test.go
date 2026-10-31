@@ -584,8 +584,8 @@ func TestRelatorioComTabelaDeSaltoELacoLimitado(t *testing.T) {
 func TestNamesReport(t *testing.T) {
 	out := NamesReport(loadExe(t, "exemplo9.exe"), 256)
 	for _, want := range []string{
-		"- 0x80010030 (chamada 1x): instala callback: troca o ponteiro global 0x80010078 e devolve o antigo",
-		"- 0x80010040 (chamada 1x): instala callback: troca o ponteiro global 0x8001007c e devolve o antigo",
+		"- 0x80010030 (chamada 1x): troca o valor da global 0x80010078 e devolve o antigo (setter; nenhuma chamada por ponteiro encontrada",
+		"- 0x80010040 (chamada 1x): troca o valor da global 0x8001007c e devolve o antigo (setter; nenhuma chamada por ponteiro encontrada",
 		`- 0x80010060 (chamada 1x): nome provável "CD_sync": string de depuração referenciada em 0x80010080 (heurística)`,
 		"Funções com alguma evidência: 3 de 6",
 		"Os nomes são pistas, não confirmações",
@@ -612,7 +612,44 @@ func TestNamesReport(t *testing.T) {
 	if rep, _ := FuncReport(loadExe(t, "exemplo9.exe"), 0x80010060, 96); !strings.Contains(rep, `- Nome/padrão (derivado): nome provável "CD_sync"`) {
 		t.Errorf("FuncReport sem a pista de nome:\n%s", rep)
 	}
-	if rep := runExemplo(t, "exemplo9.exe", stub{"ok"}, stub{"fim"}); !strings.Contains(rep, "- Nome/padrão (derivado): instala callback") {
+	if rep := runExemplo(t, "exemplo9.exe", stub{"ok"}, stub{"fim"}); !strings.Contains(rep, "- Nome/padrão (derivado): troca o valor da global") {
 		t.Errorf("relatório geral sem o padrão de instalador:\n%s", rep)
+	}
+}
+
+// Regressão do jogo real: 0x8002d408 era o nível de depuração, e foi rotulado como callback sem prova.
+func TestSetterDeCallbackContraSetterDeValor(t *testing.T) {
+	out := NamesReport(loadExe(t, "exemplo10.exe"), 256)
+	for _, want := range []string{
+		"- 0x80010020 (chamada 1x): instala callback: troca o ponteiro global 0x8001005c e devolve o antigo (a global é chamada por jalr em 0x8001003c)",
+		"- 0x8001004c (chamada 1x): troca o valor da global 0x80010060 e devolve o antigo (setter; nenhuma chamada por ponteiro encontrada",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("nomes sem %q:\n%s", want, out)
+		}
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "0x80010060") && strings.Contains(line, "instala callback") {
+			t.Errorf("a global de nível nunca é chamada por jalr; não pode ser callback:\n%s", line)
+		}
+	}
+}
+
+func TestNomesDeBIOSMarcadosParaConferir(t *testing.T) {
+	out := NamesReport(loadExe(t, "exemplo3.exe"), 256)
+	for _, want := range []string{
+		"stub de chamada à BIOS A(0x33) [malloc, nome de memória do psx-spx: conferir]",
+		"stub de chamada à BIOS B(0x07) [DeliverEvent, nome de memória do psx-spx: conferir]",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("nomes sem %q:\n%s", want, out)
+		}
+	}
+	// função de BIOS fora da tabela de alta confiança fica só com o número
+	if got := biosName(ps1.BIOSCall{Table: 0xB0, Func: 0x35}); got != "B(0x35)" {
+		t.Errorf("sem nome conhecido: %q", got)
+	}
+	if got := biosName(ps1.BIOSCall{Table: 0xC0, Func: 0x0A}); !strings.HasPrefix(got, "C(0x0a) [ChangeClearRCnt") {
+		t.Errorf("tabela C: %q", got)
 	}
 }
